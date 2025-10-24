@@ -1,5 +1,5 @@
 [package]
-name = "nhl-top"
+name = "nhl"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,4 +8,7 @@ chrono = "0.4.42"
 nhl_api = { version = "0.2.0" }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4.5.40", features = ["cargo", "derive"]}
+ratatui = "0.29.0"
+crossterm = "0.28.1"
+xdg = "3.0.0"
 
