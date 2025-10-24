@@ -1128,7 +1128,9 @@ dependencies = [
 
 [[package]]
 name = "nhl_api"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f313fd2fba9597e1b65c7667acc4100af2d3f0a00445401bb3fb7057f59f25ef"
 dependencies = [
  "anyhow",
  "cargo-tarpaulin",

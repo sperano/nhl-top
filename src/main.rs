@@ -1,4 +1,4 @@
-use nhl_api::{Client, GameDate, GameId};
+use nhl_api::{Client, ClientConfig, GameDate, GameId};
 use chrono::NaiveDate;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::collections::BTreeMap;
@@ -7,6 +7,10 @@ use std::collections::BTreeMap;
 #[command(name = "nhl-top")]
 #[command(about = "NHL stats and standings CLI", long_about = None)]
 struct Cli {
+    /// Enable debug mode with verbose output
+    #[arg(long, global = true)]
+    debug: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -45,12 +49,25 @@ enum Commands {
         /// Game ID (e.g., 2024020001)
         game_id: i64,
     },
+    /// Display daily schedule of games
+    Schedule {
+        /// Date in YYYY-MM-DD format (optional, defaults to today)
+        #[arg(short, long)]
+        date: Option<String>,
+    },
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
-    let client = Client::new().unwrap();
+
+    // Create client with debug mode if flag is set
+    let client = if cli.debug {
+        let config = ClientConfig::default().with_debug();
+        Client::with_config(config).unwrap()
+    } else {
+        Client::new().unwrap()
+    };
 
     match cli.command {
         Commands::Standings { season, date, by } => {
@@ -94,8 +111,11 @@ async fn main() {
                     // Group by conference
                     let mut grouped: BTreeMap<String, Vec<_>> = BTreeMap::new();
                     for standing in standings {
+                        let conference = standing.conference_name
+                            .clone()
+                            .unwrap_or_else(|| "Unknown".to_string());
                         grouped
-                            .entry(standing.conference_name.clone())
+                            .entry(conference)
                             .or_default()
                             .push(standing);
                     }
@@ -274,6 +294,54 @@ async fn main() {
                     goalie.goals_against,
                     sv_pct
                 );
+            }
+        }
+        Commands::Schedule { date } => {
+            let game_date = if let Some(date_str) = date {
+                // Parse date string
+                let parsed_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
+                    .expect("Invalid date format. Use YYYY-MM-DD");
+                GameDate::Date(parsed_date)
+            } else {
+                // Use today's date
+                GameDate::today()
+            };
+
+            let schedule = client.daily_schedule(Some(&game_date)).await.unwrap();
+
+            // Display schedule header
+            println!("\nNHL Schedule - {}", schedule.date);
+            println!("{}", "=".repeat(80));
+
+            if schedule.number_of_games == 0 {
+                println!("No games scheduled for this date.");
+            } else {
+                println!("Games: {}\n", schedule.number_of_games);
+
+                // Display each game
+                for game in &schedule.games {
+                    println!("Game ID: {}", game.id);
+                    println!("  {} @ {}",
+                        game.away_team.abbrev,
+                        game.home_team.abbrev
+                    );
+                    println!("  Time: {} (UTC)", game.start_time_utc);
+                    println!("  Status: {}", game.game_state);
+
+                    // Display scores if available
+                    if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
+                        println!("  Score: {} - {}", away_score, home_score);
+                    }
+                    println!();
+                }
+            }
+
+            // Display navigation info
+            if let Some(prev) = schedule.previous_start_date {
+                println!("Previous date with games: {}", prev);
+            }
+            if let Some(next) = schedule.next_start_date {
+                println!("Next date with games: {}", next);
             }
         }
     }
