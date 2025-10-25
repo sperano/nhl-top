@@ -41,8 +41,8 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>) 
     let mut output = String::new();
 
     // Determine if game has started
-    let game_started = game.game_state != "FUT" && game.game_state != "PRE";
-    let game_final = game.game_state == "FINAL" || game.game_state == "OFF";
+    let game_started = game.game_state.has_started();
+    let game_final = game.game_state.is_final();
 
     if game_started {
         if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
@@ -242,17 +242,18 @@ fn build_score_table(
 }
 
 /// Extract period scores from GameSummary
-pub fn extract_period_scores(summary: &GameSummary, _away_team_id: i64, _home_team_id: i64) -> PeriodScores {
+pub fn extract_period_scores(summary: &GameSummary, away_team_id: i64, home_team_id: i64) -> PeriodScores {
     let mut away_periods = vec![0, 0, 0]; // P1, P2, P3
     let mut home_periods = vec![0, 0, 0];
     let mut has_ot = false;
     let mut has_so = false;
 
-    // TODO: Implement proper period score extraction
-    // For now, return placeholder data
-    // Need to properly match goals to teams using team IDs
+    let mut prev_away_score = 0;
+    let mut prev_home_score = 0;
 
     for period in &summary.scoring {
+        let period_num = period.period_descriptor.number as usize;
+
         // Determine if this is OT or SO
         if period.period_descriptor.period_type == "OT" {
             has_ot = true;
@@ -268,6 +269,35 @@ pub fn extract_period_scores(summary: &GameSummary, _away_team_id: i64, _home_te
                 away_periods.push(0);
                 home_periods.push(0);
             }
+        }
+
+        // Get the final score after this period (from last goal)
+        if let Some(last_goal) = period.goals.last() {
+            let period_away_score = last_goal.away_score;
+            let period_home_score = last_goal.home_score;
+
+            // Calculate goals scored in this period
+            let away_goals_in_period = period_away_score - prev_away_score;
+            let home_goals_in_period = period_home_score - prev_home_score;
+
+            // Store in the appropriate slot
+            let idx = if period.period_descriptor.period_type == "REG" {
+                (period_num - 1).min(2) // P1=0, P2=1, P3=2
+            } else if period.period_descriptor.period_type == "OT" {
+                3 // OT slot
+            } else if period.period_descriptor.period_type == "SO" {
+                4 // SO slot
+            } else {
+                continue;
+            };
+
+            if idx < away_periods.len() {
+                away_periods[idx] = away_goals_in_period;
+                home_periods[idx] = home_goals_in_period;
+            }
+
+            prev_away_score = period_away_score;
+            prev_home_score = period_home_score;
         }
     }
 

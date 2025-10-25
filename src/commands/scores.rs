@@ -29,14 +29,14 @@ pub async fn run(client: &Client, date: Option<String>) {
         }
 
         // Determine if game has started
-        let game_started = game.game_state != "FUT" && game.game_state != "PRE";
+        let game_started = game.game_state.has_started();
 
         if game_started {
             // Fetch detailed boxscore for period information
             let game_id = GameId::new(game.id);
             match client.boxscore(&game_id).await {
                 Ok(boxscore) => {
-                    display_detailed_score(&boxscore, &game.game_state);
+                    display_detailed_score(&boxscore, game.game_state);
                 }
                 Err(_) => {
                     // Fall back to simple display if boxscore unavailable
@@ -52,7 +52,7 @@ pub async fn run(client: &Client, date: Option<String>) {
     println!();
 }
 
-fn display_detailed_score(boxscore: &Boxscore, game_state: &str) {
+fn display_detailed_score(boxscore: &Boxscore, game_state: nhl_api::GameState) {
     let away_abbrev = &boxscore.away_team.abbrev;
     let home_abbrev = &boxscore.home_team.abbrev;
     let away_score = boxscore.away_team.score;
@@ -66,7 +66,7 @@ fn display_detailed_score(boxscore: &Boxscore, game_state: &str) {
         away_abbrev, away_score, home_score, home_abbrev);
 
     // Game status line
-    let status_text = format_game_status(&boxscore.game_state, &boxscore.period_descriptor.number, &boxscore.clock);
+    let status_text = format_game_status(boxscore.game_state, &boxscore.period_descriptor.number, &boxscore.clock);
     println!("│ {:<86} │", status_text);
 
     println!("├{:─<88}┤", "");
@@ -139,7 +139,7 @@ fn display_simple_score(game: &nhl_api::ScheduleGame) {
             game.away_team.abbrev, game.home_team.abbrev);
     }
 
-    let status = if game.game_state == "FUT" || game.game_state == "PRE" {
+    let status = if game.game_state.is_scheduled() {
         format!("Scheduled: {}", game.start_time_utc)
     } else {
         format!("Status: {}", game.game_state)
@@ -149,11 +149,12 @@ fn display_simple_score(game: &nhl_api::ScheduleGame) {
     println!("└{:─<88}┘", "");
 }
 
-fn format_game_status(state: &str, period: &i32, clock: &GameClock) -> String {
+fn format_game_status(state: nhl_api::GameState, period: &i32, clock: &GameClock) -> String {
+    use nhl_api::GameState;
+
     match state {
-        "FINAL" => "FINAL".to_string(),
-        "OFF" => "FINAL".to_string(),
-        "LIVE" => {
+        GameState::Final | GameState::Off => "FINAL".to_string(),
+        GameState::Live => {
             let period_str = match period {
                 1 => "1st",
                 2 => "2nd",
@@ -167,7 +168,8 @@ fn format_game_status(state: &str, period: &i32, clock: &GameClock) -> String {
                 format!("{} Period - {}", period_str, clock.time_remaining)
             }
         }
-        "FUT" | "PRE" => "Scheduled".to_string(),
-        _ => state.to_string(),
+        GameState::Future | GameState::PreGame => "Scheduled".to_string(),
+        GameState::Postponed => "Postponed".to_string(),
+        GameState::Suspended => "Suspended".to_string(),
     }
 }

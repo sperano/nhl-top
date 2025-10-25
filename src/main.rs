@@ -94,6 +94,16 @@ enum Commands {
     Config,
 }
 
+/// Create an NHL API client with optional debug mode
+fn create_client(debug: bool) -> Client {
+    if debug {
+        let config = ClientConfig::default().with_debug();
+        Client::with_config(config).unwrap()
+    } else {
+        Client::new().unwrap()
+    }
+}
+
 async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64) {
     loop {
         // Fetch standings
@@ -109,6 +119,8 @@ async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval
         }
 
         // Fetch today's schedule
+        //let date = nhl_api::GameDate::from_str("2025-10-24").unwrap();
+        //match client.daily_schedule(Some(&date)).await {
         match client.daily_schedule(Some(&nhl_api::GameDate::today())).await {
             Ok(schedule) => {
                 // Fetch period scores for LIVE and FINAL games
@@ -116,13 +128,13 @@ async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval
 
                 for game in &schedule.games {
                     // Only fetch for games that have started
-                    if game.game_state != "FUT" && game.game_state != "PRE" {
+                    if game.game_state.has_started() {
                         let game_id = nhl_api::GameId::new(game.id);
 
-                        // Try to fetch play-by-play for period scores
-                        match client.play_by_play(&game_id).await {
-                            Ok(play_by_play) => {
-                                if let Some(summary) = &play_by_play.summary {
+                        // Try to fetch landing data for period scores (lighter than play-by-play)
+                        match client.landing(&game_id).await {
+                            Ok(landing) => {
+                                if let Some(summary) = &landing.summary {
                                     let scores = commands::scores_format::extract_period_scores(
                                         summary,
                                         game.away_team.id,
@@ -132,7 +144,7 @@ async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval
                                 }
                             }
                             Err(e) => {
-                                eprintln!("Error fetching play-by-play for game {}: {}", game.id, e);
+                                eprintln!("Error fetching landing data for game {}: {}", game.id, e);
                             }
                         }
                     }
@@ -170,12 +182,7 @@ async fn main() {
         }));
 
         // Create client for background task
-        let bg_client = if config.debug {
-            let client_config = ClientConfig::default().with_debug();
-            Client::with_config(client_config).unwrap()
-        } else {
-            Client::new().unwrap()
-        };
+        let bg_client = create_client(config.debug);
 
         // Spawn background task to fetch data
         let shared_data_clone = Arc::clone(&shared_data);
@@ -193,35 +200,33 @@ async fn main() {
 
     let command = cli.command.unwrap();
 
+    // Handle Config command separately (doesn't need a client)
+    if let Commands::Config = command {
+        let (path_str, exists) = match config::get_config_path() {
+            Some(path) => {
+                let exists = path.exists();
+                (path.display().to_string(), exists)
+            }
+            None => ("Unable to determine config path".to_string(), false),
+        };
+
+        println!("Configuration File: {} (Exists: {})", path_str, if exists { "yes" } else { "no" });
+        println!();
+        println!("Current Configuration:");
+        println!("=====================");
+        println!("debug: {}", config.debug);
+        println!("refresh_interval: {} seconds", config.refresh_interval);
+        println!("display_standings_western_first: {}", config.display_standings_western_first);
+        println!("time_format: {}", config.time_format);
+        return;
+    }
+
+    // Create client once for all other commands
+    let client = create_client(config.debug);
+
     match command {
-        Commands::Config => {
-            // Config command doesn't need a client
-            let (path_str, exists) = match config::get_config_path() {
-                Some(path) => {
-                    let exists = path.exists();
-                    (path.display().to_string(), exists)
-                }
-                None => ("Unable to determine config path".to_string(), false),
-            };
-
-            println!("Configuration File: {} (Exists: {})", path_str, if exists { "yes" } else { "no" });
-            println!();
-            println!("Current Configuration:");
-            println!("=====================");
-            println!("debug: {}", config.debug);
-            println!("refresh_interval: {} seconds", config.refresh_interval);
-            println!("display_standings_western_first: {}", config.display_standings_western_first);
-            println!("time_format: {}", config.time_format);
-        }
+        Commands::Config => unreachable!(), // Already handled above
         Commands::Standings { season, date, by } => {
-            // Create client with debug mode if flag is set
-            let client = if config.debug {
-                let config = ClientConfig::default().with_debug();
-                Client::with_config(config).unwrap()
-            } else {
-                Client::new().unwrap()
-            };
-
             let group_by = match by {
                 GroupBy::Division => commands::standings::GroupBy::Division,
                 GroupBy::Conference => commands::standings::GroupBy::Conference,
@@ -230,30 +235,12 @@ async fn main() {
             commands::standings::run(&client, season, date, group_by).await;
         }
         Commands::Boxscore { game_id } => {
-            let client = if config.debug {
-                let config = ClientConfig::default().with_debug();
-                Client::with_config(config).unwrap()
-            } else {
-                Client::new().unwrap()
-            };
             commands::boxscore::run(&client, game_id).await;
         }
         Commands::Schedule { date } => {
-            let client = if config.debug {
-                let config = ClientConfig::default().with_debug();
-                Client::with_config(config).unwrap()
-            } else {
-                Client::new().unwrap()
-            };
             commands::schedule::run(&client, date).await;
         }
         Commands::Scores { date } => {
-            let client = if config.debug {
-                let config = ClientConfig::default().with_debug();
-                Client::with_config(config).unwrap()
-            } else {
-                Client::new().unwrap()
-            };
             commands::scores::run(&client, date).await;
         }
     }
