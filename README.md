@@ -1,2 +1,2 @@
-# nhl-top
+# nhl
 NHL Live Score &amp; Standings
