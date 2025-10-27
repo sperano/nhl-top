@@ -15,34 +15,168 @@ pub fn format_scores_for_tui(
     schedule: &DailySchedule,
     period_scores: &HashMap<i64, PeriodScores>,
 ) -> String {
+    let empty_game_info = HashMap::new();
+    format_scores_for_tui_with_width(schedule, period_scores, &empty_game_info, None)
+}
+
+/// Format scores with specific terminal width for column layout
+pub fn format_scores_for_tui_with_width(
+    schedule: &DailySchedule,
+    period_scores: &HashMap<i64, PeriodScores>,
+    game_info: &HashMap<i64, nhl_api::GameMatchup>,
+    terminal_width: Option<usize>,
+) -> String {
     let mut output = String::new();
 
     // Display header
-    output.push_str(&format!("{}\n", schedule.date));
-    //output.push_str(&format!("{}\n\n", "═".repeat(60)));
+    //output.push_str(&format!("{}\n", schedule.date));
 
     if schedule.number_of_games == 0 {
         output.push_str("No games scheduled for today.\n");
         return output;
     }
 
-    // Display each game
-    for (i, game) in schedule.games.iter().enumerate() {
-        if i > 0 {
-            output.push_str("\n");
+    // Determine number of columns based on terminal width
+    // Each game box is 37 characters wide to accommodate all 5 periods (1, 2, 3, OT, SO)
+    let num_columns = if let Some(width) = terminal_width {
+        if width >= 115 {
+            3 // 3 columns for wide terminals (115 = 37*3 + 2*2 gaps)
+        } else if width >= 76 {
+            2 // 2 columns for medium terminals (76 = 37*2 + 2 gap)
+        } else {
+            1 // 1 column for narrow terminals
         }
-        output.push_str(&format_game_table(game, period_scores.get(&game.id)));
+    } else {
+        1 // Default to 1 column if width not provided
+    };
+
+    // Group games into rows
+    let games: Vec<_> = schedule.games.iter().collect();
+    let rows: Vec<_> = games.chunks(num_columns).collect();
+
+    for (row_idx, row) in rows.iter().enumerate() {
+        if row_idx > 0 {
+            output.push('\n');
+        }
+
+        // Format each game in the row as a table
+        let formatted_games: Vec<String> = row
+            .iter()
+            .map(|game| format_game_table(game, period_scores.get(&game.id), game_info.get(&game.id)))
+            .collect();
+
+        // Combine games horizontally
+        output.push_str(&combine_tables_horizontally(&formatted_games));
     }
 
     output
 }
 
-fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>) -> String {
+/// Combine multiple game tables horizontally (side-by-side)
+fn combine_tables_horizontally(tables: &[String]) -> String {
+    if tables.is_empty() {
+        return String::new();
+    }
+
+    // Split each table into lines
+    let table_lines: Vec<Vec<&str>> = tables
+        .iter()
+        .map(|t| t.lines().collect())
+        .collect();
+
+    // Find the maximum number of lines
+    let max_lines = table_lines.iter().map(|t| t.len()).max().unwrap_or(0);
+
+    let mut output = String::new();
+
+    // Combine line by line
+    for line_idx in 0..max_lines {
+        for (table_idx, lines) in table_lines.iter().enumerate() {
+            if table_idx > 0 {
+                output.push_str("  "); // 2-space gap between tables
+            }
+
+            // Get the line or use empty space if this table is shorter
+            if line_idx < lines.len() {
+                output.push_str(lines[line_idx]);
+            } else {
+                // Pad with spaces to match table width (all 5 periods)
+                output.push_str(&" ".repeat(37));
+            }
+        }
+        output.push('\n');
+    }
+
+    output
+}
+
+fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, game_info: Option<&nhl_api::GameMatchup>) -> String {
     let mut output = String::new();
 
     // Determine if game has started
     let game_started = game.game_state.has_started();
-    let game_final = game.game_state.is_final();
+
+    // Add header based on game state
+    let header = if game.game_state.is_final() {
+        "Final Score".to_string()
+    } else if game_started {
+        // Game is in progress - show period and time
+        if let Some(info) = game_info {
+            let period_text = match info.period_descriptor.period_type.as_str() {
+                "REG" => {
+                    let ordinal = match info.period_descriptor.number {
+                        1 => "1st",
+                        2 => "2nd",
+                        3 => "3rd",
+                        n => return format!("{}th Period", n),
+                    };
+                    format!("{} Period", ordinal)
+                },
+                "OT" => "Overtime".to_string(),
+                "SO" => "Shootout".to_string(),
+                _ => format!("Period {}", info.period_descriptor.number),
+            };
+
+            if let Some(clock) = &info.clock {
+                if clock.in_intermission {
+                    format!("{} - Intermission", period_text)
+                } else {
+                    format!("{} - {}", period_text, clock.time_remaining)
+                }
+            } else {
+                period_text
+            }
+        } else {
+            "In Progress".to_string()
+        }
+    } else {
+        // Game hasn't started - show start time
+        // Parse and format the UTC time (format: "2024-10-25T23:00:00Z")
+        if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&game.start_time_utc) {
+            let local_time: chrono::DateTime<chrono::Local> = parsed.into();
+            local_time.format("%I:%M %p").to_string()
+        } else {
+            game.start_time_utc.clone()
+        }
+    };
+
+    // Add 1 char left padding, then left-align the header and pad to 37 chars
+    output.push_str(&format!(" {:<36}\n", header));
+
+    // Determine current period for in-progress games
+    let current_period_num = if game_started && !game.game_state.is_final() {
+        game_info.and_then(|info| {
+            // Get the current period number based on period type
+            match info.period_descriptor.period_type.as_str() {
+                "REG" => Some(info.period_descriptor.number),
+                "OT" => Some(4),
+                "SO" => Some(5),
+                _ => Some(info.period_descriptor.number),
+            }
+        })
+    } else {
+        None
+    };
 
     if game_started {
         if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
@@ -56,25 +190,40 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>) 
             output.push_str(&build_score_table(
                 &game.away_team.abbrev,
                 &game.home_team.abbrev,
-                away_score,
-                home_score,
+                Some(away_score),
+                Some(home_score),
                 has_ot,
                 has_so,
                 away_periods,
                 home_periods,
+                current_period_num,
             ));
         } else {
-            // Game started but no scores yet - show simple info
-            output.push_str(&format!(
-                "{} @ {} ({})\n",
-                game.away_team.abbrev, game.home_team.abbrev, game.game_state
+            // Game started but no scores yet - show table with dashes
+            output.push_str(&build_score_table(
+                &game.away_team.abbrev,
+                &game.home_team.abbrev,
+                None,
+                None,
+                false,
+                false,
+                None,
+                None,
+                current_period_num,
             ));
         }
     } else {
-        // Game hasn't started - show simple info
-        output.push_str(&format!(
-            "{} @ {} - Scheduled: {}\n",
-            game.away_team.abbrev, game.home_team.abbrev, game.start_time_utc
+        // Game hasn't started - show table with dashes
+        output.push_str(&build_score_table(
+            &game.away_team.abbrev,
+            &game.home_team.abbrev,
+            None,
+            None,
+            false,
+            false,
+            None,
+            None,
+            None,
         ));
     }
 
@@ -84,29 +233,39 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>) 
 fn build_score_table(
     away_team: &str,
     home_team: &str,
-    away_score: i32,
-    home_score: i32,
+    away_score: Option<i32>,
+    home_score: Option<i32>,
     has_ot: bool,
     has_so: bool,
     away_periods: Option<&Vec<i32>>,
     home_periods: Option<&Vec<i32>>,
+    current_period_num: Option<i32>,
 ) -> String {
     let mut output = String::new();
 
-    // Calculate column count (empty + 3 periods + OT? + SO? + Total)
+    // Calculate column count based on actual periods, but we'll pad to max width later
     let base_cols = 5; // empty, 1, 2, 3, T
     let ot_cols = if has_ot { 1 } else { 0 };
     let so_cols = if has_so { 1 } else { 0 };
     let total_cols = base_cols + ot_cols + so_cols;
 
     // Top border
+    let max_width = 37; // Width with all 5 periods
     output.push('╭');
     output.push_str(&"─".repeat(5)); // team name column
     for _ in 1..total_cols {
         output.push('┬');
         output.push_str(&"─".repeat(4));
     }
-    output.push_str("╮\n");
+    output.push_str("╮");
+
+    // Pad to max width
+    // Calculate actual width: 1 (╭) + 5 (team) + (total_cols-1) * (1 connector + 4 dashes) + 1 (╮)
+    let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
+    if current_width < max_width {
+        output.push_str(&" ".repeat(max_width - current_width));
+    }
+    output.push('\n');
 
     // Header row
     output.push('│');
@@ -130,7 +289,15 @@ fn build_score_table(
 
     output.push('│');
     output.push_str(&format!("{:^4}", "T"));
-    output.push_str("│\n");
+    output.push_str("│");
+
+    // Pad to max width
+    // Calculate: 1 (│) + 5 (team) + (total_cols-1) * (1 │ + 4 chars) + 1 (│)
+    let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
+    if current_width < max_width {
+        output.push_str(&" ".repeat(max_width - current_width));
+    }
+    output.push('\n');
 
     // Middle border
     output.push('├');
@@ -139,29 +306,71 @@ fn build_score_table(
         output.push('┼');
         output.push_str(&"─".repeat(4));
     }
-    output.push_str("┤\n");
+    output.push_str("┤");
+
+    // Pad to max width
+    let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
+    if current_width < max_width {
+        output.push_str(&" ".repeat(max_width - current_width));
+    }
+    output.push('\n');
 
     // Away team row
     output.push('│');
     output.push_str(&format!("{:^5}", away_team));
     output.push('│');
 
+    // Helper to check if a period should show score or dash
+    let should_show_period = |period: i32| -> bool {
+        current_period_num.map_or(true, |current| period <= current)
+    };
+
     // Period scores or placeholders
     if let Some(periods) = away_periods {
-        output.push_str(&format!("{:^4}", periods.get(0).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+        // Period 1
+        let p1_value = if should_show_period(1) {
+            periods.get(0).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+        } else {
+            "-".to_string()
+        };
+        output.push_str(&format!("{:^4}", p1_value));
         output.push('│');
-        output.push_str(&format!("{:^4}", periods.get(1).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+
+        // Period 2
+        let p2_value = if should_show_period(2) {
+            periods.get(1).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+        } else {
+            "-".to_string()
+        };
+        output.push_str(&format!("{:^4}", p2_value));
         output.push('│');
-        output.push_str(&format!("{:^4}", periods.get(2).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+
+        // Period 3
+        let p3_value = if should_show_period(3) {
+            periods.get(2).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+        } else {
+            "-".to_string()
+        };
+        output.push_str(&format!("{:^4}", p3_value));
 
         if has_ot {
             output.push('│');
-            output.push_str(&format!("{:^4}", periods.get(3).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+            let ot_value = if should_show_period(4) {
+                periods.get(3).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            } else {
+                "-".to_string()
+            };
+            output.push_str(&format!("{:^4}", ot_value));
         }
 
         if has_so {
             output.push('│');
-            output.push_str(&format!("{:^4}", periods.get(4).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+            let so_value = if should_show_period(5) {
+                periods.get(4).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            } else {
+                "-".to_string()
+            };
+            output.push_str(&format!("{:^4}", so_value));
         }
     } else {
         output.push_str(&format!("{:^4}", "-")); // P1
@@ -182,8 +391,15 @@ fn build_score_table(
     }
 
     output.push('│');
-    output.push_str(&format!("{:^4}", away_score)); // Total
-    output.push_str("│\n");
+    output.push_str(&format!("{:^4}", away_score.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string()))); // Total
+    output.push_str("│");
+
+    // Pad to max width
+    let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
+    if current_width < max_width {
+        output.push_str(&" ".repeat(max_width - current_width));
+    }
+    output.push('\n');
 
     // Home team row
     output.push('│');
@@ -192,20 +408,50 @@ fn build_score_table(
 
     // Period scores or placeholders
     if let Some(periods) = home_periods {
-        output.push_str(&format!("{:^4}", periods.get(0).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+        // Period 1
+        let p1_value = if should_show_period(1) {
+            periods.get(0).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+        } else {
+            "-".to_string()
+        };
+        output.push_str(&format!("{:^4}", p1_value));
         output.push('│');
-        output.push_str(&format!("{:^4}", periods.get(1).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+
+        // Period 2
+        let p2_value = if should_show_period(2) {
+            periods.get(1).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+        } else {
+            "-".to_string()
+        };
+        output.push_str(&format!("{:^4}", p2_value));
         output.push('│');
-        output.push_str(&format!("{:^4}", periods.get(2).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+
+        // Period 3
+        let p3_value = if should_show_period(3) {
+            periods.get(2).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+        } else {
+            "-".to_string()
+        };
+        output.push_str(&format!("{:^4}", p3_value));
 
         if has_ot {
             output.push('│');
-            output.push_str(&format!("{:^4}", periods.get(3).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+            let ot_value = if should_show_period(4) {
+                periods.get(3).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            } else {
+                "-".to_string()
+            };
+            output.push_str(&format!("{:^4}", ot_value));
         }
 
         if has_so {
             output.push('│');
-            output.push_str(&format!("{:^4}", periods.get(4).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+            let so_value = if should_show_period(5) {
+                periods.get(4).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            } else {
+                "-".to_string()
+            };
+            output.push_str(&format!("{:^4}", so_value));
         }
     } else {
         output.push_str(&format!("{:^4}", "-")); // P1
@@ -226,8 +472,15 @@ fn build_score_table(
     }
 
     output.push('│');
-    output.push_str(&format!("{:^4}", home_score)); // Total
-    output.push_str("│\n");
+    output.push_str(&format!("{:^4}", home_score.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string()))); // Total
+    output.push_str("│");
+
+    // Pad to max width
+    let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
+    if current_width < max_width {
+        output.push_str(&" ".repeat(max_width - current_width));
+    }
+    output.push('\n');
 
     // Bottom border
     output.push('╰');
@@ -236,7 +489,14 @@ fn build_score_table(
         output.push('┴');
         output.push_str(&"─".repeat(4));
     }
-    output.push_str("╯\n");
+    output.push_str("╯");
+
+    // Pad to max width
+    let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
+    if current_width < max_width {
+        output.push_str(&" ".repeat(max_width - current_width));
+    }
+    output.push('\n');
 
     output
 }

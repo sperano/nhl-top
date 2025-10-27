@@ -154,7 +154,7 @@ fn format_game_status(state: nhl_api::GameState, period: &i32, clock: &GameClock
 
     match state {
         GameState::Final | GameState::Off => "FINAL".to_string(),
-        GameState::Live => {
+        GameState::Live | GameState::Critical => {
             let period_str = match period {
                 1 => "1st",
                 2 => "2nd",

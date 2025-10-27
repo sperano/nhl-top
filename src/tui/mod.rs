@@ -15,10 +15,11 @@ use ratatui::{
 };
 use crate::SharedDataHandle;
 use tabs::{AppState, Tab};
-use widgets::{render_tab_bar, render_standings_subtabs, render_status_bar, render_content};
+use widgets::{render_tab_bar, render_standings_subtabs, render_scores_subtabs, render_status_bar, render_content};
 use events::{handle_key_event, AppAction};
+use tokio::sync::mpsc;
 
-pub async fn run(shared_data: SharedDataHandle) -> Result<(), io::Error> {
+pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) -> Result<(), io::Error> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -31,26 +32,30 @@ pub async fn run(shared_data: SharedDataHandle) -> Result<(), io::Error> {
     // Main loop
     loop {
         // Read data from shared state
-        let (standings_data, schedule_data, period_scores_data, western_first, last_refresh, time_format) = {
+        let (standings_data, schedule_data, period_scores_data, game_info_data, western_first, last_refresh, time_format, game_date, error_message) = {
             let data = shared_data.read().await;
             (
                 data.standings.clone(),
                 data.schedule.clone(),
                 data.period_scores.clone(),
+                data.game_info.clone(),
                 data.config.display_standings_western_first,
                 data.last_refresh,
                 data.config.time_format.clone(),
+                data.game_date.clone(),
+                data.error_message.clone(),
             )
         };
 
         terminal.draw(|f| {
             let size = f.area();
 
-            // Create main layout - add space for sub-tabs if on Standings, and status bar at bottom
-            let constraints = if app_state.current_tab == Tab::Standings {
+            // Create main layout - add space for sub-tabs if on Scores or Standings, and status bar at bottom
+            let has_subtabs = app_state.current_tab == Tab::Scores || app_state.current_tab == Tab::Standings;
+            let constraints = if has_subtabs {
                 vec![
                     Constraint::Length(2), // Main tab bar
-                    Constraint::Length(2), // Sub-tab bar for standings
+                    Constraint::Length(2), // Sub-tab bar
                     Constraint::Min(0),    // Content
                     Constraint::Length(1), // Status bar
                 ]
@@ -71,7 +76,10 @@ pub async fn run(shared_data: SharedDataHandle) -> Result<(), io::Error> {
             render_tab_bar(f, chunks[0], app_state.current_tab, !app_state.subtab_focused);
 
             // Render sub-tabs and content based on current tab
-            let content_chunk_idx = if app_state.current_tab == Tab::Standings {
+            let content_chunk_idx = if app_state.current_tab == Tab::Scores {
+                render_scores_subtabs(f, chunks[1], &game_date, app_state.scores_selected_index, app_state.subtab_focused);
+                2
+            } else if app_state.current_tab == Tab::Standings {
                 render_standings_subtabs(f, chunks[1], app_state.standings_view, app_state.subtab_focused);
                 2
             } else {
@@ -85,19 +93,20 @@ pub async fn run(shared_data: SharedDataHandle) -> Result<(), io::Error> {
                 &standings_data,
                 &schedule_data,
                 &period_scores_data,
+                &game_info_data,
                 app_state.standings_view,
                 western_first,
             );
 
             // Render status bar at the bottom
             let status_chunk_idx = chunks.len() - 1;
-            render_status_bar(f, chunks[status_chunk_idx], last_refresh, &time_format);
+            render_status_bar(f, chunks[status_chunk_idx], last_refresh, &time_format, error_message.as_deref());
         })?;
 
         // Handle events
         if event::poll(std::time::Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                match handle_key_event(key, &mut app_state) {
+                match handle_key_event(key, &mut app_state, &shared_data, &refresh_tx).await {
                     AppAction::Exit => break,
                     AppAction::Continue => {}
                 }

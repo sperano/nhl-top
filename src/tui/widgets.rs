@@ -124,7 +124,95 @@ pub fn render_standings_subtabs(f: &mut Frame, area: Rect, standings_view: Group
     f.render_widget(subtab_widget, area);
 }
 
-pub fn render_status_bar(f: &mut Frame, area: Rect, last_refresh: Option<SystemTime>, time_format: &str) {
+pub fn render_scores_subtabs(f: &mut Frame, area: Rect, game_date: &nhl_api::GameDate, selected_index: usize, focused: bool) {
+    // Determine base style based on focus
+    let base_style = if focused {
+        Style::default()
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    // Calculate the three dates to display: yesterday, today (selected), tomorrow
+    let yesterday = game_date.add_days(-1);
+    let tomorrow = game_date.add_days(1);
+
+    // Format dates as MM/DD
+    let format_date = |date: &nhl_api::GameDate| -> String {
+        match date {
+            nhl_api::GameDate::Date(naive_date) => {
+                naive_date.format("%m/%d").to_string()
+            }
+            nhl_api::GameDate::Now => {
+                chrono::Local::now().date_naive().format("%m/%d").to_string()
+            }
+        }
+    };
+
+    let yesterday_str = format_date(&yesterday);
+    let today_str = format_date(game_date);
+    let tomorrow_str = format_date(&tomorrow);
+
+    // Build subtab line with separators and left margin
+    let mut subtab_spans = Vec::new();
+    subtab_spans.push(Span::styled("  ", base_style)); // 2-space left margin
+
+    // Yesterday (index 0)
+    let yesterday_style = if selected_index == 0 {
+        base_style.add_modifier(Modifier::REVERSED)
+    } else {
+        base_style
+    };
+    subtab_spans.push(Span::styled(yesterday_str.clone(), yesterday_style));
+    subtab_spans.push(Span::styled(" │ ", base_style));
+
+    // Today (index 1)
+    let today_style = if selected_index == 1 {
+        base_style.add_modifier(Modifier::REVERSED)
+    } else {
+        base_style
+    };
+    subtab_spans.push(Span::styled(today_str.clone(), today_style));
+    subtab_spans.push(Span::styled(" │ ", base_style));
+
+    // Tomorrow (index 2)
+    let tomorrow_style = if selected_index == 2 {
+        base_style.add_modifier(Modifier::REVERSED)
+    } else {
+        base_style
+    };
+    subtab_spans.push(Span::styled(tomorrow_str.clone(), tomorrow_style));
+
+    let subtab_line = Line::from(subtab_spans);
+
+    // Build separator line with connectors
+    let tab_names = vec![yesterday_str, today_str, tomorrow_str].into_iter();
+    let separator_line = build_tab_separator_line(tab_names, area.width.saturating_sub(2) as usize, base_style);
+
+    // Add left margin to separator line
+    let separator_with_margin = Line::from(vec![
+        Span::styled("  ", base_style),
+        Span::styled(separator_line.to_string(), base_style),
+    ]);
+
+    // Render subtabs with separator line
+    let subtab_widget = Paragraph::new(vec![subtab_line, separator_with_margin])
+        .block(Block::default().borders(Borders::NONE));
+
+    f.render_widget(subtab_widget, area);
+}
+
+pub fn render_status_bar(f: &mut Frame, area: Rect, last_refresh: Option<SystemTime>, time_format: &str, error_message: Option<&str>) {
+    if let Some(error) = error_message {
+        // Display error message in red if present
+        let error_line = format!("ERROR: {}", error);
+        let status_line = format!("{:width$}", error_line, width = area.width as usize);
+        let status_bar = Paragraph::new(status_line)
+            .style(Style::default().bg(Color::Red).fg(Color::White));
+        f.render_widget(status_bar, area);
+        return;
+    }
+
+    // Normal status display
     let status_text = if let Some(refresh_time) = last_refresh {
         let datetime: DateTime<Local> = refresh_time.into();
         let formatted_time = datetime.format(time_format).to_string();
@@ -148,13 +236,20 @@ pub fn render_content(
     standings_data: &[nhl_api::Standing],
     schedule_data: &Option<nhl_api::DailySchedule>,
     period_scores: &std::collections::HashMap<i64, crate::commands::scores_format::PeriodScores>,
+    game_info: &std::collections::HashMap<i64, nhl_api::GameMatchup>,
     standings_view: GroupBy,
     western_first: bool,
 ) {
     let content = match current_tab {
         Tab::Scores => {
             if let Some(schedule) = schedule_data {
-                crate::commands::scores_format::format_scores_for_tui(schedule, period_scores)
+                // Pass terminal width for column layout
+                crate::commands::scores_format::format_scores_for_tui_with_width(
+                    schedule,
+                    period_scores,
+                    game_info,
+                    Some(area.width as usize)
+                )
             } else {
                 "Loading scores...".to_string()
             }

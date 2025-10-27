@@ -6,16 +6,20 @@ use nhl_api::{Client, ClientConfig, Standing, DailySchedule};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::Arc;
 use std::collections::HashMap;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
 use std::time::{Duration, SystemTime};
+use futures::future::join_all;
 
 #[derive(Clone)]
 pub struct SharedData {
     pub standings: Vec<Standing>,
     pub schedule: Option<DailySchedule>,
     pub period_scores: HashMap<i64, commands::scores_format::PeriodScores>,
+    pub game_info: HashMap<i64, nhl_api::GameMatchup>,
     pub config: config::Config,
     pub last_refresh: Option<SystemTime>,
+    pub game_date: nhl_api::GameDate,
+    pub error_message: Option<String>,
 }
 
 impl Default for SharedData {
@@ -24,8 +28,11 @@ impl Default for SharedData {
             standings: Vec::new(),
             schedule: None,
             period_scores: HashMap::new(),
+            game_info: HashMap::new(),
             config: config::Config::default(),
             last_refresh: None,
+            game_date: nhl_api::GameDate::today(),
+            error_message: None,
         }
     }
 }
@@ -104,48 +111,83 @@ fn create_client(debug: bool) -> Client {
     }
 }
 
-async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64) {
+async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64, mut refresh_rx: mpsc::Receiver<()>) {
+    let mut interval_timer = tokio::time::interval(Duration::from_secs(interval));
+    interval_timer.tick().await; // First tick completes immediately
+
     loop {
+        // Wait for either the interval timer or a manual refresh signal
+        tokio::select! {
+            _ = interval_timer.tick() => {
+                // Regular interval refresh
+            }
+            _ = refresh_rx.recv() => {
+                // Manual refresh triggered
+            }
+        }
         // Fetch standings
         match client.current_league_standings().await {
             Ok(data) => {
                 let mut shared = shared_data.write().await;
                 shared.standings = data;
                 shared.last_refresh = Some(SystemTime::now());
+                shared.error_message = None; // Clear any previous errors
             }
             Err(e) => {
-                eprintln!("Error fetching standings: {}", e);
+                let mut shared = shared_data.write().await;
+                shared.error_message = Some(format!("Failed to fetch standings: {}", e));
             }
         }
 
-        // Fetch today's schedule
-        //let date = nhl_api::GameDate::from_str("2025-10-24").unwrap();
-        //match client.daily_schedule(Some(&date)).await {
-        match client.daily_schedule(Some(&nhl_api::GameDate::today())).await {
+        // Fetch schedule for the current game_date
+        let date = {
+            let shared = shared_data.read().await;
+            shared.game_date.clone()
+        };
+        match client.daily_schedule(Some(&date)).await {
             Ok(schedule) => {
-                // Fetch period scores for LIVE and FINAL games
+                // Fetch period scores and game info for LIVE and FINAL games
                 let mut period_scores = HashMap::new();
+                let mut game_info = HashMap::new();
 
-                for game in &schedule.games {
-                    // Only fetch for games that have started
-                    if game.game_state.has_started() {
-                        let game_id = nhl_api::GameId::new(game.id);
+                // Collect all games that need fetching
+                let games_to_fetch: Vec<_> = schedule.games.iter()
+                    .filter(|game| game.game_state.has_started())
+                    .collect();
 
-                        // Try to fetch landing data for period scores (lighter than play-by-play)
-                        match client.landing(&game_id).await {
-                            Ok(landing) => {
-                                if let Some(summary) = &landing.summary {
-                                    let scores = commands::scores_format::extract_period_scores(
-                                        summary,
-                                        game.away_team.id,
-                                        game.home_team.id,
-                                    );
-                                    period_scores.insert(game.id, scores);
-                                }
+                // Create futures for all landing requests
+                let fetch_futures = games_to_fetch.iter().map(|game| {
+                    let game_id = nhl_api::GameId::new(game.id);
+                    let game_clone = (*game).clone();
+                    let client_ref = &client;
+                    async move {
+                        let result = client_ref.landing(&game_id).await;
+                        (game_clone, result)
+                    }
+                });
+
+                // Execute all requests in parallel
+                let results = join_all(fetch_futures).await;
+
+                // Process results
+                for (game, result) in results {
+                    match result {
+                        Ok(landing) => {
+                            if let Some(summary) = &landing.summary {
+                                let scores = commands::scores_format::extract_period_scores(
+                                    summary,
+                                    game.away_team.id,
+                                    game.home_team.id,
+                                );
+                                period_scores.insert(game.id, scores);
                             }
-                            Err(e) => {
-                                eprintln!("Error fetching landing data for game {}: {}", game.id, e);
-                            }
+                            // Store the full game info for clock/period display
+                            game_info.insert(game.id, landing);
+                        }
+                        Err(e) => {
+                            // Store error for individual game fetch failures
+                            let mut shared = shared_data.write().await;
+                            shared.error_message = Some(format!("Failed to fetch game {} data: {}", game.id, e));
                         }
                     }
                 }
@@ -153,13 +195,15 @@ async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval
                 let mut shared = shared_data.write().await;
                 shared.schedule = Some(schedule);
                 shared.period_scores = period_scores;
+                shared.game_info = game_info;
+                // Note: errors from individual game fetches are preserved
             }
             Err(e) => {
-                eprintln!("Error fetching schedule: {}", e);
+                let mut shared = shared_data.write().await;
+                shared.error_message = Some(format!("Failed to fetch schedule: {}", e));
             }
         }
 
-        tokio::time::sleep(Duration::from_secs(interval)).await;
     }
 }
 
@@ -177,9 +221,15 @@ async fn main() {
             standings: Vec::new(),
             schedule: None,
             period_scores: HashMap::new(),
+            game_info: HashMap::new(),
             config: config.clone(),
             last_refresh: None,
+            game_date: nhl_api::GameDate::today(),
+            error_message: None,
         }));
+
+        // Create channel for manual refresh triggers
+        let (refresh_tx, refresh_rx) = mpsc::channel::<()>(10);
 
         // Create client for background task
         let bg_client = create_client(config.debug);
@@ -188,10 +238,10 @@ async fn main() {
         let shared_data_clone = Arc::clone(&shared_data);
         let refresh_interval = config.refresh_interval as u64;
         tokio::spawn(async move {
-            fetch_data_loop(bg_client, shared_data_clone, refresh_interval).await;
+            fetch_data_loop(bg_client, shared_data_clone, refresh_interval, refresh_rx).await;
         });
 
-        if let Err(e) = tui::run(shared_data).await {
+        if let Err(e) = tui::run(shared_data, refresh_tx).await {
             eprintln!("Error running TUI: {}", e);
             std::process::exit(1);
         }
@@ -245,3 +295,32 @@ async fn main() {
         }
     }
 }
+
+// fn init_logging() -> Result<()> {
+//     if let Err(e) = color_eyre::install() {
+//         return Err(anyhow!("Failed to install color_eyre: {}", e));
+//     }
+//     // only enable logging in debug builds
+//     #[cfg(debug_assertions)]
+//     {
+//         use simplelog::*;
+//         use std::fs::File;
+//
+//         let pgm = env!("CARGO_PKG_NAME");
+//         let xdg_dirs = BaseDirectories::with_prefix(pgm);
+//         let log_path = xdg_dirs.place_cache_file(format!("{}.log", pgm))?;
+//         let config = ConfigBuilder::new()
+//             .set_thread_level(LevelFilter::Error)
+//             .set_thread_mode(ThreadLogMode::Names)
+//             .set_thread_padding(ThreadPadding::Left(9))
+//             .set_level_padding(LevelPadding::Right)
+//             .build();
+//         CombinedLogger::init(vec![WriteLogger::new(
+//             LevelFilter::Debug,
+//             config,
+//             File::create(log_path)?,
+//         )])?;
+//     }
+//     Ok(())
+// }
+
