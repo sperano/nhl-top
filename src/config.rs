@@ -6,7 +6,8 @@ use std::path::PathBuf;
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
-    pub debug: bool,
+    pub log_level: String,
+    pub log_file: String,
     pub refresh_interval: u32,
     pub display_standings_western_first: bool,
     pub time_format: String,
@@ -15,7 +16,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            debug: false,
+            log_level: "info".to_string(),
+            log_file: "/dev/null".to_string(),
             refresh_interval: 60,
             display_standings_western_first: false,
             time_format: "%H:%M:%S".to_string(),

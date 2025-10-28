@@ -132,9 +132,15 @@ pub fn render_scores_subtabs(f: &mut Frame, area: Rect, game_date: &nhl_api::Gam
         Style::default().fg(Color::DarkGray)
     };
 
-    // Calculate the three dates to display: yesterday, today (selected), tomorrow
-    let yesterday = game_date.add_days(-1);
-    let tomorrow = game_date.add_days(1);
+    // Calculate the three dates to display based on game_date and selected_index
+    // game_date is always the selected date
+    // The 3 visible dates depend on which position (0, 1, or 2) is selected
+    let (left_date, center_date, right_date) = match selected_index {
+        0 => (game_date.clone(), game_date.add_days(1), game_date.add_days(2)),
+        1 => (game_date.add_days(-1), game_date.clone(), game_date.add_days(1)),
+        2 => (game_date.add_days(-2), game_date.add_days(-1), game_date.clone()),
+        _ => (game_date.add_days(-1), game_date.clone(), game_date.add_days(1)), // fallback
+    };
 
     // Format dates as MM/DD
     let format_date = |date: &nhl_api::GameDate| -> String {
@@ -148,9 +154,9 @@ pub fn render_scores_subtabs(f: &mut Frame, area: Rect, game_date: &nhl_api::Gam
         }
     };
 
-    let yesterday_str = format_date(&yesterday);
-    let today_str = format_date(game_date);
-    let tomorrow_str = format_date(&tomorrow);
+    let yesterday_str = format_date(&left_date);
+    let today_str = format_date(&center_date);
+    let tomorrow_str = format_date(&right_date);
 
     // Build subtab line with separators and left margin
     let mut subtab_spans = Vec::new();
@@ -267,7 +273,7 @@ pub fn render_content(
                 .collect::<Vec<_>>()
                 .join("\n")
         }
-        _ => format!("Hello {}!", current_tab.name()),
+        _ => "...".to_string(),
     };
 
     let paragraph = Paragraph::new(content).block(Block::default().borders(Borders::NONE));

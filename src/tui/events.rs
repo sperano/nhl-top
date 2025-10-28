@@ -21,7 +21,7 @@ pub async fn handle_key_event(key: KeyEvent, state: &mut AppState, shared_data: 
                     if state.scores_selected_index > 0 {
                         // Move selection within visible window
                         state.scores_selected_index -= 1;
-                        // Update game_date to reflect the newly selected date
+                        // Update game_date to the newly selected date
                         {
                             let mut data = shared_data.write().await;
                             data.game_date = data.game_date.add_days(-1);
@@ -75,7 +75,7 @@ pub async fn handle_key_event(key: KeyEvent, state: &mut AppState, shared_data: 
                     if state.scores_selected_index < 2 {
                         // Move selection within visible window
                         state.scores_selected_index += 1;
-                        // Update game_date to reflect the newly selected date
+                        // Update game_date to the newly selected date
                         {
                             let mut data = shared_data.write().await;
                             data.game_date = data.game_date.add_days(1);

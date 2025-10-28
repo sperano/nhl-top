@@ -2,13 +2,15 @@ mod tui;
 mod commands;
 mod config;
 
-use nhl_api::{Client, ClientConfig, Standing, DailySchedule};
+use nhl_api::{Client, Standing, DailySchedule};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::{RwLock, mpsc};
 use std::time::{Duration, SystemTime};
 use futures::future::join_all;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
 
 #[derive(Clone)]
 pub struct SharedData {
@@ -43,9 +45,13 @@ pub type SharedDataHandle = Arc<RwLock<SharedData>>;
 #[command(name = "nhl")]
 #[command(about = "NHL stats and standings CLI", long_about = "NHL stats and standings CLI\n\nIf no command is specified, the program starts in interactive mode.")]
 struct Cli {
-    /// Enable debug mode with verbose output
-    #[arg(long, global = true)]
-    debug: bool,
+    /// Set log level (trace, debug, info, warn, error)
+    #[arg(short = 'L', long, global = true, default_value = "info")]
+    log_level: String,
+
+    /// Log file path (default: /dev/null for no logging)
+    #[arg(short = 'F', long, global = true, default_value = "/dev/null")]
+    log_file: String,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -102,13 +108,8 @@ enum Commands {
 }
 
 /// Create an NHL API client with optional debug mode
-fn create_client(debug: bool) -> Client {
-    if debug {
-        let config = ClientConfig::default().with_debug();
-        Client::with_config(config).unwrap()
-    } else {
-        Client::new().unwrap()
-    }
+fn create_client() -> Client {
+    Client::new().unwrap()
 }
 
 async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64, mut refresh_rx: mpsc::Receiver<()>) {
@@ -116,15 +117,6 @@ async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval
     interval_timer.tick().await; // First tick completes immediately
 
     loop {
-        // Wait for either the interval timer or a manual refresh signal
-        tokio::select! {
-            _ = interval_timer.tick() => {
-                // Regular interval refresh
-            }
-            _ = refresh_rx.recv() => {
-                // Manual refresh triggered
-            }
-        }
         // Fetch standings
         match client.current_league_standings().await {
             Ok(data) => {
@@ -203,16 +195,78 @@ async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval
                 shared.error_message = Some(format!("Failed to fetch schedule: {}", e));
             }
         }
+        // Wait for either the interval timer or a manual refresh signal
+        tokio::select! {
+            _ = interval_timer.tick() => {
+                // Regular interval refresh
+            }
+            _ = refresh_rx.recv() => {
+                // Manual refresh triggered
+            }
+        }
+    }
+}
 
+fn init_logging(log_level: &str, log_file: &str) {
+    // Parse log level
+    let level = match log_level.to_lowercase().as_str() {
+        "trace" => Level::TRACE,
+        "debug" => Level::DEBUG,
+        "info" => Level::INFO,
+        "warn" => Level::WARN,
+        "error" => Level::ERROR,
+        _ => Level::INFO,
+    };
+
+    // If log file is /dev/null, skip logging setup
+    if log_file == "/dev/null" {
+        return;
+    }
+
+    // Create log file
+    let file = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open log file {}: {}", log_file, e);
+            return;
+        }
+    };
+
+    // Initialize tracing subscriber with file output
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(level)
+        .with_writer(std::sync::Mutex::new(file))
+        .with_ansi(false)
+        .finish();
+
+    if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+        eprintln!("Failed to set tracing subscriber: {}", e);
     }
 }
 
 #[tokio::main]
 async fn main() {
     let mut config = config::read();
-
     let cli = Cli::parse();
-    config.debug = config.debug || cli.debug;
+
+    // CLI arguments override config file
+    let log_level = if cli.log_level != "info" {
+        &cli.log_level
+    } else {
+        &config.log_level
+    };
+    let log_file = if cli.log_file != "/dev/null" {
+        &cli.log_file
+    } else {
+        &config.log_file
+    };
+
+    // Initialize logging
+    init_logging(log_level, log_file);
 
     // If no subcommand, run TUI
     if cli.command.is_none() {
@@ -232,7 +286,7 @@ async fn main() {
         let (refresh_tx, refresh_rx) = mpsc::channel::<()>(10);
 
         // Create client for background task
-        let bg_client = create_client(config.debug);
+        let bg_client = create_client();
 
         // Spawn background task to fetch data
         let shared_data_clone = Arc::clone(&shared_data);
@@ -264,7 +318,8 @@ async fn main() {
         println!();
         println!("Current Configuration:");
         println!("=====================");
-        println!("debug: {}", config.debug);
+        println!("log_level: {}", config.log_level);
+        println!("log_file: {}", config.log_file);
         println!("refresh_interval: {} seconds", config.refresh_interval);
         println!("display_standings_western_first: {}", config.display_standings_western_first);
         println!("time_format: {}", config.time_format);
@@ -272,7 +327,7 @@ async fn main() {
     }
 
     // Create client once for all other commands
-    let client = create_client(config.debug);
+    let client = create_client();
 
     match command {
         Commands::Config => unreachable!(), // Already handled above
@@ -295,32 +350,3 @@ async fn main() {
         }
     }
 }
-
-// fn init_logging() -> Result<()> {
-//     if let Err(e) = color_eyre::install() {
-//         return Err(anyhow!("Failed to install color_eyre: {}", e));
-//     }
-//     // only enable logging in debug builds
-//     #[cfg(debug_assertions)]
-//     {
-//         use simplelog::*;
-//         use std::fs::File;
-//
-//         let pgm = env!("CARGO_PKG_NAME");
-//         let xdg_dirs = BaseDirectories::with_prefix(pgm);
-//         let log_path = xdg_dirs.place_cache_file(format!("{}.log", pgm))?;
-//         let config = ConfigBuilder::new()
-//             .set_thread_level(LevelFilter::Error)
-//             .set_thread_mode(ThreadLogMode::Names)
-//             .set_thread_padding(ThreadPadding::Left(9))
-//             .set_level_padding(LevelPadding::Right)
-//             .build();
-//         CombinedLogger::init(vec![WriteLogger::new(
-//             LevelFilter::Debug,
-//             config,
-//             File::create(log_path)?,
-//         )])?;
-//     }
-//     Ok(())
-// }
-
