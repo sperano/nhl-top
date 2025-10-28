@@ -1,18 +1,60 @@
-use nhl_api::{Client, ClientConfig, GameDate, GameId};
-use chrono::NaiveDate;
+mod tui;
+mod commands;
+mod config;
+
+use nhl_api::{Client, Standing, DailySchedule};
 use clap::{Parser, Subcommand, ValueEnum};
-use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::collections::HashMap;
+use tokio::sync::{RwLock, mpsc};
+use std::time::{Duration, SystemTime};
+use futures::future::join_all;
+use tracing::Level;
+use tracing_subscriber::FmtSubscriber;
+
+#[derive(Clone)]
+pub struct SharedData {
+    pub standings: Vec<Standing>,
+    pub schedule: Option<DailySchedule>,
+    pub period_scores: HashMap<i64, commands::scores_format::PeriodScores>,
+    pub game_info: HashMap<i64, nhl_api::GameMatchup>,
+    pub config: config::Config,
+    pub last_refresh: Option<SystemTime>,
+    pub game_date: nhl_api::GameDate,
+    pub error_message: Option<String>,
+}
+
+impl Default for SharedData {
+    fn default() -> Self {
+        SharedData {
+            standings: Vec::new(),
+            schedule: None,
+            period_scores: HashMap::new(),
+            game_info: HashMap::new(),
+            config: config::Config::default(),
+            last_refresh: None,
+            game_date: nhl_api::GameDate::today(),
+            error_message: None,
+        }
+    }
+}
+
+pub type SharedDataHandle = Arc<RwLock<SharedData>>;
 
 #[derive(Parser)]
-#[command(name = "nhl-top")]
-#[command(about = "NHL stats and standings CLI", long_about = None)]
+#[command(name = "nhl")]
+#[command(about = "NHL stats and standings CLI", long_about = "NHL stats and standings CLI\n\nIf no command is specified, the program starts in interactive mode.")]
 struct Cli {
-    /// Enable debug mode with verbose output
-    #[arg(long, global = true)]
-    debug: bool,
+    /// Set log level (trace, debug, info, warn, error)
+    #[arg(short = 'L', long, global = true, default_value = "info")]
+    log_level: String,
+
+    /// Log file path (default: /dev/null for no logging)
+    #[arg(short = 'F', long, global = true, default_value = "/dev/null")]
+    log_file: String,
 
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -55,294 +97,256 @@ enum Commands {
         #[arg(short, long)]
         date: Option<String>,
     },
+    /// Display scores for games with period-by-period breakdown
+    Scores {
+        /// Date in YYYY-MM-DD format (optional, defaults to today)
+        #[arg(short, long)]
+        date: Option<String>,
+    },
+    /// Display current configuration
+    Config,
+}
+
+/// Create an NHL API client with optional debug mode
+fn create_client() -> Client {
+    Client::new().unwrap()
+}
+
+async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64, mut refresh_rx: mpsc::Receiver<()>) {
+    let mut interval_timer = tokio::time::interval(Duration::from_secs(interval));
+    interval_timer.tick().await; // First tick completes immediately
+
+    loop {
+        // Fetch standings
+        match client.current_league_standings().await {
+            Ok(data) => {
+                let mut shared = shared_data.write().await;
+                shared.standings = data;
+                shared.last_refresh = Some(SystemTime::now());
+                shared.error_message = None; // Clear any previous errors
+            }
+            Err(e) => {
+                let mut shared = shared_data.write().await;
+                shared.error_message = Some(format!("Failed to fetch standings: {}", e));
+            }
+        }
+
+        // Fetch schedule for the current game_date
+        let date = {
+            let shared = shared_data.read().await;
+            shared.game_date.clone()
+        };
+        match client.daily_schedule(Some(&date)).await {
+            Ok(schedule) => {
+                // Fetch period scores and game info for LIVE and FINAL games
+                let mut period_scores = HashMap::new();
+                let mut game_info = HashMap::new();
+
+                // Collect all games that need fetching
+                let games_to_fetch: Vec<_> = schedule.games.iter()
+                    .filter(|game| game.game_state.has_started())
+                    .collect();
+
+                // Create futures for all landing requests
+                let fetch_futures = games_to_fetch.iter().map(|game| {
+                    let game_id = nhl_api::GameId::new(game.id);
+                    let game_clone = (*game).clone();
+                    let client_ref = &client;
+                    async move {
+                        let result = client_ref.landing(&game_id).await;
+                        (game_clone, result)
+                    }
+                });
+
+                // Execute all requests in parallel
+                let results = join_all(fetch_futures).await;
+
+                // Process results
+                for (game, result) in results {
+                    match result {
+                        Ok(landing) => {
+                            if let Some(summary) = &landing.summary {
+                                let scores = commands::scores_format::extract_period_scores(
+                                    summary,
+                                    game.away_team.id,
+                                    game.home_team.id,
+                                );
+                                period_scores.insert(game.id, scores);
+                            }
+                            // Store the full game info for clock/period display
+                            game_info.insert(game.id, landing);
+                        }
+                        Err(e) => {
+                            // Store error for individual game fetch failures
+                            let mut shared = shared_data.write().await;
+                            shared.error_message = Some(format!("Failed to fetch game {} data: {}", game.id, e));
+                        }
+                    }
+                }
+
+                let mut shared = shared_data.write().await;
+                shared.schedule = Some(schedule);
+                shared.period_scores = period_scores;
+                shared.game_info = game_info;
+                // Note: errors from individual game fetches are preserved
+            }
+            Err(e) => {
+                let mut shared = shared_data.write().await;
+                shared.error_message = Some(format!("Failed to fetch schedule: {}", e));
+            }
+        }
+        // Wait for either the interval timer or a manual refresh signal
+        tokio::select! {
+            _ = interval_timer.tick() => {
+                // Regular interval refresh
+            }
+            _ = refresh_rx.recv() => {
+                // Manual refresh triggered
+            }
+        }
+    }
+}
+
+fn init_logging(log_level: &str, log_file: &str) {
+    // Parse log level
+    let level = match log_level.to_lowercase().as_str() {
+        "trace" => Level::TRACE,
+        "debug" => Level::DEBUG,
+        "info" => Level::INFO,
+        "warn" => Level::WARN,
+        "error" => Level::ERROR,
+        _ => Level::INFO,
+    };
+
+    // If log file is /dev/null, skip logging setup
+    if log_file == "/dev/null" {
+        return;
+    }
+
+    // Create log file
+    let file = match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)
+    {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("Failed to open log file {}: {}", log_file, e);
+            return;
+        }
+    };
+
+    // Initialize tracing subscriber with file output
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(level)
+        .with_writer(std::sync::Mutex::new(file))
+        .with_ansi(false)
+        .finish();
+
+    if let Err(e) = tracing::subscriber::set_global_default(subscriber) {
+        eprintln!("Failed to set tracing subscriber: {}", e);
+    }
 }
 
 #[tokio::main]
 async fn main() {
+    let mut config = config::read();
     let cli = Cli::parse();
 
-    // Create client with debug mode if flag is set
-    let client = if cli.debug {
-        let config = ClientConfig::default().with_debug();
-        Client::with_config(config).unwrap()
+    // CLI arguments override config file
+    let log_level = if cli.log_level != "info" {
+        &cli.log_level
     } else {
-        Client::new().unwrap()
+        &config.log_level
+    };
+    let log_file = if cli.log_file != "/dev/null" {
+        &cli.log_file
+    } else {
+        &config.log_file
     };
 
-    match cli.command {
-        Commands::Standings { season, date, by } => {
-            let mut standings = if let Some(date_str) = date {
-                // Parse date string and get standings for that date
-                let parsed_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-                    .expect("Invalid date format. Use YYYY-MM-DD");
-                let game_date = GameDate::Date(parsed_date);
-                client.league_standings_for_date(&game_date).await.unwrap()
-            } else if let Some(season_year) = season {
-                // Get standings for specific season
-                client.league_standings_for_season(season_year).await.unwrap()
-            } else {
-                // Get current standings
-                client.current_league_standings().await.unwrap()
-            };
+    // Initialize logging
+    init_logging(log_level, log_file);
 
-            // Sort by points (descending)
-            standings.sort_by(|a, b| b.points.cmp(&a.points));
+    // If no subcommand, run TUI
+    if cli.command.is_none() {
+        // Create shared data structure with config
+        let shared_data: SharedDataHandle = Arc::new(RwLock::new(SharedData {
+            standings: Vec::new(),
+            schedule: None,
+            period_scores: HashMap::new(),
+            game_info: HashMap::new(),
+            config: config.clone(),
+            last_refresh: None,
+            game_date: nhl_api::GameDate::today(),
+            error_message: None,
+        }));
 
-            match by {
-                GroupBy::Division => {
-                    // Group by division
-                    let mut grouped: BTreeMap<String, Vec<_>> = BTreeMap::new();
-                    for standing in standings {
-                        grouped
-                            .entry(standing.division_name.clone())
-                            .or_default()
-                            .push(standing);
-                    }
+        // Create channel for manual refresh triggers
+        let (refresh_tx, refresh_rx) = mpsc::channel::<()>(10);
 
-                    for (division, teams) in grouped {
-                        println!("\n{}", division);
-                        println!("{}", "=".repeat(division.len()));
-                        for standing in teams {
-                            println!("{}", standing);
-                        }
-                    }
-                }
-                GroupBy::Conference => {
-                    // Group by conference
-                    let mut grouped: BTreeMap<String, Vec<_>> = BTreeMap::new();
-                    for standing in standings {
-                        let conference = standing.conference_name
-                            .clone()
-                            .unwrap_or_else(|| "Unknown".to_string());
-                        grouped
-                            .entry(conference)
-                            .or_default()
-                            .push(standing);
-                    }
+        // Create client for background task
+        let bg_client = create_client();
 
-                    for (conference, teams) in grouped {
-                        println!("\n{}", conference);
-                        println!("{}", "=".repeat(conference.len()));
-                        for standing in teams {
-                            println!("{}", standing);
-                        }
-                    }
-                }
-                GroupBy::League => {
-                    // Show all teams in a single list
-                    println!("\nNHL Standings");
-                    println!("=============");
-                    for standing in standings {
-                        println!("{}", standing);
-                    }
-                }
+        // Spawn background task to fetch data
+        let shared_data_clone = Arc::clone(&shared_data);
+        let refresh_interval = config.refresh_interval as u64;
+        tokio::spawn(async move {
+            fetch_data_loop(bg_client, shared_data_clone, refresh_interval, refresh_rx).await;
+        });
+
+        if let Err(e) = tui::run(shared_data, refresh_tx).await {
+            eprintln!("Error running TUI: {}", e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    let command = cli.command.unwrap();
+
+    // Handle Config command separately (doesn't need a client)
+    if let Commands::Config = command {
+        let (path_str, exists) = match config::get_config_path() {
+            Some(path) => {
+                let exists = path.exists();
+                (path.display().to_string(), exists)
             }
+            None => ("Unable to determine config path".to_string(), false),
+        };
+
+        println!("Configuration File: {} (Exists: {})", path_str, if exists { "yes" } else { "no" });
+        println!();
+        println!("Current Configuration:");
+        println!("=====================");
+        println!("log_level: {}", config.log_level);
+        println!("log_file: {}", config.log_file);
+        println!("refresh_interval: {} seconds", config.refresh_interval);
+        println!("display_standings_western_first: {}", config.display_standings_western_first);
+        println!("time_format: {}", config.time_format);
+        return;
+    }
+
+    // Create client once for all other commands
+    let client = create_client();
+
+    match command {
+        Commands::Config => unreachable!(), // Already handled above
+        Commands::Standings { season, date, by } => {
+            let group_by = match by {
+                GroupBy::Division => commands::standings::GroupBy::Division,
+                GroupBy::Conference => commands::standings::GroupBy::Conference,
+                GroupBy::League => commands::standings::GroupBy::League,
+            };
+            commands::standings::run(&client, season, date, group_by).await;
         }
         Commands::Boxscore { game_id } => {
-            let game_id = GameId::new(game_id);
-            let boxscore = client.boxscore(&game_id).await.unwrap();
-
-            // Display game header
-            println!("\n{} @ {}",
-                boxscore.away_team.common_name.default,
-                boxscore.home_team.common_name.default
-            );
-            println!("{}", "=".repeat(60));
-            println!("Date: {} | Venue: {}",
-                boxscore.game_date,
-                boxscore.venue.default
-            );
-            println!("Status: {} | Period: {}",
-                boxscore.game_state,
-                boxscore.period_descriptor.number
-            );
-            if boxscore.clock.running || !boxscore.clock.in_intermission {
-                println!("Time: {}", boxscore.clock.time_remaining);
-            }
-
-            // Display score
-            println!("\n{:<20} {:>3}", "Team", "Score");
-            println!("{}", "-".repeat(25));
-            println!("{:<20} {:>3}",
-                boxscore.away_team.abbrev,
-                boxscore.away_team.score
-            );
-            println!("{:<20} {:>3}",
-                boxscore.home_team.abbrev,
-                boxscore.home_team.score
-            );
-
-            // Display shots on goal
-            println!("\n{:<20} {:>3}", "Team", "SOG");
-            println!("{}", "-".repeat(25));
-            println!("{:<20} {:>3}",
-                boxscore.away_team.abbrev,
-                boxscore.away_team.sog
-            );
-            println!("{:<20} {:>3}",
-                boxscore.home_team.abbrev,
-                boxscore.home_team.sog
-            );
-
-            // Display player stats - Away Team
-            println!("\n{} - Forwards", boxscore.away_team.abbrev);
-            println!("{}", "-".repeat(80));
-            println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                "#", "Name", "Pos", "G", "A", "P", "+/-", "TOI"
-            );
-            for player in &boxscore.player_by_game_stats.away_team.forwards {
-                println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                    player.sweater_number,
-                    player.name.default,
-                    player.position,
-                    player.goals,
-                    player.assists,
-                    player.points,
-                    player.plus_minus,
-                    player.toi
-                );
-            }
-
-            println!("\n{} - Defense", boxscore.away_team.abbrev);
-            println!("{}", "-".repeat(80));
-            println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                "#", "Name", "Pos", "G", "A", "P", "+/-", "TOI"
-            );
-            for player in &boxscore.player_by_game_stats.away_team.defense {
-                println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                    player.sweater_number,
-                    player.name.default,
-                    player.position,
-                    player.goals,
-                    player.assists,
-                    player.points,
-                    player.plus_minus,
-                    player.toi
-                );
-            }
-
-            println!("\n{} - Goalies", boxscore.away_team.abbrev);
-            println!("{}", "-".repeat(80));
-            println!("{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}",
-                "#", "Name", "SA", "Saves", "GA", "SV%"
-            );
-            for goalie in &boxscore.player_by_game_stats.away_team.goalies {
-                let sv_pct = goalie.save_pctg
-                    .map(|p| format!("{:.3}", p))
-                    .unwrap_or_else(|| "-".to_string());
-                println!("{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}",
-                    goalie.sweater_number,
-                    goalie.name.default,
-                    goalie.shots_against,
-                    goalie.saves,
-                    goalie.goals_against,
-                    sv_pct
-                );
-            }
-
-            // Display player stats - Home Team
-            println!("\n{} - Forwards", boxscore.home_team.abbrev);
-            println!("{}", "-".repeat(80));
-            println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                "#", "Name", "Pos", "G", "A", "P", "+/-", "TOI"
-            );
-            for player in &boxscore.player_by_game_stats.home_team.forwards {
-                println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                    player.sweater_number,
-                    player.name.default,
-                    player.position,
-                    player.goals,
-                    player.assists,
-                    player.points,
-                    player.plus_minus,
-                    player.toi
-                );
-            }
-
-            println!("\n{} - Defense", boxscore.home_team.abbrev);
-            println!("{}", "-".repeat(80));
-            println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                "#", "Name", "Pos", "G", "A", "P", "+/-", "TOI"
-            );
-            for player in &boxscore.player_by_game_stats.home_team.defense {
-                println!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}",
-                    player.sweater_number,
-                    player.name.default,
-                    player.position,
-                    player.goals,
-                    player.assists,
-                    player.points,
-                    player.plus_minus,
-                    player.toi
-                );
-            }
-
-            println!("\n{} - Goalies", boxscore.home_team.abbrev);
-            println!("{}", "-".repeat(80));
-            println!("{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}",
-                "#", "Name", "SA", "Saves", "GA", "SV%"
-            );
-            for goalie in &boxscore.player_by_game_stats.home_team.goalies {
-                let sv_pct = goalie.save_pctg
-                    .map(|p| format!("{:.3}", p))
-                    .unwrap_or_else(|| "-".to_string());
-                println!("{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}",
-                    goalie.sweater_number,
-                    goalie.name.default,
-                    goalie.shots_against,
-                    goalie.saves,
-                    goalie.goals_against,
-                    sv_pct
-                );
-            }
+            commands::boxscore::run(&client, game_id).await;
         }
         Commands::Schedule { date } => {
-            let game_date = if let Some(date_str) = date {
-                // Parse date string
-                let parsed_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-                    .expect("Invalid date format. Use YYYY-MM-DD");
-                GameDate::Date(parsed_date)
-            } else {
-                // Use today's date
-                GameDate::today()
-            };
-
-            let schedule = client.daily_schedule(Some(&game_date)).await.unwrap();
-
-            // Display schedule header
-            println!("\nNHL Schedule - {}", schedule.date);
-            println!("{}", "=".repeat(80));
-
-            if schedule.number_of_games == 0 {
-                println!("No games scheduled for this date.");
-            } else {
-                println!("Games: {}\n", schedule.number_of_games);
-
-                // Display each game
-                for game in &schedule.games {
-                    println!("Game ID: {}", game.id);
-                    println!("  {} @ {}",
-                        game.away_team.abbrev,
-                        game.home_team.abbrev
-                    );
-                    println!("  Time: {} (UTC)", game.start_time_utc);
-                    println!("  Status: {}", game.game_state);
-
-                    // Display scores if available
-                    if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
-                        println!("  Score: {} - {}", away_score, home_score);
-                    }
-                    println!();
-                }
-            }
-
-            // Display navigation info
-            if let Some(prev) = schedule.previous_start_date {
-                println!("Previous date with games: {}", prev);
-            }
-            if let Some(next) = schedule.next_start_date {
-                println!("Next date with games: {}", next);
-            }
+            commands::schedule::run(&client, date).await;
+        }
+        Commands::Scores { date } => {
+            commands::scores::run(&client, date).await;
         }
     }
 }
