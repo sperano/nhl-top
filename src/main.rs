@@ -1,4 +1,5 @@
 mod tui;
+mod tui2;  // New hierarchical TUI
 mod commands;
 mod background;
 pub mod config;
@@ -33,6 +34,9 @@ pub struct SharedData {
     pub last_refresh: Option<SystemTime>,
     pub game_date: nhl_api::GameDate,
     pub error_message: Option<String>,
+    pub selected_game_id: Option<i64>,
+    pub boxscore: Option<nhl_api::Boxscore>,
+    pub boxscore_loading: bool,
 }
 
 impl Default for SharedData {
@@ -46,6 +50,9 @@ impl Default for SharedData {
             last_refresh: None,
             game_date: nhl_api::GameDate::today(),
             error_message: None,
+            selected_game_id: None,
+            boxscore: None,
+            boxscore_loading: false,
         }
     }
 }
@@ -63,6 +70,10 @@ struct Cli {
     /// Log file path (default: /dev/null for no logging)
     #[arg(short = 'F', long, global = true, default_value = DEFAULT_LOG_FILE)]
     log_file: String,
+
+    /// Use new hierarchical TUI (experimental)
+    #[arg(short = '2')]
+    tui2: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -220,7 +231,7 @@ fn resolve_log_config<'a>(cli: &'a Cli, config: &'a config::Config) -> (&'a str,
 }
 
 /// Run TUI mode with background data fetching
-async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
+async fn run_tui_mode(config: config::Config, use_tui2: bool) -> Result<(), std::io::Error> {
     let shared_data: SharedDataHandle = Arc::new(RwLock::new(SharedData {
         config: config.clone(),
         ..Default::default()
@@ -239,7 +250,14 @@ async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
         background::fetch_data_loop(bg_client, shared_data_clone, refresh_interval, refresh_rx).await;
     });
 
-    tui::run(shared_data, refresh_tx).await
+    // Run selected TUI version
+    if use_tui2 {
+        // NEW TUI2 (hierarchical navigation)
+        tui2::run(shared_data, refresh_tx).await
+    } else {
+        // OLD TUI (original)
+        tui::run(shared_data, refresh_tx).await
+    }
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler
@@ -275,7 +293,7 @@ async fn main() {
 
     // If no subcommand, run TUI
     if cli.command.is_none() {
-        if let Err(e) = run_tui_mode(config).await {
+        if let Err(e) = run_tui_mode(config, cli.tui2).await {
             eprintln!("Error running TUI: {}", e);
             std::process::exit(1);
         }

@@ -16,9 +16,14 @@ pub async fn handle_key(
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
 ) -> bool {
+    // Handle boxscore view mode
+    if state.boxscore_view_active {
+        return handle_boxscore_view(key, state, shared_data).await;
+    }
+
     // Handle box selection mode separately
     if state.box_selection_active {
-        return handle_box_navigation(key, state);
+        return handle_box_navigation(key, state, shared_data, refresh_tx).await;
     }
 
     // Handle date selection mode
@@ -59,7 +64,7 @@ pub async fn handle_key(
         }
         KeyCode::Right => {
             // Navigate scores dates - move selection right
-            if state.selected_index < 2 {
+            if state.selected_index < 4 {
                 // Move selection within visible window
                 state.selected_index += 1;
                 // Update game_date to the newly selected date
@@ -81,7 +86,7 @@ pub async fn handle_key(
                 }
                 // Trigger immediate refresh
                 let _ = refresh_tx.send(()).await;
-                // Keep selection at index 2 (rightmost)
+                // Keep selection at index 4 (rightmost)
             }
             true
         }
@@ -89,7 +94,12 @@ pub async fn handle_key(
     }
 }
 
-fn handle_box_navigation(key: KeyEvent, state: &mut State) -> bool {
+async fn handle_box_navigation(
+    key: KeyEvent,
+    state: &mut State,
+    shared_data: &SharedDataHandle,
+    refresh_tx: &mpsc::Sender<()>,
+) -> bool {
     let (row, col) = state.selected_box;
     let (num_rows, num_cols) = state.grid_dimensions;
 
@@ -134,6 +144,76 @@ fn handle_box_navigation(key: KeyEvent, state: &mut State) -> bool {
             }
             true
         }
+        KeyCode::Enter => {
+            // Select the game and trigger boxscore fetch
+            select_game_for_boxscore(state, shared_data, refresh_tx).await;
+            true
+        }
+        KeyCode::Esc => {
+            // Exit box selection mode and return to date selection
+            state.box_selection_active = false;
+            true
+        }
         _ => false,
+    }
+}
+
+async fn handle_boxscore_view(key: KeyEvent, state: &mut State, shared_data: &SharedDataHandle) -> bool {
+    match key.code {
+        KeyCode::Esc => {
+            // Close the boxscore view and return to game list
+            state.boxscore_view_active = false;
+            state.boxscore_scrollable.reset(); // Reset scroll position
+            let mut data = shared_data.write().await;
+            data.selected_game_id = None;
+            data.boxscore = None;
+            data.boxscore_loading = false;
+            true
+        }
+        KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
+            // Handle scrolling
+            state.boxscore_scrollable.handle_key(key)
+        }
+        _ => true, // Consume all keys while boxscore view is active
+    }
+}
+
+async fn select_game_for_boxscore(state: &mut State, shared_data: &SharedDataHandle, refresh_tx: &mpsc::Sender<()>) {
+    let (row, col) = state.selected_box;
+    let (_, num_cols) = state.grid_dimensions;
+
+    // Calculate the game index based on row and column
+    let game_index = row * num_cols + col;
+
+    // Get the game from the schedule and set selected_game_id
+    let mut data = shared_data.write().await;
+    if let Some(ref schedule) = data.schedule {
+        if game_index < schedule.games.len() {
+            let game = &schedule.games[game_index];
+
+            // Check if game has started
+            if !game.game_state.has_started() {
+                // Game hasn't started yet, show error message
+                data.error_message = Some("Game hasn't started yet".to_string());
+                return;
+            }
+
+            let game_id = game.id;
+
+            // Set the selected game ID to trigger fetch in background
+            data.selected_game_id = Some(game_id);
+            data.boxscore_loading = true;
+            data.boxscore = None;
+
+            // Open the boxscore view and reset scroll position
+            state.boxscore_view_active = true;
+            state.boxscore_scrollable.reset();
+
+            // Drop the write lock before triggering refresh
+            drop(data);
+
+            // Trigger immediate refresh to fetch boxscore
+            let _ = refresh_tx.send(()).await;
+        }
     }
 }

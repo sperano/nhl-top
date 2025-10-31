@@ -98,6 +98,38 @@ pub async fn fetch_schedule_with_games(client: &Client, shared_data: &SharedData
     }
 }
 
+/// Fetch boxscore for selected game
+async fn fetch_boxscore(client: &Client, shared_data: &SharedDataHandle) {
+    // Get the selected game ID
+    let selected_game_id = {
+        let shared = shared_data.read().await;
+        shared.selected_game_id
+    };
+
+    if let Some(game_id) = selected_game_id {
+        // Set loading state
+        {
+            let mut shared = shared_data.write().await;
+            shared.boxscore_loading = true;
+            shared.boxscore = None;
+        }
+
+        // Fetch the boxscore
+        match client.boxscore(&nhl_api::GameId::new(game_id)).await {
+            Ok(boxscore) => {
+                let mut shared = shared_data.write().await;
+                shared.boxscore = Some(boxscore);
+                shared.boxscore_loading = false;
+            }
+            Err(e) => {
+                let mut shared = shared_data.write().await;
+                shared.boxscore_loading = false;
+                shared.error_message = Some(format!("Failed to fetch boxscore: {}", e));
+            }
+        }
+    }
+}
+
 /// Background task loop that periodically fetches NHL data
 pub async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64, mut refresh_rx: mpsc::Receiver<()>) {
     let mut interval_timer = tokio::time::interval(Duration::from_secs(interval));
@@ -107,6 +139,9 @@ pub async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, inte
         // Fetch standings and schedule with game details
         fetch_standings(&client, &shared_data).await;
         fetch_schedule_with_games(&client, &shared_data).await;
+
+        // Fetch boxscore if a game is selected
+        fetch_boxscore(&client, &shared_data).await;
 
         // Wait for either the interval timer or a manual refresh signal
         tokio::select! {

@@ -42,6 +42,18 @@ const EVENT_POLL_INTERVAL_MS: u64 = 100;
 /// Returns Some(true) to exit app, Some(false) to continue, None if not ESC
 fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
     if key.code == KeyCode::Esc {
+        // If on Scores tab and boxscore view is active, don't handle ESC here
+        // Let the scores handler close the boxscore view
+        if matches!(app_state.current_tab, CurrentTab::Scores) && app_state.scores.boxscore_view_active {
+            return None; // Let scores handler handle ESC
+        }
+
+        // If on Scores tab and box selection is active, don't handle ESC here
+        // Let the scores handler exit box selection mode
+        if matches!(app_state.current_tab, CurrentTab::Scores) && app_state.scores.box_selection_active {
+            return None; // Let scores handler handle ESC
+        }
+
         if app_state.is_subtab_focused() {
             app_state.exit_subtab_mode();
             Some(false) // Continue running
@@ -56,12 +68,13 @@ fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
 /// Handles number keys (1-4) for direct tab switching
 /// Only works when not in subtab mode
 /// Returns true if key was handled
-fn handle_number_keys(key: KeyEvent, app_state: &mut AppState) -> bool {
+async fn handle_number_keys(key: KeyEvent, app_state: &mut AppState, shared_data: &SharedDataHandle) -> bool {
     if app_state.is_subtab_focused() {
         return false;
     }
 
-    match key.code {
+    let old_tab = app_state.current_tab;
+    let handled = match key.code {
         KeyCode::Char('1') => {
             app_state.current_tab = CurrentTab::Scores;
             true
@@ -79,7 +92,17 @@ fn handle_number_keys(key: KeyEvent, app_state: &mut AppState) -> bool {
             true
         }
         _ => false,
+    };
+
+    // Reset boxscore state when navigating away from Scores tab
+    if handled && matches!(old_tab, CurrentTab::Scores) && !matches!(app_state.current_tab, CurrentTab::Scores) {
+        let mut data = shared_data.write().await;
+        data.selected_game_id = None;
+        data.boxscore = None;
+        data.boxscore_loading = false;
     }
+
+    handled
 }
 
 /// Handles Down/Enter keys to enter subtab mode
@@ -101,17 +124,17 @@ fn handle_enter_subtab_mode(key: KeyEvent, app_state: &mut AppState) -> bool {
     }
 }
 
-/// Handles arrow key navigation for both main tabs and subtabs
+/// Handles arrow key and Enter navigation for both main tabs and subtabs
 /// Delegates to tab-specific handlers when in subtab mode
 /// Returns true if key was handled
-async fn handle_arrow_keys(
+async fn handle_arrow_and_enter_keys(
     key: KeyEvent,
     app_state: &mut AppState,
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
 ) -> bool {
     match key.code {
-        KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right => {
+        KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Enter | KeyCode::Esc => {
             if app_state.is_subtab_focused() {
                 // Delegate to tab-specific handler
                 let handled = match app_state.current_tab {
@@ -132,10 +155,19 @@ async fn handle_arrow_keys(
                 }
             } else {
                 // Navigate between main tabs
+                let old_tab = app_state.current_tab;
                 match key.code {
                     KeyCode::Left => app_state.navigate_tab_left(),
                     KeyCode::Right => app_state.navigate_tab_right(),
                     _ => {}
+                }
+
+                // Reset boxscore state when navigating away from Scores tab
+                if matches!(old_tab, CurrentTab::Scores) && !matches!(app_state.current_tab, CurrentTab::Scores) {
+                    let mut data = shared_data.write().await;
+                    data.selected_game_id = None;
+                    data.boxscore = None;
+                    data.boxscore_loading = false;
                 }
             }
             true
@@ -158,7 +190,7 @@ async fn handle_key_event(
     }
 
     // Try other handlers in order
-    if handle_number_keys(key, app_state) {
+    if handle_number_keys(key, app_state, shared_data).await {
         return false;
     }
 
@@ -166,7 +198,7 @@ async fn handle_key_event(
         return false;
     }
 
-    if handle_arrow_keys(key, app_state, shared_data, refresh_tx).await {
+    if handle_arrow_and_enter_keys(key, app_state, shared_data, refresh_tx).await {
         return false;
     }
 
@@ -214,6 +246,8 @@ struct RenderData {
     game_date: GameDate,
     error_message: Option<String>,
     theme: crate::config::ThemeConfig,
+    boxscore: Option<nhl_api::Boxscore>,
+    boxscore_loading: bool,
 }
 
 /// Renders a single frame with the current application state and data
@@ -250,6 +284,8 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 &data.period_scores,
                 &data.game_info,
                 data.theme.selection_fg,
+                &data.boxscore,
+                data.boxscore_loading,
             );
         }
         CurrentTab::Standings => {
@@ -257,7 +293,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 f,
                 chunks[content_chunk_idx],
                 &data.standings,
-                &app_state.standings,
+                &mut app_state.standings,
                 data.western_first,
             );
         }
@@ -300,6 +336,8 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 game_date: data.game_date.clone(),
                 error_message: data.error_message.clone(),
                 theme: data.config.theme.clone(),
+                boxscore: data.boxscore.clone(),
+                boxscore_loading: data.boxscore_loading,
             }
         };
 

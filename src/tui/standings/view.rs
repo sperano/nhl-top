@@ -10,9 +10,9 @@ use super::State;
 use crate::tui::common::separator::build_tab_separator_line;
 use crate::tui::common::styling::{base_tab_style, selection_style};
 
-// Subtab Layout Constants
-/// Left margin for subtab bar and content (spaces before standings view tabs)
-const SUBTAB_LEFT_MARGIN: usize = 2;
+// Content Layout Constants
+/// Left margin for standings content
+const CONTENT_LEFT_MARGIN: usize = 2;
 
 pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Color, unfocused_selection_fg: Color) {
     let views = GroupBy::all();
@@ -21,9 +21,8 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Co
 
     let base_style = base_tab_style(focused);
 
-    // Build subtab line with separators and left margin
+    // Build subtab line with separators (no left margin)
     let mut subtab_spans = Vec::new();
-    subtab_spans.push(Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style)); // Left margin
 
     for (i, view) in views.iter().enumerate() {
         if i > 0 {
@@ -42,17 +41,15 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Co
     }
     let subtab_line = Line::from(subtab_spans);
 
-    // Build separator line with connectors (adjust width for left margin)
+    // Build separator line with connectors
     let tab_names = views.iter().map(|view| view.name().to_string());
     let separator_line = build_tab_separator_line(
         tab_names,
-        area.width.saturating_sub(SUBTAB_LEFT_MARGIN as u16) as usize,
+        area.width as usize,
         base_style
     );
 
-    // Add left margin to separator line
     let separator_with_margin = Line::from(vec![
-        Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style),
         Span::styled(separator_line.to_string(), base_style),
     ]);
 
@@ -67,7 +64,7 @@ pub fn render_content(
     f: &mut Frame,
     area: Rect,
     standings_data: &[nhl_api::Standing],
-    state: &State,
+    state: &mut State,
     western_first: bool,
 ) {
     let standings_text = crate::commands::standings::format_standings_by_group(
@@ -75,13 +72,12 @@ pub fn render_content(
         state.view,
         western_first,
     );
-    // Add left padding to each line to align with sub-tab line
+    // Add left padding to each line
     let content = standings_text
         .lines()
-        .map(|line| format!("{}{}", " ".repeat(SUBTAB_LEFT_MARGIN), line))
+        .map(|line| format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), line))
         .collect::<Vec<_>>()
         .join("\n");
 
-    let paragraph = Paragraph::new(content).block(Block::default().borders(Borders::NONE));
-    f.render_widget(paragraph, area);
+    state.scrollable.render_paragraph(f, area, content, None);
 }

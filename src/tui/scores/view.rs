@@ -2,7 +2,7 @@ use ratatui::{
     layout::Rect,
     style::{Style, Color},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Wrap, Clear},
     Frame,
 };
 use std::collections::HashMap;
@@ -11,8 +11,8 @@ use crate::tui::common::separator::build_tab_separator_line;
 use crate::tui::common::styling::{base_tab_style, selection_style};
 
 // Subtab Layout Constants
-/// Left margin for subtab bar (spaces before date tabs)
-const SUBTAB_LEFT_MARGIN: usize = 2;
+/// Left margin for subtab bar (spaces before date tabs) - REMOVED
+const SUBTAB_LEFT_MARGIN: usize = 0;
 
 pub fn render_subtabs(
     f: &mut Frame,
@@ -22,19 +22,58 @@ pub fn render_subtabs(
     selection_fg: Color,
     unfocused_selection_fg: Color,
 ) {
-    let focused = state.subtab_focused;
+    // Subtabs are only focused when subtab_focused is true AND box selection is not active
+    let focused = state.subtab_focused && !state.box_selection_active;
     let selected_index = state.selected_index;
 
     let base_style = base_tab_style(focused);
 
-    // Calculate the three dates to display based on game_date and selected_index
+    // Calculate the five dates to display based on game_date and selected_index
     // game_date is always the selected date
-    // The 3 visible dates depend on which position (0, 1, or 2) is selected
-    let (left_date, center_date, right_date) = match selected_index {
-        0 => (game_date.clone(), game_date.add_days(1), game_date.add_days(2)),
-        1 => (game_date.add_days(-1), game_date.clone(), game_date.add_days(1)),
-        2 => (game_date.add_days(-2), game_date.add_days(-1), game_date.clone()),
-        _ => (game_date.add_days(-1), game_date.clone(), game_date.add_days(1)), // fallback
+    // The 5 visible dates with current day in the middle (index 2)
+    let (date0, date1, date2, date3, date4) = match selected_index {
+        0 => (
+            game_date.clone(),
+            game_date.add_days(1),
+            game_date.add_days(2),
+            game_date.add_days(3),
+            game_date.add_days(4),
+        ),
+        1 => (
+            game_date.add_days(-1),
+            game_date.clone(),
+            game_date.add_days(1),
+            game_date.add_days(2),
+            game_date.add_days(3),
+        ),
+        2 => (
+            game_date.add_days(-2),
+            game_date.add_days(-1),
+            game_date.clone(),
+            game_date.add_days(1),
+            game_date.add_days(2),
+        ),
+        3 => (
+            game_date.add_days(-3),
+            game_date.add_days(-2),
+            game_date.add_days(-1),
+            game_date.clone(),
+            game_date.add_days(1),
+        ),
+        4 => (
+            game_date.add_days(-4),
+            game_date.add_days(-3),
+            game_date.add_days(-2),
+            game_date.add_days(-1),
+            game_date.clone(),
+        ),
+        _ => (
+            game_date.add_days(-2),
+            game_date.add_days(-1),
+            game_date.clone(),
+            game_date.add_days(1),
+            game_date.add_days(2),
+        ), // fallback to middle
     };
 
     // Format dates as MM/DD
@@ -49,50 +88,73 @@ pub fn render_subtabs(
         }
     };
 
-    let yesterday_str = format_date(&left_date);
-    let today_str = format_date(&center_date);
-    let tomorrow_str = format_date(&right_date);
+    let date0_str = format_date(&date0);
+    let date1_str = format_date(&date1);
+    let date2_str = format_date(&date2);
+    let date3_str = format_date(&date3);
+    let date4_str = format_date(&date4);
 
-    // Build subtab line with separators and left margin
+    // Build subtab line with separators (no left margin)
     let mut subtab_spans = Vec::new();
-    subtab_spans.push(Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style)); // Left margin
 
-    // Left date (index 0)
-    let yesterday_style = selection_style(
+    // Date 0 (index 0)
+    let date0_style = selection_style(
         base_style,
         selected_index == 0,
         focused,
         selection_fg,
         unfocused_selection_fg,
     );
-    subtab_spans.push(Span::styled(yesterday_str.clone(), yesterday_style));
+    subtab_spans.push(Span::styled(date0_str.clone(), date0_style));
     subtab_spans.push(Span::styled(" │ ", base_style));
 
-    // Center date (index 1)
-    let today_style = selection_style(
+    // Date 1 (index 1)
+    let date1_style = selection_style(
         base_style,
         selected_index == 1,
         focused,
         selection_fg,
         unfocused_selection_fg,
     );
-    subtab_spans.push(Span::styled(today_str.clone(), today_style));
+    subtab_spans.push(Span::styled(date1_str.clone(), date1_style));
     subtab_spans.push(Span::styled(" │ ", base_style));
 
-    // Right date (index 2)
-    let tomorrow_style = selection_style(
+    // Date 2 (index 2) - CENTER (current day)
+    let date2_style = selection_style(
         base_style,
         selected_index == 2,
         focused,
         selection_fg,
         unfocused_selection_fg,
     );
-    subtab_spans.push(Span::styled(tomorrow_str.clone(), tomorrow_style));
+    subtab_spans.push(Span::styled(date2_str.clone(), date2_style));
+    subtab_spans.push(Span::styled(" │ ", base_style));
+
+    // Date 3 (index 3)
+    let date3_style = selection_style(
+        base_style,
+        selected_index == 3,
+        focused,
+        selection_fg,
+        unfocused_selection_fg,
+    );
+    subtab_spans.push(Span::styled(date3_str.clone(), date3_style));
+    subtab_spans.push(Span::styled(" │ ", base_style));
+
+    // Date 4 (index 4)
+    let date4_style = selection_style(
+        base_style,
+        selected_index == 4,
+        focused,
+        selection_fg,
+        unfocused_selection_fg,
+    );
+    subtab_spans.push(Span::styled(date4_str.clone(), date4_style));
 
     let subtab_line = Line::from(subtab_spans);
 
-    // Build separator line with connectors (adjust width for left margin)
-    let tab_names = vec![yesterday_str, today_str, tomorrow_str].into_iter();
+    // Build separator line with connectors (no left margin)
+    let tab_names = vec![date0_str, date1_str, date2_str, date3_str, date4_str].into_iter();
     let separator_line = build_tab_separator_line(
         tab_names,
         area.width.saturating_sub(SUBTAB_LEFT_MARGIN as u16) as usize,
@@ -127,7 +189,14 @@ pub fn render_content(
     period_scores: &HashMap<i64, crate::commands::scores_format::PeriodScores>,
     game_info: &HashMap<i64, nhl_api::GameMatchup>,
     selection_fg: Color,
+    boxscore: &Option<nhl_api::Boxscore>,
+    boxscore_loading: bool,
 ) {
+    // If boxscore view is active, render boxscore instead of game list
+    if state.boxscore_view_active {
+        render_boxscore_content(f, area, state, boxscore, boxscore_loading);
+        return;
+    }
 
     if let Some(schedule) = schedule {
         // Calculate grid dimensions
@@ -166,15 +235,28 @@ pub fn render_content(
             Some(area.width as usize)
         );
 
-        // Convert to styled Text if a box is selected
-        let styled_text = if let Some((sel_row, sel_col)) = selected_box {
-            apply_box_styling_ratatui(&content, sel_row, sel_col, selection_fg)
-        } else {
-            Text::raw(content)
-        };
+        // Update viewport and content height
+        state.grid_scrollable.update_viewport_height(area.height);
+        state.grid_scrollable.update_content_height(content.lines().count());
 
-        let paragraph = Paragraph::new(styled_text).block(Block::default().borders(Borders::NONE));
-        f.render_widget(paragraph, area);
+        // Ensure selected box is visible
+        ensure_box_visible(state, area.height);
+
+        // If a box is selected, apply styling and render with scroll
+        if let Some((sel_row, sel_col)) = selected_box {
+            let styled_text = apply_box_styling_ratatui(&content, sel_row, sel_col, selection_fg);
+
+            let paragraph = Paragraph::new(styled_text)
+                .block(Block::default().borders(Borders::NONE))
+                .scroll((state.grid_scrollable.scroll_offset, 0));
+            f.render_widget(paragraph, area);
+        } else {
+            // No selection, render normally with scroll
+            let paragraph = Paragraph::new(content)
+                .block(Block::default().borders(Borders::NONE))
+                .scroll((state.grid_scrollable.scroll_offset, 0));
+            f.render_widget(paragraph, area);
+        }
     } else {
         let paragraph = Paragraph::new("Loading scores...").block(Block::default().borders(Borders::NONE));
         f.render_widget(paragraph, area);
@@ -185,15 +267,38 @@ pub fn render_content(
 // Constants for box layout
 const LINES_PER_BOX: usize = 7;
 const BLANK_LINE_BETWEEN_BOXES: usize = 1;
+const LINES_PER_ROW: usize = LINES_PER_BOX + BLANK_LINE_BETWEEN_BOXES; // 8 lines total per row
 const BOX_WIDTH: usize = 37;
 const BOX_GAP: usize = 2;
 
 /// Calculate the line range (start, end) for a box at the given row
 fn calculate_box_line_range(sel_row: usize) -> (usize, usize) {
-    let lines_per_row = LINES_PER_BOX + BLANK_LINE_BETWEEN_BOXES; // 8 lines total per row
-    let start_line = sel_row * lines_per_row;
+    let start_line = sel_row * LINES_PER_ROW;
     let end_line = start_line + LINES_PER_BOX; // 7 lines for the box
     (start_line, end_line)
+}
+
+/// Ensure the selected box is fully visible by adjusting scroll offset
+fn ensure_box_visible(state: &mut State, viewport_height: u16) {
+    if !state.box_selection_active {
+        return;
+    }
+
+    let (sel_row, _) = state.selected_box;
+    let (start_line, end_line) = calculate_box_line_range(sel_row);
+
+    let scroll_offset = state.grid_scrollable.scroll_offset as usize;
+    let viewport_end = scroll_offset + viewport_height as usize;
+
+    // If box top is above viewport, scroll up to show it
+    if start_line < scroll_offset {
+        state.grid_scrollable.scroll_offset = start_line as u16;
+    }
+    // If box bottom is below viewport, scroll down to show it
+    else if end_line > viewport_end {
+        let new_offset = end_line.saturating_sub(viewport_height as usize);
+        state.grid_scrollable.scroll_offset = new_offset as u16;
+    }
 }
 
 /// Calculate the column range (start, end) for a box at the given column
@@ -284,4 +389,24 @@ fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, sele
     }
 
     Text::from(styled_lines)
+}
+
+/// Render boxscore content in place of game list (scrollable)
+fn render_boxscore_content(
+    f: &mut Frame,
+    area: Rect,
+    state: &mut State,
+    boxscore: &Option<nhl_api::Boxscore>,
+    loading: bool,
+) {
+    // Render the boxscore content
+    let content_text = if loading {
+        "Loading boxscore...".to_string()
+    } else if let Some(ref bs) = boxscore {
+        crate::commands::boxscore::format_boxscore(bs)
+    } else {
+        "No boxscore available".to_string()
+    };
+
+    state.boxscore_scrollable.render_paragraph(f, area, content_text, None);
 }
