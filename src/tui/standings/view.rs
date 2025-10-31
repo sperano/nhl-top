@@ -1,54 +1,29 @@
 use ratatui::{
     layout::Rect,
-    style::{Modifier, Style, Color},
+    style::Color,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use crate::commands::standings::GroupBy;
 use super::State;
+use crate::tui::common::separator::build_tab_separator_line;
+use crate::tui::common::styling::{base_tab_style, selection_style};
 
-/// Helper function to build a separator line with box-drawing connectors for tabs
-fn build_tab_separator_line<'a, I>(tab_names: I, area_width: usize, style: Style) -> Line<'a>
-where
-    I: Iterator<Item = String>,
-{
-    let mut separator_spans = Vec::new();
-    let mut pos = 0;
+// Subtab Layout Constants
+/// Left margin for subtab bar and content (spaces before standings view tabs)
+const SUBTAB_LEFT_MARGIN: usize = 2;
 
-    for (i, tab_name) in tab_names.enumerate() {
-        if i > 0 {
-            separator_spans.push(Span::raw("─".repeat(1)));
-            separator_spans.push(Span::raw("┴"));
-            separator_spans.push(Span::raw("─".repeat(1)));
-            pos += 3;
-        }
-        separator_spans.push(Span::raw("─".repeat(tab_name.len())));
-        pos += tab_name.len();
-    }
-
-    if pos < area_width {
-        separator_spans.push(Span::raw("─".repeat(area_width - pos)));
-    }
-
-    Line::from(separator_spans).style(style)
-}
-
-pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State) {
+pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Color, unfocused_selection_fg: Color) {
     let views = GroupBy::all();
     let standings_view = state.view;
     let focused = state.subtab_focused;
 
-    // Determine base style based on focus
-    let base_style = if focused {
-        Style::default()
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let base_style = base_tab_style(focused);
 
     // Build subtab line with separators and left margin
     let mut subtab_spans = Vec::new();
-    subtab_spans.push(Span::styled("  ", base_style)); // 2-space left margin
+    subtab_spans.push(Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style)); // Left margin
 
     for (i, view) in views.iter().enumerate() {
         if i > 0 {
@@ -56,22 +31,28 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State) {
         }
 
         let tab_text = format!("{}", view.name());
-        let style = if *view == standings_view {
-            base_style.add_modifier(Modifier::REVERSED)
-        } else {
-            base_style
-        };
+        let style = selection_style(
+            base_style,
+            *view == standings_view,
+            focused,
+            selection_fg,
+            unfocused_selection_fg,
+        );
         subtab_spans.push(Span::styled(tab_text, style));
     }
     let subtab_line = Line::from(subtab_spans);
 
-    // Build separator line with connectors (adjust width for 2-space margin)
+    // Build separator line with connectors (adjust width for left margin)
     let tab_names = views.iter().map(|view| view.name().to_string());
-    let separator_line = build_tab_separator_line(tab_names, area.width.saturating_sub(2) as usize, base_style);
+    let separator_line = build_tab_separator_line(
+        tab_names,
+        area.width.saturating_sub(SUBTAB_LEFT_MARGIN as u16) as usize,
+        base_style
+    );
 
     // Add left margin to separator line
     let separator_with_margin = Line::from(vec![
-        Span::styled("  ", base_style),
+        Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style),
         Span::styled(separator_line.to_string(), base_style),
     ]);
 
@@ -94,10 +75,10 @@ pub fn render_content(
         state.view,
         western_first,
     );
-    // Add 2-space left padding to each line to align with sub-tab line
+    // Add left padding to each line to align with sub-tab line
     let content = standings_text
         .lines()
-        .map(|line| format!("  {}", line))
+        .map(|line| format!("{}{}", " ".repeat(SUBTAB_LEFT_MARGIN), line))
         .collect::<Vec<_>>()
         .join("\n");
 

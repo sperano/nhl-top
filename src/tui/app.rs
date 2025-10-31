@@ -9,18 +9,18 @@ pub enum CurrentTab {
 }
 
 impl CurrentTab {
-    pub fn name(&self) -> &str {
-        match self {
-            CurrentTab::Scores => "Scores",
-            CurrentTab::Standings => "Standings",
-            CurrentTab::Stats => "Stats",
-            CurrentTab::Settings => "Settings",
-        }
-    }
-
-    pub fn all() -> [CurrentTab; 4] {
-        [CurrentTab::Scores, CurrentTab::Standings, CurrentTab::Stats, CurrentTab::Settings]
-    }
+    // pub fn name(&self) -> &str {
+    //     match self {
+    //         CurrentTab::Scores => "Scores",
+    //         CurrentTab::Standings => "Standings",
+    //         CurrentTab::Stats => "Stats",
+    //         CurrentTab::Settings => "Settings",
+    //     }
+    // }
+    //
+    // pub fn all() -> [CurrentTab; 4] {
+    //     [CurrentTab::Scores, CurrentTab::Standings, CurrentTab::Stats, CurrentTab::Settings]
+    // }
 
     pub fn all_names() -> [&'static str; 4] {
         ["Scores", "Standings", "Stats", "Settings"]

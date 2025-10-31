@@ -1330,6 +1330,7 @@ dependencies = [
 name = "nhl"
 version = "0.2.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "clap",
  "crossterm",
@@ -1346,7 +1347,7 @@ dependencies = [
 
 [[package]]
 name = "nhl_api"
-version = "0.4.4"
+version = "0.4.6"
 dependencies = [
  "anyhow",
  "cargo-tarpaulin",

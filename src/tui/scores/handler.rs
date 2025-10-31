@@ -1,7 +1,14 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use tokio::sync::mpsc;
 use super::State;
-use crate::SharedDataHandle;
+use crate::{SharedData, SharedDataHandle};
+
+/// Clears schedule-related data to show "Loading..." state while fetching new data
+fn clear_schedule_data(data: &mut SharedData) {
+    data.schedule = None;
+    data.period_scores.clear();
+    data.game_info.clear();
+}
 
 pub async fn handle_key(
     key: KeyEvent,
@@ -32,9 +39,7 @@ pub async fn handle_key(
                     let mut data = shared_data.write().await;
                     data.game_date = data.game_date.add_days(-1);
                     // Clear schedule data to show "Loading..." while fetching
-                    data.schedule = None;
-                    data.period_scores.clear();
-                    data.game_info.clear();
+                    clear_schedule_data(&mut data);
                 }
                 // Trigger immediate refresh
                 let _ = refresh_tx.send(()).await;
@@ -44,9 +49,7 @@ pub async fn handle_key(
                     let mut data = shared_data.write().await;
                     data.game_date = data.game_date.add_days(-1);
                     // Clear schedule data to show "Loading..." while fetching
-                    data.schedule = None;
-                    data.period_scores.clear();
-                    data.game_info.clear();
+                    clear_schedule_data(&mut data);
                 }
                 // Trigger immediate refresh
                 let _ = refresh_tx.send(()).await;
@@ -64,9 +67,7 @@ pub async fn handle_key(
                     let mut data = shared_data.write().await;
                     data.game_date = data.game_date.add_days(1);
                     // Clear schedule data to show "Loading..." while fetching
-                    data.schedule = None;
-                    data.period_scores.clear();
-                    data.game_info.clear();
+                    clear_schedule_data(&mut data);
                 }
                 // Trigger immediate refresh
                 let _ = refresh_tx.send(()).await;
@@ -76,9 +77,7 @@ pub async fn handle_key(
                     let mut data = shared_data.write().await;
                     data.game_date = data.game_date.add_days(1);
                     // Clear schedule data to show "Loading..." while fetching
-                    data.schedule = None;
-                    data.period_scores.clear();
-                    data.game_info.clear();
+                    clear_schedule_data(&mut data);
                 }
                 // Trigger immediate refresh
                 let _ = refresh_tx.send(()).await;

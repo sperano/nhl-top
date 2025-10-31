@@ -1,5 +1,6 @@
-use nhl_api::{Client, GameDate, DailySchedule};
-use chrono::NaiveDate;
+use nhl_api::{Client, DailySchedule};
+use crate::commands::parse_game_date;
+use anyhow::{Context, Result};
 
 pub fn format_schedule(schedule: &DailySchedule) -> String {
     let mut output = String::new();
@@ -49,51 +50,25 @@ pub fn format_schedule(schedule: &DailySchedule) -> String {
     output
 }
 
-pub async fn run(client: &Client, date: Option<String>) {
-    let game_date = if let Some(date_str) = date {
-        // Parse date string
-        let parsed_date = NaiveDate::parse_from_str(&date_str, "%Y-%m-%d")
-            .expect("Invalid date format. Use YYYY-MM-DD");
-        GameDate::Date(parsed_date)
-    } else {
-        // Use today's date
-        GameDate::today()
-    };
+pub async fn run(client: &Client, date: Option<String>) -> Result<()> {
+    let game_date = parse_game_date(date)?;
+    let schedule = client.daily_schedule(Some(game_date)).await
+        .context("Failed to fetch schedule")?;
 
-    let schedule = client.daily_schedule(Some(&game_date)).await.unwrap();
-
-    // Display schedule header
-    println!("\nNHL Schedule - {}", schedule.date);
-    println!("{}", "=".repeat(80));
-
-    if schedule.number_of_games == 0 {
-        println!("No games scheduled for this date.");
-    } else {
-        println!("Games: {}\n", schedule.number_of_games);
-
-        // Display each game
-        for game in &schedule.games {
-            println!("Game ID: {}", game.id);
-            println!("  {} @ {}",
-                game.away_team.abbrev,
-                game.home_team.abbrev
-            );
-            println!("  Time: {} (UTC)", game.start_time_utc);
-            println!("  Status: {}", game.game_state);
-
-            // Display scores if available
-            if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
-                println!("  Score: {} - {}", away_score, home_score);
-            }
-            println!();
-        }
-    }
+    // Use existing formatting function
+    print!("{}", format_schedule(&schedule));
 
     // Display navigation info
-    if let Some(prev) = schedule.previous_start_date {
+    display_navigation(&schedule);
+
+    Ok(())
+}
+
+fn display_navigation(schedule: &DailySchedule) {
+    if let Some(prev) = &schedule.previous_start_date {
         println!("Previous date with games: {}", prev);
     }
-    if let Some(next) = schedule.next_start_date {
+    if let Some(next) = &schedule.next_start_date {
         println!("Next date with games: {}", next);
     }
 }
