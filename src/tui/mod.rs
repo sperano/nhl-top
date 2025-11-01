@@ -55,6 +55,12 @@ fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
             return None; // Let scores handler handle ESC
         }
 
+        // If on Standings tab and team selection is active, don't handle ESC here
+        // Let the standings handler exit team selection mode
+        if matches!(app_state.current_tab, CurrentTab::Standings) && app_state.standings.team_selection_active {
+            return None; // Let standings handler handle ESC
+        }
+
         if app_state.is_subtab_focused() {
             app_state.exit_subtab_mode();
             Some(false) // Continue running
@@ -147,7 +153,11 @@ async fn handle_arrow_and_enter_keys(
                         scores::handle_key(key, &mut app_state.scores, shared_data, refresh_tx).await
                     }
                     CurrentTab::Standings => {
-                        standings::handle_key(key, &mut app_state.standings)
+                        let data = shared_data.read().await;
+                        let standings_data = data.standings.clone();
+                        let western_first = data.config.display_standings_western_first;
+                        drop(data);
+                        standings::handle_key(key, &mut app_state.standings, &standings_data, western_first)
                     }
                     CurrentTab::Stats => false,
                     CurrentTab::Players => false,
@@ -306,6 +316,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 &data.standings,
                 &mut app_state.standings,
                 data.western_first,
+                data.theme.selection_fg,
             );
         }
         CurrentTab::Stats => {

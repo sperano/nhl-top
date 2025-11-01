@@ -5,6 +5,9 @@ pub struct State {
     pub view: GroupBy,
     pub subtab_focused: bool,
     pub scrollable: Scrollable,
+    pub team_selection_active: bool,
+    pub selected_team_index: usize,
+    pub selected_column: usize, // 0 = left, 1 = right (for Division/Conference views)
 }
 
 impl State {
@@ -13,6 +16,9 @@ impl State {
             view: GroupBy::Division,
             subtab_focused: false,
             scrollable: Scrollable::new(),
+            team_selection_active: false,
+            selected_team_index: 0,
+            selected_column: 0,
         }
     }
 }
