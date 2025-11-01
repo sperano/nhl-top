@@ -153,11 +153,7 @@ async fn handle_arrow_and_enter_keys(
                         scores::handle_key(key, &mut app_state.scores, shared_data, refresh_tx).await
                     }
                     CurrentTab::Standings => {
-                        let data = shared_data.read().await;
-                        let standings_data = data.standings.clone();
-                        let western_first = data.config.display_standings_western_first;
-                        drop(data);
-                        standings::handle_key(key, &mut app_state.standings, &standings_data, western_first)
+                        standings::handle_key(key, &mut app_state.standings)
                     }
                     CurrentTab::Stats => false,
                     CurrentTab::Players => false,
@@ -310,12 +306,15 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
             );
         }
         CurrentTab::Standings => {
+            // Update layout cache if needed
+            if app_state.standings.layout_cache.is_none() {
+                app_state.standings.update_layout(&data.standings, data.western_first);
+            }
+
             standings::render_content(
                 f,
                 chunks[content_chunk_idx],
-                &data.standings,
                 &mut app_state.standings,
-                data.western_first,
                 data.theme.selection_fg,
             );
         }
