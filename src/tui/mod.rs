@@ -2,6 +2,7 @@ mod common;
 mod scores;
 mod standings;
 mod stats;
+mod players;
 mod settings;
 mod app;
 
@@ -65,7 +66,7 @@ fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
     }
 }
 
-/// Handles number keys (1-4) for direct tab switching
+/// Handles number keys (1-5) for direct tab switching
 /// Only works when not in subtab mode
 /// Returns true if key was handled
 async fn handle_number_keys(key: KeyEvent, app_state: &mut AppState, shared_data: &SharedDataHandle) -> bool {
@@ -88,6 +89,10 @@ async fn handle_number_keys(key: KeyEvent, app_state: &mut AppState, shared_data
             true
         }
         KeyCode::Char('4') => {
+            app_state.current_tab = CurrentTab::Players;
+            true
+        }
+        KeyCode::Char('5') => {
             app_state.current_tab = CurrentTab::Settings;
             true
         }
@@ -145,6 +150,7 @@ async fn handle_arrow_and_enter_keys(
                         standings::handle_key(key, &mut app_state.standings)
                     }
                     CurrentTab::Stats => false,
+                    CurrentTab::Players => false,
                     CurrentTab::Settings => false,
                 };
 
@@ -184,6 +190,11 @@ async fn handle_key_event(
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
 ) -> bool {
+    // Handle Q key globally to quit from anywhere
+    if key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q') {
+        return true; // Exit app
+    }
+
     // Try ESC key handler first
     if let Some(should_exit) = handle_esc_key(key, app_state) {
         return should_exit;
@@ -229,7 +240,7 @@ fn calculate_layout_constraints(has_subtabs: bool) -> Vec<Constraint> {
 fn calculate_content_chunk_index(current_tab: &CurrentTab) -> usize {
     match current_tab {
         CurrentTab::Scores | CurrentTab::Standings => 2,
-        CurrentTab::Stats | CurrentTab::Settings => 1,
+        CurrentTab::Stats | CurrentTab::Players | CurrentTab::Settings => 1,
     }
 }
 
@@ -265,7 +276,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
         CurrentTab::Standings => {
             standings::render_subtabs(f, chunks[1], &app_state.standings, data.theme.selection_fg, data.theme.unfocused_selection_fg());
         }
-        CurrentTab::Stats | CurrentTab::Settings => {
+        CurrentTab::Stats | CurrentTab::Players | CurrentTab::Settings => {
             // No subtabs for these tabs
         }
     }
@@ -299,6 +310,9 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
         }
         CurrentTab::Stats => {
             stats::render_content(f, chunks[content_chunk_idx]);
+        }
+        CurrentTab::Players => {
+            players::render_content(f, chunks[content_chunk_idx]);
         }
         CurrentTab::Settings => {
             settings::render_content(f, chunks[content_chunk_idx]);

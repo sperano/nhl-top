@@ -1,10 +1,11 @@
-use super::{scores, standings, stats, settings};
+use super::{scores, standings, stats, players, settings};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CurrentTab {
     Scores,
     Standings,
     Stats,
+    Players,
     Settings,
 }
 
@@ -22,8 +23,8 @@ impl CurrentTab {
     //     [CurrentTab::Scores, CurrentTab::Standings, CurrentTab::Stats, CurrentTab::Settings]
     // }
 
-    pub fn all_names() -> [&'static str; 4] {
-        ["Scores", "Standings", "Stats", "Settings"]
+    pub fn all_names() -> [&'static str; 5] {
+        ["Scores", "Standings", "Stats", "Players", "Settings"]
     }
 
     pub fn index(&self) -> usize {
@@ -31,7 +32,8 @@ impl CurrentTab {
             CurrentTab::Scores => 0,
             CurrentTab::Standings => 1,
             CurrentTab::Stats => 2,
-            CurrentTab::Settings => 3,
+            CurrentTab::Players => 3,
+            CurrentTab::Settings => 4,
         }
     }
 }
@@ -41,6 +43,7 @@ pub struct AppState {
     pub scores: scores::State,
     pub standings: standings::State,
     pub stats: stats::State,
+    pub players: players::State,
     pub settings: settings::State,
 }
 
@@ -51,6 +54,7 @@ impl AppState {
             scores: scores::State::new(),
             standings: standings::State::new(),
             stats: stats::State::new(),
+            players: players::State::new(),
             settings: settings::State::new(),
         }
     }
@@ -60,7 +64,8 @@ impl AppState {
             CurrentTab::Scores => CurrentTab::Settings,
             CurrentTab::Standings => CurrentTab::Scores,
             CurrentTab::Stats => CurrentTab::Standings,
-            CurrentTab::Settings => CurrentTab::Stats,
+            CurrentTab::Players => CurrentTab::Stats,
+            CurrentTab::Settings => CurrentTab::Players,
         };
         // Reset subtab focus when changing tabs
         self.exit_subtab_mode();
@@ -70,7 +75,8 @@ impl AppState {
         self.current_tab = match self.current_tab {
             CurrentTab::Scores => CurrentTab::Standings,
             CurrentTab::Standings => CurrentTab::Stats,
-            CurrentTab::Stats => CurrentTab::Settings,
+            CurrentTab::Stats => CurrentTab::Players,
+            CurrentTab::Players => CurrentTab::Settings,
             CurrentTab::Settings => CurrentTab::Scores,
         };
         // Reset subtab focus when changing tabs
@@ -82,6 +88,7 @@ impl AppState {
             CurrentTab::Scores => self.scores.subtab_focused = true,
             CurrentTab::Standings => self.standings.subtab_focused = true,
             CurrentTab::Stats => {} // No subtabs for stats
+            CurrentTab::Players => {} // No subtabs for players
             CurrentTab::Settings => {} // No subtabs for settings
         }
     }
@@ -97,6 +104,7 @@ impl AppState {
             CurrentTab::Scores => self.scores.subtab_focused,
             CurrentTab::Standings => self.standings.subtab_focused,
             CurrentTab::Stats => false,
+            CurrentTab::Players => false,
             CurrentTab::Settings => false,
         }
     }
