@@ -96,9 +96,10 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
         // Subtab focused but team selection not active
         match key.code {
             KeyCode::Left => {
-                // Navigate standings view
+                // Navigate standings view (cycle left: Wildcard → League → Conference → Division → Wildcard)
                 state.view = match state.view {
-                    GroupBy::Division => GroupBy::League,
+                    GroupBy::Wildcard => GroupBy::League,
+                    GroupBy::Division => GroupBy::Wildcard,
                     GroupBy::Conference => GroupBy::Division,
                     GroupBy::League => GroupBy::Conference,
                 };
@@ -111,11 +112,12 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
                 true
             }
             KeyCode::Right => {
-                // Navigate standings view
+                // Navigate standings view (cycle right: Wildcard → Division → Conference → League → Wildcard)
                 state.view = match state.view {
+                    GroupBy::Wildcard => GroupBy::Division,
                     GroupBy::Division => GroupBy::Conference,
                     GroupBy::Conference => GroupBy::League,
-                    GroupBy::League => GroupBy::Division,
+                    GroupBy::League => GroupBy::Wildcard,
                 };
                 // Reset scroll and team selection when changing view
                 state.scrollable.reset();

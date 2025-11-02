@@ -104,7 +104,7 @@ fn render_layout(layout: &StandingsLayout, state: &State, selection_fg: Color) -
 
     match layout.view {
         GroupBy::League => render_single_column(layout, state, selection_fg, &mut lines),
-        GroupBy::Conference | GroupBy::Division => render_two_columns(layout, state, selection_fg, &mut lines),
+        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard => render_two_columns(layout, state, selection_fg, &mut lines),
     }
 
     lines
@@ -211,12 +211,20 @@ fn render_column(column: &super::layout::StandingsColumn, state: &State, selecti
         lines.push(Line::raw(format!("{}{}", " ".repeat(margin), "─".repeat(STANDINGS_COLUMN_WIDTH - margin))));
 
         // Render teams
-        for team in &group.teams {
+        for (idx_in_group, team) in group.teams.iter().enumerate() {
             let is_selected = state.team_selection_active
                 && state.selected_column == col_idx
                 && state.selected_team_index == team_idx;
 
             lines.push(render_team_row(team, is_selected, selection_fg, margin));
+
+            // Draw playoff cutoff line after specified team index (for wildcard view)
+            if let Some(cutoff_idx) = group.playoff_cutoff_after {
+                if idx_in_group == cutoff_idx {
+                    lines.push(Line::raw(format!("{}{}", " ".repeat(margin), "─".repeat(STANDINGS_COLUMN_WIDTH - margin))));
+                }
+            }
+
             team_idx += 1;
         }
     }

@@ -36,6 +36,7 @@ pub enum GroupBy {
     Division,
     Conference,
     League,
+    Wildcard,
 }
 
 impl GroupBy {
@@ -44,11 +45,12 @@ impl GroupBy {
             GroupBy::Division => "Division",
             GroupBy::Conference => "Conference",
             GroupBy::League => "League",
+            GroupBy::Wildcard => "Wildcard",
         }
     }
 
-    pub fn all() -> [GroupBy; 3] {
-        [GroupBy::Division, GroupBy::Conference, GroupBy::League]
+    pub fn all() -> [GroupBy; 4] {
+        [GroupBy::Wildcard, GroupBy::Division, GroupBy::Conference, GroupBy::League]
     }
 }
 
@@ -238,6 +240,115 @@ fn format_league_view(sorted_standings: Vec<Standing>) -> String {
     output
 }
 
+/// Helper to format wildcard groups for a conference
+fn format_wildcard_conference(
+    div1_name: &str,
+    div1_teams: &[Standing],
+    div2_name: &str,
+    div2_teams: &[Standing],
+) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    // Division 1 - top 3
+    let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
+    if !div1_top3.is_empty() {
+        lines.extend(format_group_with_header(div1_name, &div1_top3));
+        lines.push(String::new()); // Blank line after division
+    }
+
+    // Division 2 - top 3
+    let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
+    if !div2_top3.is_empty() {
+        lines.extend(format_group_with_header(div2_name, &div2_top3));
+        lines.push(String::new()); // Blank line after division
+    }
+
+    // Remaining teams (wildcards and out of playoffs) - sorted by points
+    let div1_remaining: Vec<_> = div1_teams.iter().skip(3).cloned().collect();
+    let div2_remaining: Vec<_> = div2_teams.iter().skip(3).cloned().collect();
+
+    let mut wildcard_teams: Vec<_> = div1_remaining
+        .into_iter()
+        .chain(div2_remaining)
+        .collect();
+    wildcard_teams.sort_by(|a, b| b.points.cmp(&a.points));
+
+    if !wildcard_teams.is_empty() {
+        lines.extend(format_group_with_header("Wildcard", &wildcard_teams));
+
+        // Add playoff cutoff line after 2nd wildcard team (if there are at least 2)
+        if wildcard_teams.len() >= 2 {
+            // Find the line with the 2nd wildcard team (accounting for header lines)
+            // Header has 3 lines (title, underline, blank) + table header (2 lines) + teams
+            let cutoff_line_idx = 3 + 2 + 2; // After 2nd team row
+            if lines.len() > cutoff_line_idx {
+                lines.insert(cutoff_line_idx, format!("{}", "─".repeat(SEPARATOR_LINE_WIDTH)));
+            }
+        }
+    }
+
+    lines
+}
+
+/// Formats standings in wildcard view with two-column layout
+fn format_wildcard_view(sorted_standings: Vec<Standing>, western_first: bool) -> String {
+    // Group teams by division
+    let mut atlantic: Vec<_> = sorted_standings
+        .iter()
+        .filter(|s| s.division_name == "Atlantic")
+        .cloned()
+        .collect();
+    atlantic.sort_by(|a, b| b.points.cmp(&a.points));
+
+    let mut metropolitan: Vec<_> = sorted_standings
+        .iter()
+        .filter(|s| s.division_name == "Metropolitan")
+        .cloned()
+        .collect();
+    metropolitan.sort_by(|a, b| b.points.cmp(&a.points));
+
+    let mut central: Vec<_> = sorted_standings
+        .iter()
+        .filter(|s| s.division_name == "Central")
+        .cloned()
+        .collect();
+    central.sort_by(|a, b| b.points.cmp(&a.points));
+
+    let mut pacific: Vec<_> = sorted_standings
+        .iter()
+        .filter(|s| s.division_name == "Pacific")
+        .cloned()
+        .collect();
+    pacific.sort_by(|a, b| b.points.cmp(&a.points));
+
+    // Build Eastern Conference wildcard groups
+    let eastern_lines = format_wildcard_conference(
+        "Atlantic",
+        &atlantic,
+        "Metropolitan",
+        &metropolitan,
+    );
+
+    // Build Western Conference wildcard groups
+    let western_lines = format_wildcard_conference(
+        "Central",
+        &central,
+        "Pacific",
+        &pacific,
+    );
+
+    let (col1_lines, col2_lines) = if western_first {
+        (western_lines, eastern_lines)
+    } else {
+        (eastern_lines, western_lines)
+    };
+
+    let mut output = String::new();
+    output.push('\n');
+    output.push_str(&merge_columns(col1_lines, col2_lines, STANDINGS_COLUMN_WIDTH));
+    output
+}
+
 pub fn format_standings_by_group(standings: &[Standing], by: GroupBy, western_first: bool) -> String {
     if standings.is_empty() {
         return "Loading standings...".to_string();
@@ -250,6 +361,7 @@ pub fn format_standings_by_group(standings: &[Standing], by: GroupBy, western_fi
         GroupBy::Division => format_division_view(sorted_standings, western_first),
         GroupBy::Conference => format_conference_view(sorted_standings, western_first),
         GroupBy::League => format_league_view(sorted_standings),
+        GroupBy::Wildcard => format_wildcard_view(sorted_standings, western_first),
     }
 }
 
@@ -290,10 +402,11 @@ mod tests {
     #[test]
     fn test_groupby_all() {
         let all = GroupBy::all();
-        assert_eq!(all.len(), 3);
-        assert_eq!(all[0], GroupBy::Division);
-        assert_eq!(all[1], GroupBy::Conference);
-        assert_eq!(all[2], GroupBy::League);
+        assert_eq!(all.len(), 4);
+        assert_eq!(all[0], GroupBy::Wildcard);
+        assert_eq!(all[1], GroupBy::Division);
+        assert_eq!(all[2], GroupBy::Conference);
+        assert_eq!(all[3], GroupBy::League);
     }
 
     #[test]

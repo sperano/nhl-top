@@ -15,7 +15,7 @@ pub struct State {
 impl State {
     pub fn new() -> Self {
         State {
-            view: GroupBy::Division,
+            view: GroupBy::Wildcard,
             subtab_focused: false,
             scrollable: Scrollable::new(),
             team_selection_active: false,
