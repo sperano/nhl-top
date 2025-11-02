@@ -5,8 +5,11 @@ mod stats;
 mod players;
 mod settings;
 mod app;
+mod error;
+pub mod traits;
 
 use std::io;
+use std::sync::Arc;
 use std::time::SystemTime;
 use std::collections::HashMap;
 use crossterm::{
@@ -108,9 +111,7 @@ async fn handle_number_keys(key: KeyEvent, app_state: &mut AppState, shared_data
     // Reset boxscore state when navigating away from Scores tab
     if handled && matches!(old_tab, CurrentTab::Scores) && !matches!(app_state.current_tab, CurrentTab::Scores) {
         let mut data = shared_data.write().await;
-        data.selected_game_id = None;
-        data.boxscore = None;
-        data.boxscore_loading = false;
+        data.clear_boxscore();
     }
 
     handled
@@ -177,9 +178,7 @@ async fn handle_arrow_and_enter_keys(
                 // Reset boxscore state when navigating away from Scores tab
                 if matches!(old_tab, CurrentTab::Scores) && !matches!(app_state.current_tab, CurrentTab::Scores) {
                     let mut data = shared_data.write().await;
-                    data.selected_game_id = None;
-                    data.boxscore = None;
-                    data.boxscore_loading = false;
+                    data.clear_boxscore();
                 }
             }
             true
@@ -253,17 +252,17 @@ fn calculate_content_chunk_index(current_tab: &CurrentTab) -> usize {
 /// Data structure holding all cloned data needed for rendering
 /// This avoids holding the RwLock during rendering operations
 struct RenderData {
-    standings: Vec<Standing>,
-    schedule: Option<DailySchedule>,
-    period_scores: HashMap<i64, PeriodScores>,
-    game_info: HashMap<i64, GameMatchup>,
+    standings: Arc<Vec<Standing>>,
+    schedule: Arc<Option<DailySchedule>>,
+    period_scores: Arc<HashMap<i64, PeriodScores>>,
+    game_info: Arc<HashMap<i64, GameMatchup>>,
+    boxscore: Arc<Option<nhl_api::Boxscore>>,
     western_first: bool,
     last_refresh: Option<SystemTime>,
     time_format: String,
     game_date: GameDate,
     error_message: Option<String>,
     theme: crate::config::ThemeConfig,
-    boxscore: Option<nhl_api::Boxscore>,
     boxscore_loading: bool,
 }
 
@@ -350,17 +349,17 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
         let render_data = {
             let data = shared_data.read().await;
             RenderData {
-                standings: data.standings.clone(),
-                schedule: data.schedule.clone(),
-                period_scores: data.period_scores.clone(),
-                game_info: data.game_info.clone(),
+                standings: Arc::clone(&data.standings),
+                schedule: Arc::clone(&data.schedule),
+                period_scores: Arc::clone(&data.period_scores),
+                game_info: Arc::clone(&data.game_info),
+                boxscore: Arc::clone(&data.boxscore),
                 western_first: data.config.display_standings_western_first,
                 last_refresh: data.last_refresh,
                 time_format: data.config.time_format.clone(),
                 game_date: data.game_date.clone(),
                 error_message: data.error_message.clone(),
                 theme: data.config.theme.clone(),
-                boxscore: data.boxscore.clone(),
                 boxscore_loading: data.boxscore_loading,
             }
         };

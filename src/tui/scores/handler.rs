@@ -1,13 +1,38 @@
 use crossterm::event::{KeyCode, KeyEvent};
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use super::State;
+use super::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX};
+use crate::tui::error::TuiError;
 use crate::{SharedData, SharedDataHandle};
 
 /// Clears schedule-related data to show "Loading..." state while fetching new data
 fn clear_schedule_data(data: &mut SharedData) {
-    data.schedule = None;
-    data.period_scores.clear();
-    data.game_info.clear();
+    data.schedule = Arc::new(None);
+    data.period_scores = Arc::new(HashMap::new());
+    data.game_info = Arc::new(HashMap::new());
+}
+
+/// Navigate to a date by adjusting game_date and triggering refresh
+///
+/// This helper consolidates the common pattern of:
+/// 1. Updating game_date by offset days
+/// 2. Clearing schedule data to show "Loading..."
+/// 3. Triggering an immediate refresh
+async fn navigate_to_date(
+    offset_days: i64,
+    shared_data: &SharedDataHandle,
+    refresh_tx: &mpsc::Sender<()>,
+) {
+    {
+        let mut data = shared_data.write().await;
+        data.game_date = data.game_date.add_days(offset_days);
+        clear_schedule_data(&mut data);
+    }
+    if let Err(e) = refresh_tx.send(()).await {
+        tracing::error!("Failed to send refresh signal: {}", e);
+    }
 }
 
 pub async fn handle_key(
@@ -35,59 +60,17 @@ pub async fn handle_key(
             true
         }
         KeyCode::Left => {
-            // Navigate scores dates - move selection left
-            if state.selected_index > 0 {
-                // Move selection within visible window
+            if state.selected_index > DATE_WINDOW_MIN_INDEX {
                 state.selected_index -= 1;
-                // Update game_date to the newly selected date
-                {
-                    let mut data = shared_data.write().await;
-                    data.game_date = data.game_date.add_days(-1);
-                    // Clear schedule data to show "Loading..." while fetching
-                    clear_schedule_data(&mut data);
-                }
-                // Trigger immediate refresh
-                let _ = refresh_tx.send(()).await;
-            } else {
-                // Already at leftmost position, shift window left
-                {
-                    let mut data = shared_data.write().await;
-                    data.game_date = data.game_date.add_days(-1);
-                    // Clear schedule data to show "Loading..." while fetching
-                    clear_schedule_data(&mut data);
-                }
-                // Trigger immediate refresh
-                let _ = refresh_tx.send(()).await;
-                // Keep selection at index 0 (leftmost)
             }
+            navigate_to_date(-1, shared_data, refresh_tx).await;
             true
         }
         KeyCode::Right => {
-            // Navigate scores dates - move selection right
-            if state.selected_index < 4 {
-                // Move selection within visible window
+            if state.selected_index < DATE_WINDOW_MAX_INDEX {
                 state.selected_index += 1;
-                // Update game_date to the newly selected date
-                {
-                    let mut data = shared_data.write().await;
-                    data.game_date = data.game_date.add_days(1);
-                    // Clear schedule data to show "Loading..." while fetching
-                    clear_schedule_data(&mut data);
-                }
-                // Trigger immediate refresh
-                let _ = refresh_tx.send(()).await;
-            } else {
-                // Already at rightmost position, shift window right
-                {
-                    let mut data = shared_data.write().await;
-                    data.game_date = data.game_date.add_days(1);
-                    // Clear schedule data to show "Loading..." while fetching
-                    clear_schedule_data(&mut data);
-                }
-                // Trigger immediate refresh
-                let _ = refresh_tx.send(()).await;
-                // Keep selection at index 4 (rightmost)
             }
+            navigate_to_date(1, shared_data, refresh_tx).await;
             true
         }
         _ => false, // Key not handled
@@ -163,11 +146,9 @@ async fn handle_boxscore_view(key: KeyEvent, state: &mut State, shared_data: &Sh
         KeyCode::Esc => {
             // Close the boxscore view and return to game list
             state.boxscore_view_active = false;
-            state.boxscore_scrollable.reset(); // Reset scroll position
+            state.boxscore_scrollable.reset();
             let mut data = shared_data.write().await;
-            data.selected_game_id = None;
-            data.boxscore = None;
-            data.boxscore_loading = false;
+            data.clear_boxscore();
             true
         }
         KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
@@ -187,14 +168,13 @@ async fn select_game_for_boxscore(state: &mut State, shared_data: &SharedDataHan
 
     // Get the game from the schedule and set selected_game_id
     let mut data = shared_data.write().await;
-    if let Some(ref schedule) = data.schedule {
+    if let Some(ref schedule) = data.schedule.as_ref() {
         if game_index < schedule.games.len() {
             let game = &schedule.games[game_index];
 
             // Check if game has started
             if !game.game_state.has_started() {
-                // Game hasn't started yet, show error message
-                data.error_message = Some("Game hasn't started yet".to_string());
+                data.error_message = Some(TuiError::GameNotStarted.to_string());
                 return;
             }
 
@@ -203,7 +183,7 @@ async fn select_game_for_boxscore(state: &mut State, shared_data: &SharedDataHan
             // Set the selected game ID to trigger fetch in background
             data.selected_game_id = Some(game_id);
             data.boxscore_loading = true;
-            data.boxscore = None;
+            data.boxscore = Arc::new(None);
 
             // Open the boxscore view and reset scroll position
             state.boxscore_view_active = true;
@@ -213,7 +193,80 @@ async fn select_game_for_boxscore(state: &mut State, shared_data: &SharedDataHan
             drop(data);
 
             // Trigger immediate refresh to fetch boxscore
-            let _ = refresh_tx.send(()).await;
+            if let Err(e) = refresh_tx.send(()).await {
+                tracing::error!("Failed to send refresh signal for boxscore: {}", e);
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::scores::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX, DATE_WINDOW_CENTER};
+
+    #[test]
+    fn test_selected_index_navigation_left_within_window() {
+        let mut state = State::new();
+        state.selected_index = DATE_WINDOW_CENTER;
+
+        if state.selected_index > DATE_WINDOW_MIN_INDEX {
+            state.selected_index -= 1;
+        }
+
+        assert_eq!(state.selected_index, 1);
+    }
+
+    #[test]
+    fn test_selected_index_navigation_left_at_edge() {
+        let mut state = State::new();
+        state.selected_index = DATE_WINDOW_MIN_INDEX;
+
+        if state.selected_index > DATE_WINDOW_MIN_INDEX {
+            state.selected_index -= 1;
+        }
+
+        assert_eq!(state.selected_index, DATE_WINDOW_MIN_INDEX);
+    }
+
+    #[test]
+    fn test_selected_index_navigation_right_within_window() {
+        let mut state = State::new();
+        state.selected_index = DATE_WINDOW_CENTER;
+
+        if state.selected_index < DATE_WINDOW_MAX_INDEX {
+            state.selected_index += 1;
+        }
+
+        assert_eq!(state.selected_index, 3);
+    }
+
+    #[test]
+    fn test_selected_index_navigation_right_at_edge() {
+        let mut state = State::new();
+        state.selected_index = DATE_WINDOW_MAX_INDEX;
+
+        if state.selected_index < DATE_WINDOW_MAX_INDEX {
+            state.selected_index += 1;
+        }
+
+        assert_eq!(state.selected_index, DATE_WINDOW_MAX_INDEX);
+    }
+
+    #[test]
+    fn test_box_selection_initial_state() {
+        let state = State::new();
+        assert!(!state.box_selection_active);
+        assert_eq!(state.selected_box, (0, 0));
+    }
+
+    #[test]
+    fn test_box_selection_enter_mode() {
+        let mut state = State::new();
+        state.box_selection_active = true;
+        state.selected_box = (0, 0);
+
+        assert!(state.box_selection_active);
+        assert_eq!(state.selected_box, (0, 0));
     }
 }

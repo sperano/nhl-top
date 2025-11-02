@@ -1,6 +1,13 @@
 use crossterm::event::{KeyCode, KeyEvent};
-use crate::commands::standings::GroupBy;
 use super::State;
+
+/// Navigate to a different column and clamp team index to new column's bounds
+fn navigate_to_column(state: &mut State, new_column: usize, new_column_team_count: usize) {
+    state.selected_column = new_column;
+    if state.selected_team_index >= new_column_team_count && new_column_team_count > 0 {
+        state.selected_team_index = new_column_team_count - 1;
+    }
+}
 
 pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
     // Get layout information
@@ -37,32 +44,18 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
                 true
             }
             KeyCode::Left => {
-                // Switch to left column, maintaining same rank/index
                 if state.selected_column > 0 {
-                    state.selected_column -= 1;
-                    // Keep same index, but clamp to new column's team count
-                    let new_column_team_count = layout.columns
-                        .get(state.selected_column)
-                        .map(|col| col.team_count)
-                        .unwrap_or(0);
-                    if state.selected_team_index >= new_column_team_count && new_column_team_count > 0 {
-                        state.selected_team_index = new_column_team_count - 1;
-                    }
+                    let new_column = state.selected_column - 1;
+                    let new_column_team_count = layout.columns.get(new_column).map(|col| col.team_count).unwrap_or(0);
+                    navigate_to_column(state, new_column, new_column_team_count);
                 }
                 true
             }
             KeyCode::Right => {
-                // Switch to right column, maintaining same rank/index
                 if state.selected_column + 1 < max_columns {
-                    state.selected_column += 1;
-                    // Keep same index, but clamp to new column's team count
-                    let new_column_team_count = layout.columns
-                        .get(state.selected_column)
-                        .map(|col| col.team_count)
-                        .unwrap_or(0);
-                    if state.selected_team_index >= new_column_team_count && new_column_team_count > 0 {
-                        state.selected_team_index = new_column_team_count - 1;
-                    }
+                    let new_column = state.selected_column + 1;
+                    let new_column_team_count = layout.columns.get(new_column).map(|col| col.team_count).unwrap_or(0);
+                    navigate_to_column(state, new_column, new_column_team_count);
                 }
                 true
             }
@@ -96,34 +89,18 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
         // Subtab focused but team selection not active
         match key.code {
             KeyCode::Left => {
-                // Navigate standings view (cycle left: Wildcard → League → Conference → Division → Wildcard)
-                state.view = match state.view {
-                    GroupBy::Wildcard => GroupBy::League,
-                    GroupBy::Division => GroupBy::Wildcard,
-                    GroupBy::Conference => GroupBy::Division,
-                    GroupBy::League => GroupBy::Conference,
-                };
-                // Reset scroll and team selection when changing view
+                state.view = state.view.prev();
                 state.scrollable.reset();
                 state.selected_team_index = 0;
                 state.selected_column = 0;
-                // Invalidate layout cache (will be rebuilt on next render)
                 state.layout_cache = None;
                 true
             }
             KeyCode::Right => {
-                // Navigate standings view (cycle right: Wildcard → Division → Conference → League → Wildcard)
-                state.view = match state.view {
-                    GroupBy::Wildcard => GroupBy::Division,
-                    GroupBy::Division => GroupBy::Conference,
-                    GroupBy::Conference => GroupBy::League,
-                    GroupBy::League => GroupBy::Wildcard,
-                };
-                // Reset scroll and team selection when changing view
+                state.view = state.view.next();
                 state.scrollable.reset();
                 state.selected_team_index = 0;
                 state.selected_column = 0;
-                // Invalidate layout cache (will be rebuilt on next render)
                 state.layout_cache = None;
                 true
             }

@@ -2,17 +2,67 @@ use ratatui::{
     layout::Rect,
     style::{Style, Color},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Paragraph, Wrap, Clear},
+    widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use std::collections::HashMap;
 use super::State;
+use super::state::DATE_WINDOW_SIZE;
 use crate::tui::common::separator::build_tab_separator_line;
 use crate::tui::common::styling::{base_tab_style, selection_style};
 
 // Subtab Layout Constants
 /// Left margin for subtab bar (spaces before date tabs) - REMOVED
 const SUBTAB_LEFT_MARGIN: usize = 0;
+
+/// Calculate the date window based on game_date and selected_index
+fn calculate_date_window(game_date: &nhl_api::GameDate, selected_index: usize) -> [nhl_api::GameDate; DATE_WINDOW_SIZE] {
+    let offset_start = (selected_index as i64) - (DATE_WINDOW_SIZE as i64 / 2);
+    [
+        game_date.add_days(offset_start),
+        game_date.add_days(offset_start + 1),
+        game_date.add_days(offset_start + 2),
+        game_date.add_days(offset_start + 3),
+        game_date.add_days(offset_start + 4),
+    ]
+}
+
+/// Format a GameDate as MM/DD
+fn format_date_mmdd(date: &nhl_api::GameDate) -> String {
+    match date {
+        nhl_api::GameDate::Date(naive_date) => naive_date.format("%m/%d").to_string(),
+        nhl_api::GameDate::Now => chrono::Local::now().date_naive().format("%m/%d").to_string(),
+    }
+}
+
+/// Build subtab spans for date navigation
+fn build_date_subtab_spans(
+    date_strings: &[String],
+    selected_index: usize,
+    base_style: Style,
+    focused: bool,
+    selection_fg: Color,
+    unfocused_selection_fg: Color,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+
+    for (i, date_str) in date_strings.iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::styled(" │ ", base_style));
+        }
+
+        let style = selection_style(
+            base_style,
+            i == selected_index,
+            focused,
+            selection_fg,
+            unfocused_selection_fg,
+        );
+        spans.push(Span::styled(date_str.clone(), style));
+    }
+
+    spans
+}
 
 pub fn render_subtabs(
     f: &mut Frame,
@@ -22,152 +72,33 @@ pub fn render_subtabs(
     selection_fg: Color,
     unfocused_selection_fg: Color,
 ) {
-    // Subtabs are only focused when subtab_focused is true AND box selection is not active
     let focused = state.subtab_focused && !state.box_selection_active;
-    let selected_index = state.selected_index;
-
     let base_style = base_tab_style(focused);
 
-    // Calculate the five dates to display based on game_date and selected_index
-    // game_date is always the selected date
-    // The 5 visible dates with current day in the middle (index 2)
-    let (date0, date1, date2, date3, date4) = match selected_index {
-        0 => (
-            game_date.clone(),
-            game_date.add_days(1),
-            game_date.add_days(2),
-            game_date.add_days(3),
-            game_date.add_days(4),
-        ),
-        1 => (
-            game_date.add_days(-1),
-            game_date.clone(),
-            game_date.add_days(1),
-            game_date.add_days(2),
-            game_date.add_days(3),
-        ),
-        2 => (
-            game_date.add_days(-2),
-            game_date.add_days(-1),
-            game_date.clone(),
-            game_date.add_days(1),
-            game_date.add_days(2),
-        ),
-        3 => (
-            game_date.add_days(-3),
-            game_date.add_days(-2),
-            game_date.add_days(-1),
-            game_date.clone(),
-            game_date.add_days(1),
-        ),
-        4 => (
-            game_date.add_days(-4),
-            game_date.add_days(-3),
-            game_date.add_days(-2),
-            game_date.add_days(-1),
-            game_date.clone(),
-        ),
-        _ => (
-            game_date.add_days(-2),
-            game_date.add_days(-1),
-            game_date.clone(),
-            game_date.add_days(1),
-            game_date.add_days(2),
-        ), // fallback to middle
-    };
+    let dates = calculate_date_window(game_date, state.selected_index);
+    let date_strings: Vec<String> = dates.iter().map(format_date_mmdd).collect();
 
-    // Format dates as MM/DD
-    let format_date = |date: &nhl_api::GameDate| -> String {
-        match date {
-            nhl_api::GameDate::Date(naive_date) => {
-                naive_date.format("%m/%d").to_string()
-            }
-            nhl_api::GameDate::Now => {
-                chrono::Local::now().date_naive().format("%m/%d").to_string()
-            }
-        }
-    };
-
-    let date0_str = format_date(&date0);
-    let date1_str = format_date(&date1);
-    let date2_str = format_date(&date2);
-    let date3_str = format_date(&date3);
-    let date4_str = format_date(&date4);
-
-    // Build subtab line with separators (no left margin)
-    let mut subtab_spans = Vec::new();
-
-    // Date 0 (index 0)
-    let date0_style = selection_style(
+    let subtab_spans = build_date_subtab_spans(
+        &date_strings,
+        state.selected_index,
         base_style,
-        selected_index == 0,
         focused,
         selection_fg,
         unfocused_selection_fg,
     );
-    subtab_spans.push(Span::styled(date0_str.clone(), date0_style));
-    subtab_spans.push(Span::styled(" │ ", base_style));
-
-    // Date 1 (index 1)
-    let date1_style = selection_style(
-        base_style,
-        selected_index == 1,
-        focused,
-        selection_fg,
-        unfocused_selection_fg,
-    );
-    subtab_spans.push(Span::styled(date1_str.clone(), date1_style));
-    subtab_spans.push(Span::styled(" │ ", base_style));
-
-    // Date 2 (index 2) - CENTER (current day)
-    let date2_style = selection_style(
-        base_style,
-        selected_index == 2,
-        focused,
-        selection_fg,
-        unfocused_selection_fg,
-    );
-    subtab_spans.push(Span::styled(date2_str.clone(), date2_style));
-    subtab_spans.push(Span::styled(" │ ", base_style));
-
-    // Date 3 (index 3)
-    let date3_style = selection_style(
-        base_style,
-        selected_index == 3,
-        focused,
-        selection_fg,
-        unfocused_selection_fg,
-    );
-    subtab_spans.push(Span::styled(date3_str.clone(), date3_style));
-    subtab_spans.push(Span::styled(" │ ", base_style));
-
-    // Date 4 (index 4)
-    let date4_style = selection_style(
-        base_style,
-        selected_index == 4,
-        focused,
-        selection_fg,
-        unfocused_selection_fg,
-    );
-    subtab_spans.push(Span::styled(date4_str.clone(), date4_style));
-
     let subtab_line = Line::from(subtab_spans);
 
-    // Build separator line with connectors (no left margin)
-    let tab_names = vec![date0_str, date1_str, date2_str, date3_str, date4_str].into_iter();
     let separator_line = build_tab_separator_line(
-        tab_names,
+        date_strings.into_iter(),
         area.width.saturating_sub(SUBTAB_LEFT_MARGIN as u16) as usize,
-        base_style
+        base_style,
     );
 
-    // Add left margin to separator line
     let separator_with_margin = Line::from(vec![
         Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style),
         Span::styled(separator_line.to_string(), base_style),
     ]);
 
-    // Render subtabs with separator line
     let subtab_widget = Paragraph::new(vec![subtab_line, separator_with_margin])
         .block(Block::default().borders(Borders::NONE));
 

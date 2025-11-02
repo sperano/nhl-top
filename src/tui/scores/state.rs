@@ -1,20 +1,26 @@
 use crate::tui::common::scrollable::Scrollable;
 
+/// Date window configuration
+pub const DATE_WINDOW_SIZE: usize = 5;
+pub const DATE_WINDOW_CENTER: usize = 2;
+pub const DATE_WINDOW_MIN_INDEX: usize = 0;
+pub const DATE_WINDOW_MAX_INDEX: usize = 4;
+
 pub struct State {
-    pub selected_index: usize, // 0 = left, 1 = middle, 2 = right
+    pub selected_index: usize,
     pub subtab_focused: bool,
-    pub box_selection_active: bool, // true when navigating game boxes
-    pub selected_box: (usize, usize), // (row, col) of selected box
-    pub grid_dimensions: (usize, usize), // (num_rows, num_cols) - updated during render
-    pub boxscore_view_active: bool, // true when boxscore view is displayed
-    pub boxscore_scrollable: Scrollable, // scrollable for boxscore view
-    pub grid_scrollable: Scrollable, // scrollable for game grid
+    pub box_selection_active: bool,
+    pub selected_box: (usize, usize),
+    pub grid_dimensions: (usize, usize),
+    pub boxscore_view_active: bool,
+    pub boxscore_scrollable: Scrollable,
+    pub grid_scrollable: Scrollable,
 }
 
 impl State {
     pub fn new() -> Self {
         State {
-            selected_index: 2, // Start with middle date selected (index 2 of 5 dates)
+            selected_index: DATE_WINDOW_CENTER,
             subtab_focused: false,
             box_selection_active: false,
             selected_box: (0, 0),

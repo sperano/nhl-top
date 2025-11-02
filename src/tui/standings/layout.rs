@@ -52,6 +52,28 @@ impl StandingsLayout {
         StandingsLayout { view, columns }
     }
 
+    /// Filter and sort teams by division
+    fn filter_division_teams(standings: &[Standing], division_name: &str) -> Vec<Standing> {
+        let mut teams: Vec<_> = standings
+            .iter()
+            .filter(|s| s.division_name == division_name)
+            .cloned()
+            .collect();
+        teams.sort_by(|a, b| b.points.cmp(&a.points));
+        teams
+    }
+
+    /// Filter and sort teams by conference
+    fn filter_conference_teams(standings: &[Standing], conference_name: &str) -> Vec<Standing> {
+        let mut teams: Vec<_> = standings
+            .iter()
+            .filter(|s| s.conference_name.as_deref() == Some(conference_name))
+            .cloned()
+            .collect();
+        teams.sort_by(|a, b| b.points.cmp(&a.points));
+        teams
+    }
+
     /// Build single-column layout with all teams sorted by points
     fn build_league_layout(standings: &[Standing]) -> Vec<StandingsColumn> {
         let mut sorted = standings.to_vec();
@@ -71,19 +93,8 @@ impl StandingsLayout {
 
     /// Build two-column layout with conferences
     fn build_conference_layout(standings: &[Standing], western_first: bool) -> Vec<StandingsColumn> {
-        let mut eastern_teams: Vec<_> = standings
-            .iter()
-            .filter(|s| s.conference_name.as_deref() == Some("Eastern"))
-            .cloned()
-            .collect();
-        eastern_teams.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut western_teams: Vec<_> = standings
-            .iter()
-            .filter(|s| s.conference_name.as_deref() == Some("Western"))
-            .cloned()
-            .collect();
-        western_teams.sort_by(|a, b| b.points.cmp(&a.points));
+        let eastern_teams = Self::filter_conference_teams(standings, "Eastern");
+        let western_teams = Self::filter_conference_teams(standings, "Western");
 
         let eastern_group = TeamGroup {
             header: "Eastern Conference".to_string(),
@@ -116,34 +127,10 @@ impl StandingsLayout {
 
     /// Build two-column layout with divisions grouped by conference
     fn build_division_layout(standings: &[Standing], western_first: bool) -> Vec<StandingsColumn> {
-        // Group teams by division
-        let mut atlantic: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Atlantic")
-            .cloned()
-            .collect();
-        atlantic.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut metropolitan: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Metropolitan")
-            .cloned()
-            .collect();
-        metropolitan.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut central: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Central")
-            .cloned()
-            .collect();
-        central.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut pacific: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Pacific")
-            .cloned()
-            .collect();
-        pacific.sort_by(|a, b| b.points.cmp(&a.points));
+        let atlantic = Self::filter_division_teams(standings, "Atlantic");
+        let metropolitan = Self::filter_division_teams(standings, "Metropolitan");
+        let central = Self::filter_division_teams(standings, "Central");
+        let pacific = Self::filter_division_teams(standings, "Pacific");
 
         // Create groups
         let atlantic_group = TeamGroup {
@@ -195,34 +182,10 @@ impl StandingsLayout {
     /// - Remaining teams (wildcards and out of playoffs)
     /// - Visual separator after 2nd wildcard (8th team overall)
     fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<StandingsColumn> {
-        // Group teams by division
-        let mut atlantic: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Atlantic")
-            .cloned()
-            .collect();
-        atlantic.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut metropolitan: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Metropolitan")
-            .cloned()
-            .collect();
-        metropolitan.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut central: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Central")
-            .cloned()
-            .collect();
-        central.sort_by(|a, b| b.points.cmp(&a.points));
-
-        let mut pacific: Vec<_> = standings
-            .iter()
-            .filter(|s| s.division_name == "Pacific")
-            .cloned()
-            .collect();
-        pacific.sort_by(|a, b| b.points.cmp(&a.points));
+        let atlantic = Self::filter_division_teams(standings, "Atlantic");
+        let metropolitan = Self::filter_division_teams(standings, "Metropolitan");
+        let central = Self::filter_division_teams(standings, "Central");
+        let pacific = Self::filter_division_teams(standings, "Pacific");
 
         // Build Eastern Conference wildcard groups
         let eastern_groups = Self::build_wildcard_groups(

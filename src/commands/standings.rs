@@ -52,6 +52,26 @@ impl GroupBy {
     pub fn all() -> [GroupBy; 4] {
         [GroupBy::Wildcard, GroupBy::Division, GroupBy::Conference, GroupBy::League]
     }
+
+    /// Get the next view in the cycle (Wildcard → Division → Conference → League → Wildcard)
+    pub fn next(&self) -> Self {
+        match self {
+            GroupBy::Wildcard => GroupBy::Division,
+            GroupBy::Division => GroupBy::Conference,
+            GroupBy::Conference => GroupBy::League,
+            GroupBy::League => GroupBy::Wildcard,
+        }
+    }
+
+    /// Get the previous view in the cycle (Wildcard → League → Conference → Division → Wildcard)
+    pub fn prev(&self) -> Self {
+        match self {
+            GroupBy::Wildcard => GroupBy::League,
+            GroupBy::Division => GroupBy::Wildcard,
+            GroupBy::Conference => GroupBy::Division,
+            GroupBy::League => GroupBy::Conference,
+        }
+    }
 }
 
 pub fn format_standings_table(standings: &[Standing]) -> String {

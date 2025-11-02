@@ -1,5 +1,6 @@
 use nhl_api::{Client, DailySchedule};
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use std::time::{Duration, SystemTime};
 use futures::future::join_all;
@@ -10,9 +11,9 @@ pub async fn fetch_standings(client: &Client, shared_data: &SharedDataHandle) {
     match client.current_league_standings().await {
         Ok(data) => {
             let mut shared = shared_data.write().await;
-            shared.standings = data;
+            shared.standings = Arc::new(data);
             shared.last_refresh = Some(SystemTime::now());
-            shared.error_message = None; // Clear any previous errors
+            shared.error_message = None;
         }
         Err(e) => {
             let mut shared = shared_data.write().await;
@@ -86,10 +87,10 @@ pub async fn fetch_schedule_with_games(client: &Client, shared_data: &SharedData
 
             // Update shared state with all data
             let mut shared = shared_data.write().await;
-            shared.schedule = Some(schedule);
-            shared.period_scores = period_scores;
-            shared.game_info = game_info;
-            shared.error_message = None; // Clear errors on successful fetch
+            shared.schedule = Arc::new(Some(schedule));
+            shared.period_scores = Arc::new(period_scores);
+            shared.game_info = Arc::new(game_info);
+            shared.error_message = None;
         }
         Err(e) => {
             let mut shared = shared_data.write().await;
@@ -111,14 +112,14 @@ async fn fetch_boxscore(client: &Client, shared_data: &SharedDataHandle) {
         {
             let mut shared = shared_data.write().await;
             shared.boxscore_loading = true;
-            shared.boxscore = None;
+            shared.boxscore = Arc::new(None);
         }
 
         // Fetch the boxscore
         match client.boxscore(&nhl_api::GameId::new(game_id)).await {
             Ok(boxscore) => {
                 let mut shared = shared_data.write().await;
-                shared.boxscore = Some(boxscore);
+                shared.boxscore = Arc::new(Some(boxscore));
                 shared.boxscore_loading = false;
             }
             Err(e) => {
