@@ -1,10 +1,10 @@
 use xdg::BaseDirectories;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use ratatui::style::Color;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct Config {
     pub log_level: String,
@@ -15,12 +15,14 @@ pub struct Config {
     pub theme: ThemeConfig,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct ThemeConfig {
     #[serde(deserialize_with = "deserialize_color")]
+    #[serde(serialize_with = "serialize_color")]
     pub selection_fg: Color,
     #[serde(deserialize_with = "deserialize_color_optional")]
+    #[serde(serialize_with = "serialize_color_optional")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unfocused_selection_fg: Option<Color>,
 }
@@ -90,6 +92,49 @@ where
             Ok(Some(color))
         }
         None => Ok(None),
+    }
+}
+
+/// Serialize a color to a string
+fn serialize_color<S>(color: &Color, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&format_color(color))
+}
+
+/// Serialize an optional color to a string
+fn serialize_color_optional<S>(color: &Option<Color>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match color {
+        Some(c) => serializer.serialize_str(&format_color(c)),
+        None => serializer.serialize_none(),
+    }
+}
+
+/// Format a color as a string (RGB format for serialization)
+fn format_color(color: &Color) -> String {
+    match color {
+        Color::Rgb(r, g, b) => format!("{},{},{}", r, g, b),
+        Color::Black => "black".to_string(),
+        Color::Red => "red".to_string(),
+        Color::Green => "green".to_string(),
+        Color::Yellow => "yellow".to_string(),
+        Color::Blue => "blue".to_string(),
+        Color::Magenta => "magenta".to_string(),
+        Color::Cyan => "cyan".to_string(),
+        Color::Gray => "gray".to_string(),
+        Color::DarkGray => "darkgray".to_string(),
+        Color::LightRed => "lightred".to_string(),
+        Color::LightGreen => "lightgreen".to_string(),
+        Color::LightYellow => "lightyellow".to_string(),
+        Color::LightBlue => "lightblue".to_string(),
+        Color::LightMagenta => "lightmagenta".to_string(),
+        Color::LightCyan => "lightcyan".to_string(),
+        Color::White => "white".to_string(),
+        _ => "white".to_string(), // fallback for indexed colors
     }
 }
 
@@ -177,6 +222,25 @@ pub fn read() -> Config {
     };
 
     toml::from_str(&content).unwrap_or_else(|_| Config::default())
+}
+
+/// Write a config to the config file
+pub fn write(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = get_config_path()
+        .ok_or("Failed to get config path")?;
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Serialize config to TOML
+    let toml_string = toml::to_string_pretty(config)?;
+
+    // Write to file
+    fs::write(&config_path, toml_string)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -289,5 +353,51 @@ selection_fg = "128,0,128"
 
         let config: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(config.theme.selection_fg, Color::Rgb(128, 0, 128));
+    }
+
+    #[test]
+    fn test_serialize_color_rgb() {
+        let color = Color::Rgb(255, 165, 0);
+        assert_eq!(format_color(&color), "255,165,0");
+    }
+
+    #[test]
+    fn test_serialize_color_named() {
+        assert_eq!(format_color(&Color::Red), "red");
+        assert_eq!(format_color(&Color::Blue), "blue");
+        assert_eq!(format_color(&Color::Cyan), "cyan");
+    }
+
+    #[test]
+    fn test_config_to_toml() {
+        let mut config = Config::default();
+        config.theme.selection_fg = Color::Rgb(128, 0, 128);
+        config.refresh_interval = 30;
+
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+
+        // Verify it contains expected values
+        assert!(toml_str.contains("refresh_interval = 30"));
+        assert!(toml_str.contains("selection_fg = \"128,0,128\""));
+    }
+
+    #[test]
+    fn test_roundtrip_serialization() {
+        let mut config = Config::default();
+        config.theme.selection_fg = Color::Rgb(255, 100, 50);
+        config.theme.unfocused_selection_fg = Some(Color::Cyan);
+        config.refresh_interval = 45;
+        config.display_standings_western_first = true;
+
+        // Serialize to TOML
+        let toml_str = toml::to_string_pretty(&config).unwrap();
+
+        // Deserialize back
+        let deserialized: Config = toml::from_str(&toml_str).unwrap();
+
+        assert_eq!(deserialized.theme.selection_fg, Color::Rgb(255, 100, 50));
+        assert_eq!(deserialized.theme.unfocused_selection_fg, Some(Color::Cyan));
+        assert_eq!(deserialized.refresh_interval, 45);
+        assert_eq!(deserialized.display_standings_western_first, true);
     }
 }
