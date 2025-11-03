@@ -15,15 +15,18 @@ use crate::tui::common::styling::{base_tab_style, selection_style};
 /// Left margin for subtab bar (spaces before date tabs) - REMOVED
 const SUBTAB_LEFT_MARGIN: usize = 0;
 
-/// Calculate the date window based on game_date and selected_index
-fn calculate_date_window(game_date: &nhl_api::GameDate, selected_index: usize) -> [nhl_api::GameDate; DATE_WINDOW_SIZE] {
-    let offset_start = (selected_index as i64) - (DATE_WINDOW_SIZE as i64 / 2);
+/// Calculate the date window based on game_date
+/// game_date is always the CENTER of the window (at index 2)
+/// selected_index is ignored for window calculation - it just tracks which date in the window is selected
+fn calculate_date_window(game_date: &nhl_api::GameDate, _selected_index: usize) -> [nhl_api::GameDate; DATE_WINDOW_SIZE] {
+    // Window is always centered on game_date
+    // [game_date-2, game_date-1, game_date, game_date+1, game_date+2]
     [
-        game_date.add_days(offset_start),
-        game_date.add_days(offset_start + 1),
-        game_date.add_days(offset_start + 2),
-        game_date.add_days(offset_start + 3),
-        game_date.add_days(offset_start + 4),
+        game_date.add_days(-2),
+        game_date.add_days(-1),
+        game_date.add_days(0),
+        game_date.add_days(1),
+        game_date.add_days(2),
     ]
 }
 

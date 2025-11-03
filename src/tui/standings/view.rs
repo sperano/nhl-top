@@ -8,8 +8,9 @@ use ratatui::{
 use std::sync::Arc;
 use std::collections::HashMap;
 use crate::commands::standings::GroupBy;
+use crate::NHL_LEAGUE_ABBREV;
 use super::{State, layout::StandingsLayout};
-use super::panel::{StandingsPanel, fake_player_data, PlayerStat, GoalieStat};
+use super::panel::{StandingsPanel, PlayerStat, GoalieStat};
 use crate::tui::common::separator::build_tab_separator_line;
 use crate::tui::common::styling::{base_tab_style, selection_style};
 use crate::tui::common::breadcrumb::render_breadcrumb_simple;
@@ -86,13 +87,14 @@ pub fn render_content(
     selection_fg: Color,
     club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>,
     selected_team_abbrev: &Option<String>,
+    player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
 ) {
     let panel_to_render = state.navigation.as_ref()
         .and_then(|nav_ctx| nav_ctx.stack.current())
         .cloned();
 
     if let Some(panel) = panel_to_render {
-        render_panel(f, area, state, &panel, selection_fg, club_stats, selected_team_abbrev);
+        render_panel(f, area, state, &panel, selection_fg, club_stats, selected_team_abbrev, player_info);
         return;
     }
 
@@ -357,13 +359,13 @@ fn find_team_line_index(lines: &[Line], team_name: &str) -> Option<usize> {
     None
 }
 
-fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, selection_fg: Color, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>) {
+fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, selection_fg: Color, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
     match panel {
         StandingsPanel::TeamDetail { team_name, .. } => {
             render_team_panel(f, area, state, team_name, selection_fg, club_stats, selected_team_abbrev);
         }
-        StandingsPanel::PlayerDetail { player_name, .. } => {
-            render_player_panel(f, area, state, player_name, selection_fg);
+        StandingsPanel::PlayerDetail { player_id, player_name, .. } => {
+            render_player_panel(f, area, state, *player_id, player_name, selection_fg, player_info);
         }
     }
 }
@@ -400,7 +402,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     let stats = club_stats_data.unwrap();
 
     // Convert API stats to panel format
-    let players: Vec<PlayerStat> = stats.skaters.iter().map(|s| PlayerStat {
+    let mut players: Vec<PlayerStat> = stats.skaters.iter().map(|s| PlayerStat {
         name: format!("{} {}", s.first_name.default, s.last_name.default),
         gp: s.games_played,
         g: s.goals,
@@ -408,13 +410,19 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
         pts: s.points,
     }).collect();
 
-    let goalies: Vec<GoalieStat> = stats.goalies.iter().map(|g| GoalieStat {
+    // Sort by points (highest to lowest)
+    players.sort_by(|a, b| b.pts.cmp(&a.pts));
+
+    let mut goalies: Vec<GoalieStat> = stats.goalies.iter().map(|g| GoalieStat {
         name: format!("{} {}", g.first_name.default, g.last_name.default),
         gp: g.games_played,
         gaa: format!("{:.2}", g.goals_against_average),
         sv_pct: format!("{:.3}", g.save_percentage),
         so: g.shutouts,
     }).collect();
+
+    // Sort by games played (highest to lowest)
+    goalies.sort_by(|a, b| b.gp.cmp(&a.gp));
 
     lines.push(Line::raw("  Player Statistics"));
     lines.push(Line::raw("  ═════════════════"));
@@ -516,63 +524,123 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     f.render_widget(paragraph, area);
 }
 
-fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_name: &str, selection_fg: Color) {
-    let player_data = fake_player_data(player_name);
-
+fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: i64, player_name: &str, selection_fg: Color, player_info_map: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
     let mut lines = Vec::new();
     let mut item_index = 0;
     let mut selected_item_line_number: Option<usize> = None;
 
     lines.push(Line::raw(""));
-    lines.push(Line::raw(format!("  {}", player_data.name)));
-    lines.push(Line::raw(format!("  {}", "═".repeat(player_data.name.len()))));
+    lines.push(Line::raw(format!("  {}", player_name)));
+    lines.push(Line::raw(format!("  {}", "═".repeat(player_name.len()))));
     lines.push(Line::raw(""));
 
+    // Get real player data
+    let player_data = player_info_map.get(&player_id);
+
+    if player_data.is_none() {
+        lines.push(Line::raw("  Loading player information..."));
+        lines.push(Line::raw(""));
+
+        state.panel_scrollable.update_viewport_height(area.height);
+        state.panel_scrollable.update_content_height(lines.len());
+
+        let paragraph = Paragraph::new(lines)
+            .scroll((state.panel_scrollable.scroll_offset, 0));
+        f.render_widget(paragraph, area);
+        return;
+    }
+
+    let player = player_data.unwrap();
+
+    // Player Information
     lines.push(Line::raw("  Player Information"));
     lines.push(Line::raw("  ──────────────────"));
     lines.push(Line::raw(""));
-    lines.push(Line::raw(format!("  Position:      {}", player_data.position)));
-    lines.push(Line::raw(format!("  Number:        #{}", player_data.number)));
-    lines.push(Line::raw(format!("  Height:        {}", player_data.height)));
-    lines.push(Line::raw(format!("  Weight:        {}", player_data.weight)));
-    lines.push(Line::raw(format!("  Birthplace:    {}", player_data.birthplace)));
-    lines.push(Line::raw(""));
-    lines.push(Line::raw(""));
+    lines.push(Line::raw(format!("  Position:      {}", player.position)));
+    if let Some(num) = player.sweater_number {
+        lines.push(Line::raw(format!("  Number:        #{}", num)));
+    }
 
-    lines.push(Line::raw("  Career Statistics"));
-    lines.push(Line::raw("  ═════════════════"));
-    lines.push(Line::raw(""));
+    let height_ft = player.height_in_inches / 12;
+    let height_in = player.height_in_inches % 12;
+    lines.push(Line::raw(format!("  Height:        {}'{}\"", height_ft, height_in)));
+    lines.push(Line::raw(format!("  Weight:        {} lbs", player.weight_in_pounds)));
 
-    lines.push(Line::raw(format!(
-        "  {:<10} {:<20} {:>4} {:>4} {:>4} {:>5}",
-        "Season", "Team", "GP", "G", "A", "PTS"
-    )));
-    lines.push(Line::raw(format!(
-        "  {}",
-        "─".repeat(52)
-    )));
-
-    for season in &player_data.career_stats {
-        let is_selected = state.panel_selection_active && state.panel_selected_index == item_index;
-
-        if is_selected {
-            selected_item_line_number = Some(lines.len());
+    let mut birthplace = String::new();
+    if let Some(city) = &player.birth_city {
+        birthplace.push_str(&city.default);
+    }
+    if let Some(state_prov) = &player.birth_state_province {
+        if !birthplace.is_empty() {
+            birthplace.push_str(", ");
         }
-
-        let line_text = format!(
-            "  {:<10} {:<20} {:>4} {:>4} {:>4} {:>5}",
-            season.season, season.team, season.gp, season.g, season.a, season.pts
-        );
-
-        if is_selected {
-            lines.push(Line::from(vec![
-                Span::styled(line_text, Style::default().fg(selection_fg))
-            ]));
-        } else {
-            lines.push(Line::raw(line_text));
+        birthplace.push_str(&state_prov.default);
+    }
+    if let Some(country) = &player.birth_country {
+        if !birthplace.is_empty() {
+            birthplace.push_str(", ");
         }
+        birthplace.push_str(country);
+    }
+    if !birthplace.is_empty() {
+        lines.push(Line::raw(format!("  Birthplace:    {}", birthplace)));
+    }
 
-        item_index += 1;
+    lines.push(Line::raw(""));
+    lines.push(Line::raw(""));
+
+    // Career Statistics (NHL only)
+    if let Some(season_totals) = &player.season_totals {
+        // Filter to only NHL games
+        let nhl_seasons: Vec<_> = season_totals.iter()
+            .filter(|s| s.league_abbrev == NHL_LEAGUE_ABBREV)
+            .collect();
+
+        if !nhl_seasons.is_empty() {
+            lines.push(Line::raw("  NHL Career Statistics"));
+            lines.push(Line::raw("  ═════════════════════"));
+            lines.push(Line::raw(""));
+
+            lines.push(Line::raw(format!(
+                "  {:<10} {:<20} {:>4} {:>4} {:>4} {:>5}",
+                "Season", "Team", "GP", "G", "A", "PTS"
+            )));
+            lines.push(Line::raw(format!(
+                "  {}",
+                "─".repeat(52)
+            )));
+
+            for season in nhl_seasons.iter().rev() {
+                let is_selected = state.panel_selection_active && state.panel_selected_index == item_index;
+
+                if is_selected {
+                    selected_item_line_number = Some(lines.len());
+                }
+
+                let season_str = format!("{}-{}", season.season / 10000, season.season % 10000);
+                let team_name = &season.team_name.default;
+
+                let line_text = format!(
+                    "  {:<10} {:<20} {:>4} {:>4} {:>4} {:>5}",
+                    season_str,
+                    team_name,
+                    season.games_played,
+                    season.goals.unwrap_or(0),
+                    season.assists.unwrap_or(0),
+                    season.points.unwrap_or(0)
+                );
+
+                if is_selected {
+                    lines.push(Line::from(vec![
+                        Span::styled(line_text, Style::default().fg(selection_fg))
+                    ]));
+                } else {
+                    lines.push(Line::raw(line_text));
+                }
+
+                item_index += 1;
+            }
+        }
     }
 
     lines.push(Line::raw(""));

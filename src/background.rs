@@ -132,6 +132,49 @@ async fn fetch_boxscore(client: &Client, shared_data: &SharedDataHandle) {
     }
 }
 
+/// Fetch player info for selected player
+async fn fetch_player_info(client: &Client, shared_data: &SharedDataHandle) {
+    // Get the selected player ID
+    let selected_player_id = {
+        let shared = shared_data.read().await;
+        shared.selected_player_id
+    };
+
+    if let Some(player_id) = selected_player_id {
+        // Check if we already have the data cached
+        let already_cached = {
+            let shared = shared_data.read().await;
+            shared.player_info.contains_key(&player_id)
+        };
+
+        if already_cached {
+            return;
+        }
+
+        // Set loading state
+        {
+            let mut shared = shared_data.write().await;
+            shared.player_info_loading = true;
+        }
+
+        // Fetch the player info
+        match client.player_landing(player_id).await {
+            Ok(info) => {
+                let mut shared = shared_data.write().await;
+                let mut new_player_info = (*shared.player_info).clone();
+                new_player_info.insert(player_id, info);
+                shared.player_info = Arc::new(new_player_info);
+                shared.player_info_loading = false;
+            }
+            Err(e) => {
+                let mut shared = shared_data.write().await;
+                shared.player_info_loading = false;
+                shared.error_message = Some(format!("Failed to fetch player info: {}", e));
+            }
+        }
+    }
+}
+
 /// Fetch club stats for selected team
 async fn fetch_club_stats(client: &Client, shared_data: &SharedDataHandle) {
     // Get the selected team abbreviation
@@ -201,6 +244,9 @@ pub async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, inte
 
         // Fetch club stats if a team is selected
         fetch_club_stats(&client, &shared_data).await;
+
+        // Fetch player info if a player is selected
+        fetch_player_info(&client, &shared_data).await;
 
         // Wait for either the interval timer or a manual refresh signal
         tokio::select! {

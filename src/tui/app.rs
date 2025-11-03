@@ -89,7 +89,9 @@ impl AppState {
             CurrentTab::Standings => self.standings.subtab_focused = true,
             CurrentTab::Stats => {} // No subtabs for stats
             CurrentTab::Players => {} // No subtabs for players
-            CurrentTab::Settings => {} // No subtabs for settings
+            CurrentTab::Settings => {
+                self.settings.subtab_focused = true;
+            }
         }
     }
 
@@ -100,6 +102,7 @@ impl AppState {
         self.standings.team_selection_active = false;
         self.standings.selected_team_index = 0;
         self.standings.selected_column = 0;
+        self.settings.subtab_focused = false;
     }
 
     pub fn is_subtab_focused(&self) -> bool {
@@ -108,12 +111,12 @@ impl AppState {
             CurrentTab::Standings => self.standings.subtab_focused,
             CurrentTab::Stats => false,
             CurrentTab::Players => false,
-            CurrentTab::Settings => false,
+            CurrentTab::Settings => self.settings.subtab_focused,
         }
     }
 
     pub fn has_subtabs(&self) -> bool {
-        matches!(self.current_tab, CurrentTab::Scores | CurrentTab::Standings)
+        matches!(self.current_tab, CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings)
     }
 }
 

@@ -4,6 +4,9 @@ mod background;
 pub mod config;
 
 use nhl_api::{Client, Standing, DailySchedule};
+
+// Global Constants
+pub const NHL_LEAGUE_ABBREV: &str = "NHL";
 use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -31,6 +34,7 @@ pub struct SharedData {
     pub game_info: Arc<HashMap<i64, nhl_api::GameMatchup>>,
     pub boxscore: Arc<Option<nhl_api::Boxscore>>,
     pub club_stats: Arc<HashMap<String, nhl_api::ClubStats>>,
+    pub player_info: Arc<HashMap<i64, nhl_api::PlayerLanding>>,
     pub config: config::Config,
     pub last_refresh: Option<SystemTime>,
     pub game_date: nhl_api::GameDate,
@@ -39,6 +43,8 @@ pub struct SharedData {
     pub boxscore_loading: bool,
     pub selected_team_abbrev: Option<String>,
     pub club_stats_loading: bool,
+    pub selected_player_id: Option<i64>,
+    pub player_info_loading: bool,
 }
 
 impl Default for SharedData {
@@ -50,6 +56,7 @@ impl Default for SharedData {
             game_info: Arc::new(HashMap::new()),
             boxscore: Arc::new(None),
             club_stats: Arc::new(HashMap::new()),
+            player_info: Arc::new(HashMap::new()),
             config: config::Config::default(),
             last_refresh: None,
             game_date: nhl_api::GameDate::today(),
@@ -58,6 +65,8 @@ impl Default for SharedData {
             boxscore_loading: false,
             selected_team_abbrev: None,
             club_stats_loading: false,
+            selected_player_id: None,
+            player_info_loading: false,
         }
     }
 }

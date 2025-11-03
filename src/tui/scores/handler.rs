@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use super::State;
-use super::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX};
+use super::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX, DATE_WINDOW_CENTER};
 use crate::tui::error::TuiError;
 use crate::{SharedData, SharedDataHandle};
 
@@ -61,16 +61,32 @@ pub async fn handle_key(
         }
         KeyCode::Left => {
             if state.selected_index > DATE_WINDOW_MIN_INDEX {
+                // Move left within the window and recenter on the new date
                 state.selected_index -= 1;
+                // Moving left by 1 position means game_date should shift left by 1 day
+                // So the new selected date becomes the center
+                navigate_to_date(-1, shared_data, refresh_tx).await;
+                // Reset to center after the window updates
+                state.selected_index = DATE_WINDOW_CENTER;
+            } else {
+                // At left edge, shift window left by 1 day and stay at left edge
+                navigate_to_date(-1, shared_data, refresh_tx).await;
             }
-            navigate_to_date(-1, shared_data, refresh_tx).await;
             true
         }
         KeyCode::Right => {
             if state.selected_index < DATE_WINDOW_MAX_INDEX {
+                // Move right within the window and recenter on the new date
                 state.selected_index += 1;
+                // Moving right by 1 position means game_date should shift right by 1 day
+                // So the new selected date becomes the center
+                navigate_to_date(1, shared_data, refresh_tx).await;
+                // Reset to center after the window updates
+                state.selected_index = DATE_WINDOW_CENTER;
+            } else {
+                // At right edge, shift window right by 1 day and stay at right edge
+                navigate_to_date(1, shared_data, refresh_tx).await;
             }
-            navigate_to_date(1, shared_data, refresh_tx).await;
             true
         }
         _ => false, // Key not handled
@@ -203,54 +219,112 @@ async fn select_game_for_boxscore(state: &mut State, shared_data: &SharedDataHan
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::scores::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX, DATE_WINDOW_CENTER};
+    use crate::tui::scores::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX, DATE_WINDOW_CENTER, DATE_WINDOW_SIZE};
+    use nhl_api::GameDate;
+    use chrono::NaiveDate;
 
-    #[test]
-    fn test_selected_index_navigation_left_within_window() {
-        let mut state = State::new();
-        state.selected_index = DATE_WINDOW_CENTER;
-
-        if state.selected_index > DATE_WINDOW_MIN_INDEX {
-            state.selected_index -= 1;
-        }
-
-        assert_eq!(state.selected_index, 1);
+    /// Calculate the full window (game_date is always at center)
+    fn calculate_window(game_date: &GameDate) -> [NaiveDate; DATE_WINDOW_SIZE] {
+        let base_date = match game_date {
+            GameDate::Date(d) => d.clone(),
+            GameDate::Now => chrono::Local::now().date_naive(),
+        };
+        [
+            base_date + chrono::Duration::days(-2),
+            base_date + chrono::Duration::days(-1),
+            base_date + chrono::Duration::days(0),
+            base_date + chrono::Duration::days(1),
+            base_date + chrono::Duration::days(2),
+        ]
     }
 
     #[test]
-    fn test_selected_index_navigation_left_at_edge() {
-        let mut state = State::new();
-        state.selected_index = DATE_WINDOW_MIN_INDEX;
+    fn test_window_always_centered_on_game_date() {
+        let game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
 
-        if state.selected_index > DATE_WINDOW_MIN_INDEX {
-            state.selected_index -= 1;
-        }
-
-        assert_eq!(state.selected_index, DATE_WINDOW_MIN_INDEX);
+        // Window is always [game_date-2, game_date-1, game_date, game_date+1, game_date+2]
+        let window = calculate_window(&game_date);
+        assert_eq!(window[0], NaiveDate::from_ymd_opt(2024, 1, 13).unwrap());
+        assert_eq!(window[1], NaiveDate::from_ymd_opt(2024, 1, 14).unwrap());
+        assert_eq!(window[2], NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()); // CENTER
+        assert_eq!(window[3], NaiveDate::from_ymd_opt(2024, 1, 16).unwrap());
+        assert_eq!(window[4], NaiveDate::from_ymd_opt(2024, 1, 17).unwrap());
     }
 
     #[test]
-    fn test_selected_index_navigation_right_within_window() {
-        let mut state = State::new();
-        state.selected_index = DATE_WINDOW_CENTER;
+    fn test_navigation_within_window() {
+        let game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+        let window = calculate_window(&game_date);
 
-        if state.selected_index < DATE_WINDOW_MAX_INDEX {
-            state.selected_index += 1;
-        }
+        // Start at center (index 2), viewing Jan 15
+        assert_eq!(window[2], NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
 
-        assert_eq!(state.selected_index, 3);
+        // Press Left to index 1, viewing Jan 14 (same window, same game_date)
+        assert_eq!(window[1], NaiveDate::from_ymd_opt(2024, 1, 14).unwrap());
+
+        // Press Left to index 0, viewing Jan 13 (same window, same game_date)
+        assert_eq!(window[0], NaiveDate::from_ymd_opt(2024, 1, 13).unwrap());
+
+        // Press Right from center to index 3, viewing Jan 16
+        assert_eq!(window[3], NaiveDate::from_ymd_opt(2024, 1, 16).unwrap());
+
+        // Press Right to index 4, viewing Jan 17
+        assert_eq!(window[4], NaiveDate::from_ymd_opt(2024, 1, 17).unwrap());
     }
 
     #[test]
-    fn test_selected_index_navigation_right_at_edge() {
-        let mut state = State::new();
-        state.selected_index = DATE_WINDOW_MAX_INDEX;
+    fn test_navigation_at_left_edge_shifts_window() {
+        // Start: game_date=Jan 15, selected_index=0
+        // Window: [Jan 13, Jan 14, Jan 15, Jan 16, Jan 17], viewing Jan 13
+        let game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+        let window = calculate_window(&game_date);
+        assert_eq!(window[0], NaiveDate::from_ymd_opt(2024, 1, 13).unwrap());
 
-        if state.selected_index < DATE_WINDOW_MAX_INDEX {
-            state.selected_index += 1;
-        }
+        // Press Left: game_date becomes Jan 14, selected_index stays at 0
+        // Window: [Jan 12, Jan 13, Jan 14, Jan 15, Jan 16], viewing Jan 12
+        let new_game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 14).unwrap());
+        let new_window = calculate_window(&new_game_date);
+        assert_eq!(new_window[0], NaiveDate::from_ymd_opt(2024, 1, 12).unwrap());
+        assert_eq!(new_window[2], NaiveDate::from_ymd_opt(2024, 1, 14).unwrap());
+    }
 
-        assert_eq!(state.selected_index, DATE_WINDOW_MAX_INDEX);
+    #[test]
+    fn test_navigation_at_right_edge_shifts_window() {
+        // Start: game_date=Jan 15, selected_index=4
+        // Window: [Jan 13, Jan 14, Jan 15, Jan 16, Jan 17], viewing Jan 17
+        let game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+        let window = calculate_window(&game_date);
+        assert_eq!(window[4], NaiveDate::from_ymd_opt(2024, 1, 17).unwrap());
+
+        // Press Right: game_date becomes Jan 16, selected_index stays at 4
+        // Window: [Jan 14, Jan 15, Jan 16, Jan 17, Jan 18], viewing Jan 18
+        let new_game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 16).unwrap());
+        let new_window = calculate_window(&new_game_date);
+        assert_eq!(new_window[4], NaiveDate::from_ymd_opt(2024, 1, 18).unwrap());
+        assert_eq!(new_window[2], NaiveDate::from_ymd_opt(2024, 1, 16).unwrap());
+    }
+
+    #[test]
+    fn test_complete_navigation_sequence() {
+        // Start: game_date=Jan 15 (today), selected_index=2 (center)
+        // Window: [Jan 13, Jan 14, **Jan 15**, Jan 16, Jan 17]
+        let game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+        let window = calculate_window(&game_date);
+        assert_eq!(window[2], NaiveDate::from_ymd_opt(2024, 1, 15).unwrap());
+
+        // Press Left: selected_index=1, window unchanged
+        // Viewing: Jan 14
+        assert_eq!(window[1], NaiveDate::from_ymd_opt(2024, 1, 14).unwrap());
+
+        // Press Left: selected_index=0, window unchanged
+        // Viewing: Jan 13
+        assert_eq!(window[0], NaiveDate::from_ymd_opt(2024, 1, 13).unwrap());
+
+        // Press Left at edge: game_date=Jan 14, selected_index=0
+        // Window: [Jan 12, **Jan 13**, Jan 14, Jan 15, Jan 16]
+        let new_game_date = GameDate::Date(NaiveDate::from_ymd_opt(2024, 1, 14).unwrap());
+        let new_window = calculate_window(&new_game_date);
+        assert_eq!(new_window[0], NaiveDate::from_ymd_opt(2024, 1, 12).unwrap());
     }
 
     #[test]

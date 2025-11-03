@@ -159,7 +159,9 @@ async fn handle_arrow_and_enter_keys(
                     }
                     CurrentTab::Stats => false,
                     CurrentTab::Players => false,
-                    CurrentTab::Settings => false,
+                    CurrentTab::Settings => {
+                        settings::handle_key(key, &mut app_state.settings)
+                    }
                 };
 
                 // If handler didn't handle the key, apply default behavior
@@ -245,8 +247,8 @@ fn calculate_layout_constraints(has_subtabs: bool) -> Vec<Constraint> {
 /// Tabs with subtabs use chunk index 2, others use index 1
 fn calculate_content_chunk_index(current_tab: &CurrentTab) -> usize {
     match current_tab {
-        CurrentTab::Scores | CurrentTab::Standings => 2,
-        CurrentTab::Stats | CurrentTab::Players | CurrentTab::Settings => 1,
+        CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings => 2,
+        CurrentTab::Stats | CurrentTab::Players => 1,
     }
 }
 
@@ -259,6 +261,7 @@ struct RenderData {
     game_info: Arc<HashMap<i64, GameMatchup>>,
     boxscore: Arc<Option<nhl_api::Boxscore>>,
     club_stats: Arc<HashMap<String, nhl_api::ClubStats>>,
+    player_info: Arc<HashMap<i64, nhl_api::PlayerLanding>>,
     western_first: bool,
     last_refresh: Option<SystemTime>,
     time_format: String,
@@ -320,6 +323,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 data.theme.selection_fg,
                 &data.club_stats,
                 &data.selected_team_abbrev,
+                &data.player_info,
             );
         }
         CurrentTab::Stats => {
@@ -329,7 +333,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
             players::render_content(f, chunks[content_chunk_idx]);
         }
         CurrentTab::Settings => {
-            settings::render_content(f, chunks[content_chunk_idx]);
+            settings::render_content(f, chunks[content_chunk_idx], &mut app_state.settings);
         }
     }
 
@@ -360,6 +364,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 game_info: Arc::clone(&data.game_info),
                 boxscore: Arc::clone(&data.boxscore),
                 club_stats: Arc::clone(&data.club_stats),
+                player_info: Arc::clone(&data.player_info),
                 western_first: data.config.display_standings_western_first,
                 last_refresh: data.last_refresh,
                 time_format: data.config.time_format.clone(),
