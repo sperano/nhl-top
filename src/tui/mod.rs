@@ -26,6 +26,7 @@ use ratatui::{
 };
 use crate::SharedDataHandle;
 use crate::commands::scores_format::PeriodScores;
+use crate::config::ThemeConfig;
 use app::{AppState, CurrentTab};
 use tokio::sync::mpsc;
 use nhl_api::{Standing, DailySchedule, GameMatchup, GameDate};
@@ -160,7 +161,7 @@ async fn handle_arrow_and_enter_keys(
                     CurrentTab::Stats => false,
                     CurrentTab::Players => false,
                     CurrentTab::Settings => {
-                        settings::handle_key(key, &mut app_state.settings)
+                        settings::handle_key(key, &mut app_state.settings, shared_data).await
                     }
                 };
 
@@ -267,7 +268,7 @@ struct RenderData {
     time_format: String,
     game_date: GameDate,
     error_message: Option<String>,
-    theme: crate::config::ThemeConfig,
+    theme: Arc<ThemeConfig>,
     boxscore_loading: bool,
     selected_team_abbrev: Option<String>,
 }
@@ -277,15 +278,15 @@ struct RenderData {
 fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: &RenderData) {
     // Render main tab bar
     let tab_names = CurrentTab::all_names();
-    common::tab_bar::render(f, chunks[0], &tab_names, app_state.current_tab.index(), !app_state.is_subtab_focused(), data.theme.selection_fg, data.theme.unfocused_selection_fg());
+    common::tab_bar::render(f, chunks[0], &tab_names, app_state.current_tab.index(), !app_state.is_subtab_focused(), &data.theme);
 
     // Render sub-tabs for tabs that have them
     match app_state.current_tab {
         CurrentTab::Scores => {
-            scores::render_subtabs(f, chunks[1], &app_state.scores, &data.game_date, data.theme.selection_fg, data.theme.unfocused_selection_fg());
+            scores::render_subtabs(f, chunks[1], &app_state.scores, &data.game_date, &data.theme);
         }
         CurrentTab::Standings => {
-            standings::render_subtabs(f, chunks[1], &app_state.standings, data.theme.selection_fg, data.theme.unfocused_selection_fg());
+            standings::render_subtabs(f, chunks[1], &app_state.standings, &data.theme);
         }
         CurrentTab::Stats | CurrentTab::Players | CurrentTab::Settings => {
             // No subtabs for these tabs
@@ -305,7 +306,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 &data.schedule,
                 &data.period_scores,
                 &data.game_info,
-                data.theme.selection_fg,
+                &data.theme,
                 &data.boxscore,
                 data.boxscore_loading,
             );
@@ -320,7 +321,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 f,
                 chunks[content_chunk_idx],
                 &mut app_state.standings,
-                data.theme.selection_fg,
+                &data.theme,
                 &data.club_stats,
                 &data.selected_team_abbrev,
                 &data.player_info,
@@ -333,7 +334,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
             players::render_content(f, chunks[content_chunk_idx]);
         }
         CurrentTab::Settings => {
-            settings::render_content(f, chunks[content_chunk_idx], &mut app_state.settings);
+            settings::render_content(f, chunks[content_chunk_idx], &mut app_state.settings, &data.theme);
         }
     }
 
@@ -370,7 +371,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 time_format: data.config.time_format.clone(),
                 game_date: data.game_date.clone(),
                 error_message: data.error_message.clone(),
-                theme: data.config.theme.clone(),
+                theme: Arc::new(data.config.theme.clone()),
                 boxscore_loading: data.boxscore_loading,
                 selected_team_abbrev: data.selected_team_abbrev.clone(),
             }

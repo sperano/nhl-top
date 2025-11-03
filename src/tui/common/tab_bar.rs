@@ -1,14 +1,15 @@
 use ratatui::{
     layout::Rect,
-    style::Color,
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
+use std::sync::Arc;
+use crate::config::ThemeConfig;
 use super::separator::build_tab_separator_line;
 use super::styling::{base_tab_style, selection_style};
 
-pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, focused: bool, selection_fg: Color, unfocused_selection_fg: Color) {
+pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, focused: bool, theme: &Arc<ThemeConfig>) {
     let base_style = base_tab_style(focused);
 
     // Build tab line with separators
@@ -22,8 +23,8 @@ pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, f
             base_style,
             i == selected_index,
             focused,
-            selection_fg,
-            unfocused_selection_fg,
+            theme.selection_fg,
+            theme.unfocused_selection_fg(),
         );
         tab_spans.push(Span::styled(tab_name.to_string(), style));
     }

@@ -1,11 +1,13 @@
 use ratatui::{
     layout::Rect,
-    style::{Style, Color},
+    style::Style,
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
 use std::collections::HashMap;
+use std::sync::Arc;
+use crate::config::ThemeConfig;
 use super::State;
 use super::state::DATE_WINDOW_SIZE;
 use crate::tui::common::separator::build_tab_separator_line;
@@ -47,8 +49,7 @@ fn build_date_subtab_spans(
     selected_index: usize,
     base_style: Style,
     focused: bool,
-    selection_fg: Color,
-    unfocused_selection_fg: Color,
+    theme: &Arc<ThemeConfig>,
 ) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
 
@@ -61,8 +62,8 @@ fn build_date_subtab_spans(
             base_style,
             i == selected_index,
             focused,
-            selection_fg,
-            unfocused_selection_fg,
+            theme.selection_fg,
+            theme.unfocused_selection_fg(),
         );
         spans.push(Span::styled(date_str.clone(), style));
     }
@@ -75,8 +76,7 @@ pub fn render_subtabs(
     area: Rect,
     state: &State,
     game_date: &nhl_api::GameDate,
-    selection_fg: Color,
-    unfocused_selection_fg: Color,
+    theme: &Arc<ThemeConfig>,
 ) {
     let focused = state.subtab_focused && !state.box_selection_active;
     let base_style = base_tab_style(focused);
@@ -89,8 +89,7 @@ pub fn render_subtabs(
         state.selected_index,
         base_style,
         focused,
-        selection_fg,
-        unfocused_selection_fg,
+        theme,
     );
     let subtab_line = Line::from(subtab_spans);
 
@@ -125,7 +124,7 @@ pub fn render_content(
     schedule: &Option<nhl_api::DailySchedule>,
     period_scores: &HashMap<i64, crate::commands::scores_format::PeriodScores>,
     game_info: &HashMap<i64, nhl_api::GameMatchup>,
-    selection_fg: Color,
+    theme: &Arc<ThemeConfig>,
     boxscore: &Option<nhl_api::Boxscore>,
     boxscore_loading: bool,
 ) {
@@ -181,7 +180,7 @@ pub fn render_content(
 
         // If a box is selected, apply styling and render with scroll
         if let Some((sel_row, sel_col)) = selected_box {
-            let styled_text = apply_box_styling_ratatui(&content, sel_row, sel_col, selection_fg);
+            let styled_text = apply_box_styling_ratatui(&content, sel_row, sel_col, theme);
 
             let paragraph = Paragraph::new(styled_text)
                 .block(Block::default().borders(Borders::NONE))
@@ -266,7 +265,7 @@ fn char_positions_to_byte_indices(line: &str, start_col: usize, end_col: usize) 
 }
 
 /// Create styled spans for a line, applying selection color to the specified byte range
-fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, selection_fg: Color) -> Vec<Span<'static>> {
+fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, theme: &Arc<ThemeConfig>) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
 
     // Before the box
@@ -278,7 +277,7 @@ fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, selection
     if byte_start < byte_end {
         spans.push(Span::styled(
             line[byte_start..byte_end].to_string(),
-            Style::default().fg(selection_fg)
+            Style::default().fg(theme.selection_fg)
         ));
     }
 
@@ -306,7 +305,7 @@ fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, selection
 /// 6. Home team row
 /// 7. Bottom border (╰─...╯)
 /// Plus 1 blank line between rows
-fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, selection_fg: Color) -> Text<'static> {
+fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, theme: &Arc<ThemeConfig>) -> Text<'static> {
     let lines: Vec<&str> = content.lines().collect();
     let mut styled_lines: Vec<Line> = Vec::new();
 
@@ -317,7 +316,7 @@ fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, sele
         if line_idx >= start_line && line_idx < end_line {
             // This line is part of the selected box - apply selection styling
             let (byte_start, byte_end) = char_positions_to_byte_indices(line, start_col, end_col);
-            let spans = create_styled_spans(line, byte_start, byte_end, selection_fg);
+            let spans = create_styled_spans(line, byte_start, byte_end, theme);
             styled_lines.push(Line::from(spans));
         } else {
             // Normal line without styling

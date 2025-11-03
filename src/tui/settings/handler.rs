@@ -1,8 +1,17 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use super::State;
+use crate::SharedDataHandle;
+
+// Import the COLORS array from view module
+use super::view::COLORS;
 
 /// Handle key events for settings tab
-pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
+pub async fn handle_key(key: KeyEvent, state: &mut State, shared_data: &SharedDataHandle) -> bool {
+    // Clear any existing status message when navigating
+    if matches!(key.code, KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) {
+        state.status_message = None;
+    }
+
     // Color picker is active when in subtab mode
     match key.code {
         KeyCode::Up => {
@@ -37,17 +46,17 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
             true
         }
         KeyCode::Enter => {
-            // Log the selected color
-            let color_names = [
-                "Coral Red", "Bright Orange", "Golden Yellow", "Mint Green",
-                "Sky Blue", "Claude Purple", "Hot Pink", "Turquoise",
-                "Light Pink", "Powder Blue", "Plum", "Khaki",
-                "Teal", "Amethyst", "Pumpkin", "Ocean Blue",
-                "Chocolate", "Rosy Brown", "Salmon", "Olive",
-                "Crimson", "Cyan", "Indigo", "Lime Green",
-            ];
-            let selected_color_name = color_names[state.selected_color_index];
-            tracing::info!("User selected color: {}", selected_color_name);
+            // Get the selected color
+            let (selected_color, selected_name) = COLORS[state.selected_color_index];
+
+            // Update the theme in SharedData
+            let mut data = shared_data.write().await;
+            data.config.theme.selection_fg = selected_color;
+
+            // Set status message
+            state.status_message = Some(format!("✓ Theme color changed to {}", selected_name));
+
+            tracing::info!("User selected color: {} - theme updated", selected_name);
             true
         }
         _ => false,

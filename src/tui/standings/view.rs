@@ -7,6 +7,7 @@ use ratatui::{
 };
 use std::sync::Arc;
 use std::collections::HashMap;
+use crate::config::ThemeConfig;
 use crate::commands::standings::GroupBy;
 use crate::NHL_LEAGUE_ABBREV;
 use super::{State, layout::StandingsLayout};
@@ -26,13 +27,13 @@ const PTS_COL_WIDTH: usize = 4;
 const STANDINGS_COLUMN_WIDTH: usize = 48; // Actual table width with all columns
 const COLUMN_SPACING: usize = 4;
 
-pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Color, unfocused_selection_fg: Color) {
+pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<ThemeConfig>) {
     let base_style = base_tab_style(state.subtab_focused);
 
     if let Some(nav_ctx) = &state.navigation {
         if !nav_ctx.is_at_root() {
             let trail = nav_ctx.stack.breadcrumb_trail();
-            render_breadcrumb_simple(f, area, &trail, selection_fg, base_style);
+            render_breadcrumb_simple(f, area, &trail, theme, base_style);
             return;
         }
     }
@@ -55,8 +56,8 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Co
             base_style,
             *view == standings_view,
             focused,
-            selection_fg,
-            unfocused_selection_fg,
+            theme.selection_fg,
+            theme.unfocused_selection_fg(),
         );
         subtab_spans.push(Span::styled(tab_text, style));
     }
@@ -84,7 +85,7 @@ pub fn render_content(
     f: &mut Frame,
     area: Rect,
     state: &mut State,
-    selection_fg: Color,
+    theme: &Arc<ThemeConfig>,
     club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>,
     selected_team_abbrev: &Option<String>,
     player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
@@ -94,7 +95,7 @@ pub fn render_content(
         .cloned();
 
     if let Some(panel) = panel_to_render {
-        render_panel(f, area, state, &panel, selection_fg, club_stats, selected_team_abbrev, player_info);
+        render_panel(f, area, state, &panel, theme, club_stats, selected_team_abbrev, player_info);
         return;
     }
 
@@ -105,7 +106,7 @@ pub fn render_content(
     };
 
     // Render the layout
-    let lines = render_layout(&layout, state, selection_fg);
+    let lines = render_layout(&layout, state, theme);
 
     // Update scrollable dimensions
     state.scrollable.update_viewport_height(area.height);
@@ -122,22 +123,22 @@ pub fn render_content(
 }
 
 /// Render the standings layout to a vector of lines
-fn render_layout(layout: &StandingsLayout, state: &State, selection_fg: Color) -> Vec<Line<'static>> {
+fn render_layout(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfig>) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     // Add initial blank line
     lines.push(Line::raw(""));
 
     match layout.view {
-        GroupBy::League => render_single_column(layout, state, selection_fg, &mut lines),
-        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard => render_two_columns(layout, state, selection_fg, &mut lines),
+        GroupBy::League => render_single_column(layout, state, theme, &mut lines),
+        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard => render_two_columns(layout, state, theme, &mut lines),
     }
 
     lines
 }
 
 /// Render a single-column layout (League view)
-fn render_single_column(layout: &StandingsLayout, state: &State, selection_fg: Color, lines: &mut Vec<Line<'static>>) {
+fn render_single_column(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfig>, lines: &mut Vec<Line<'static>>) {
     let column = &layout.columns[0];
 
     for group in &column.groups {
@@ -160,17 +161,17 @@ fn render_single_column(layout: &StandingsLayout, state: &State, selection_fg: C
                 && state.selected_column == 0
                 && state.selected_team_index == team_idx;
 
-            lines.push(render_team_row(team, is_selected, selection_fg, CONTENT_LEFT_MARGIN));
+            lines.push(render_team_row(team, is_selected, theme.selection_fg, CONTENT_LEFT_MARGIN));
             team_idx += 1;
         }
     }
 }
 
 /// Render a two-column layout (Conference/Division view)
-fn render_two_columns(layout: &StandingsLayout, state: &State, selection_fg: Color, lines: &mut Vec<Line<'static>>) {
-    let left_lines = render_column(&layout.columns[0], state, selection_fg, 0);
+fn render_two_columns(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfig>, lines: &mut Vec<Line<'static>>) {
+    let left_lines = render_column(&layout.columns[0], state, theme, 0);
     let right_lines = if layout.columns.len() > 1 {
-        render_column(&layout.columns[1], state, selection_fg, 1)
+        render_column(&layout.columns[1], state, theme, 1)
     } else {
         vec![]
     };
@@ -211,7 +212,7 @@ fn render_two_columns(layout: &StandingsLayout, state: &State, selection_fg: Col
 }
 
 /// Render a single column (for two-column layouts)
-fn render_column(column: &super::layout::StandingsColumn, state: &State, selection_fg: Color, col_idx: usize) -> Vec<Line<'static>> {
+fn render_column(column: &super::layout::StandingsColumn, state: &State, theme: &Arc<ThemeConfig>, col_idx: usize) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let mut team_idx = 0;
 
@@ -242,7 +243,7 @@ fn render_column(column: &super::layout::StandingsColumn, state: &State, selecti
                 && state.selected_column == col_idx
                 && state.selected_team_index == team_idx;
 
-            lines.push(render_team_row(team, is_selected, selection_fg, margin));
+            lines.push(render_team_row(team, is_selected, theme.selection_fg, margin));
 
             // Draw playoff cutoff line after specified team index (for wildcard view)
             if let Some(cutoff_idx) = group.playoff_cutoff_after {
@@ -359,13 +360,13 @@ fn find_team_line_index(lines: &[Line], team_name: &str) -> Option<usize> {
     None
 }
 
-fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, selection_fg: Color, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
+fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, theme: &Arc<ThemeConfig>, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
     match panel {
         StandingsPanel::TeamDetail { team_name, .. } => {
-            render_team_panel(f, area, state, team_name, selection_fg, club_stats, selected_team_abbrev);
+            render_team_panel(f, area, state, team_name, theme.selection_fg, club_stats, selected_team_abbrev);
         }
         StandingsPanel::PlayerDetail { player_id, player_name, .. } => {
-            render_player_panel(f, area, state, *player_id, player_name, selection_fg, player_info);
+            render_player_panel(f, area, state, *player_id, player_name, theme.selection_fg, player_info);
         }
     }
 }

@@ -6,9 +6,11 @@ use ratatui::{
     Frame,
 };
 use super::State;
+use std::sync::Arc;
+use crate::config::ThemeConfig;
 
 /// 24 beautiful, professionally-chosen colors for the color picker (4x6 grid)
-const COLORS: [(Color, &str); 24] = [
+pub const COLORS: [(Color, &str); 24] = [
     // Row 1 - Vibrant primary colors
     (Color::Rgb(255, 107, 107), "Coral Red"),      // Soft coral red
     (Color::Rgb(255, 165, 0), "Bright Orange"),    // Vibrant orange (like current selection)
@@ -46,11 +48,14 @@ const COLORS: [(Color, &str); 24] = [
     (Color::Rgb(50, 205, 50), "Lime Green"),       // Electric lime
 ];
 
-pub fn render_content(f: &mut Frame, area: Rect, state: &State) {
+pub fn render_content(f: &mut Frame, area: Rect, state: &State, theme: &Arc<ThemeConfig>) {
     let mut lines = Vec::new();
 
     lines.push(Line::raw(""));
-    lines.push(Line::raw("  Selection Color"));
+    lines.push(Line::from(vec![
+        Span::raw("  Current Theme Color: "),
+        Span::styled("████", Style::default().fg(theme.selection_fg).bg(theme.selection_fg)),
+    ]));
     lines.push(Line::raw("  ───────────────"));
     lines.push(Line::raw(""));
 
@@ -69,10 +74,13 @@ pub fn render_content(f: &mut Frame, area: Rect, state: &State) {
             let idx = row * 4 + col;
             let (color, name) = COLORS[idx];
             let is_selected = state.subtab_focused && state.selected_color_index == idx;
+            let is_current_theme = color == theme.selection_fg;
 
             // Show selection indicator
             if is_selected {
                 line_spans.push(Span::raw("► "));
+            } else if is_current_theme {
+                line_spans.push(Span::raw("● ")); // Show dot for current theme color
             } else {
                 line_spans.push(Span::raw("  "));
             }
@@ -106,6 +114,15 @@ pub fn render_content(f: &mut Frame, area: Rect, state: &State) {
         Span::raw("  Current selection: "),
         Span::styled(selected_name, Style::default().fg(selected_color)),
     ]));
+
+    // Show status message if present
+    if let Some(msg) = &state.status_message {
+        lines.push(Line::raw(""));
+        lines.push(Line::from(vec![
+            Span::raw("  "),
+            Span::styled(msg.clone(), Style::default().fg(Color::Green)),
+        ]));
+    }
 
     let paragraph = Paragraph::new(lines).block(Block::default().borders(Borders::NONE));
     f.render_widget(paragraph, area);

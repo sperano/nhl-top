@@ -2,11 +2,13 @@
 
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
 };
+use std::sync::Arc;
+use crate::config::ThemeConfig;
 
 /// Render a breadcrumb trail
 ///
@@ -15,14 +17,14 @@ use ratatui::{
 /// * `area` - Area to render within
 /// * `trail` - Vector of breadcrumb labels
 /// * `separator` - Separator between breadcrumbs (e.g., " >> ", " / ", " > ")
-/// * `selection_fg` - Color for breadcrumb text
+/// * `theme` - Theme configuration reference
 /// * `base_style` - Base style for separator and line
 pub fn render_breadcrumb(
     f: &mut Frame,
     area: Rect,
     trail: &[String],
     separator: &str,
-    selection_fg: Color,
+    theme: &Arc<ThemeConfig>,
     base_style: Style,
 ) {
     if trail.is_empty() {
@@ -35,7 +37,7 @@ pub fn render_breadcrumb(
         if i > 0 {
             spans.push(Span::styled(separator, base_style));
         }
-        spans.push(Span::styled(label.clone(), Style::default().fg(selection_fg)));
+        spans.push(Span::styled(label.clone(), Style::default().fg(theme.selection_fg)));
     }
 
     let breadcrumb_line = Line::from(spans);
@@ -53,10 +55,10 @@ pub fn render_breadcrumb_simple(
     f: &mut Frame,
     area: Rect,
     trail: &[String],
-    selection_fg: Color,
+    theme: &Arc<ThemeConfig>,
     base_style: Style,
 ) {
-    render_breadcrumb(f, area, trail, " ▸ ", selection_fg, base_style);
+    render_breadcrumb(f, area, trail, " ▸ ", theme, base_style);
 }
 
 #[cfg(test)]

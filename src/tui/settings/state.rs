@@ -3,6 +3,8 @@ pub struct State {
     pub selected_color_index: usize,
     /// Whether subtab mode is focused (for main TUI navigation)
     pub subtab_focused: bool,
+    /// Optional status message to display
+    pub status_message: Option<String>,
 }
 
 impl State {
@@ -10,6 +12,7 @@ impl State {
         State {
             selected_color_index: 0,
             subtab_focused: false,
+            status_message: None,
         }
     }
 }
