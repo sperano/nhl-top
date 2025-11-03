@@ -9,7 +9,94 @@ fn navigate_to_column(state: &mut State, new_column: usize, new_column_team_coun
     }
 }
 
+const TOTAL_PLAYERS: usize = 15;
+const TOTAL_GOALIES: usize = 2;
+const TOTAL_SELECTABLE_ITEMS: usize = TOTAL_PLAYERS + TOTAL_GOALIES;
+
+fn handle_team_detail_view(key: KeyEvent, state: &mut State) -> bool {
+    if state.team_detail_player_selection_active {
+        match key.code {
+            KeyCode::Up => {
+                if state.team_detail_selected_player_index == 0 {
+                    state.team_detail_player_selection_active = false;
+                } else {
+                    state.team_detail_selected_player_index = state.team_detail_selected_player_index.saturating_sub(1);
+                }
+                true
+            }
+            KeyCode::Down => {
+                if state.team_detail_selected_player_index + 1 < TOTAL_SELECTABLE_ITEMS {
+                    state.team_detail_selected_player_index += 1;
+                }
+                true
+            }
+            KeyCode::Enter => {
+                let player_name = get_player_name_by_index(state.team_detail_selected_player_index);
+                tracing::info!("Selected player: {}", player_name);
+                true
+            }
+            KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
+                state.team_detail_scrollable.handle_key(key)
+            }
+            KeyCode::Esc => {
+                state.team_detail_player_selection_active = false;
+                true
+            }
+            _ => false,
+        }
+    } else {
+        match key.code {
+            KeyCode::Esc => {
+                state.team_detail_view_active = false;
+                state.team_detail_scrollable.reset();
+                state.selected_team_name = None;
+                state.team_detail_player_selection_active = false;
+                state.team_detail_selected_player_index = 0;
+                true
+            }
+            KeyCode::Down => {
+                state.team_detail_player_selection_active = true;
+                state.team_detail_selected_player_index = 0;
+                true
+            }
+            KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
+                state.team_detail_scrollable.handle_key(key)
+            }
+            _ => true,
+        }
+    }
+}
+
+fn get_player_name_by_index(index: usize) -> &'static str {
+    let players = [
+        "Auston Matthews",
+        "Mitchell Marner",
+        "William Nylander",
+        "John Tavares",
+        "Morgan Rielly",
+        "Matthew Knies",
+        "Tyler Bertuzzi",
+        "Max Domi",
+        "Jake McCabe",
+        "T.J. Brodie",
+        "Calle Jarnkrok",
+        "Bobby McMann",
+        "David Kampf",
+        "Timothy Liljegren",
+        "Noah Gregor",
+        "Ilya Samsonov",
+        "Joseph Woll",
+    ];
+
+    players.get(index).unwrap_or(&"Unknown Player")
+}
+
 pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
+    // If team detail view is active, handle separately
+    if state.team_detail_view_active {
+        return handle_team_detail_view(key, state);
+    }
+
     // Get layout information
     let layout = match &state.layout_cache {
         Some(layout) => layout,
@@ -64,17 +151,12 @@ pub fn handle_key(key: KeyEvent, state: &mut State) -> bool {
                 state.scrollable.handle_key(key)
             }
             KeyCode::Enter => {
-                // Log the selected team for debugging
                 if let Some(team) = layout.get_team(state.selected_column, state.selected_team_index) {
-                    tracing::info!(
-                        "Selected team: {} | View: {:?} | Column: {} | Index: {} | Division: {} | Conference: {}",
-                        team.team_common_name.default,
-                        state.view,
-                        state.selected_column,
-                        state.selected_team_index,
-                        team.division_name,
-                        team.conference_name.as_deref().unwrap_or("N/A")
-                    );
+                    state.team_detail_view_active = true;
+                    state.team_detail_scrollable.reset();
+                    state.selected_team_name = Some(team.team_common_name.default.clone());
+                    state.team_detail_player_selection_active = false;
+                    state.team_detail_selected_player_index = 0;
                 }
                 true
             }

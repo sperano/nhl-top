@@ -22,11 +22,26 @@ const STANDINGS_COLUMN_WIDTH: usize = 48; // Actual table width with all columns
 const COLUMN_SPACING: usize = 4;
 
 pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, selection_fg: Color, unfocused_selection_fg: Color) {
+    let base_style = base_tab_style(state.subtab_focused);
+
+    // If team detail view is active, show breadcrumb
+    if state.team_detail_view_active {
+        let team_name = state.selected_team_name.as_deref().unwrap_or("Unknown Team");
+        let breadcrumb_line = Line::from(vec![
+            Span::styled(team_name, Style::default().fg(selection_fg)),
+        ]);
+        let separator_line = Line::from(vec![
+            Span::styled("─".repeat(area.width as usize), base_style),
+        ]);
+        let breadcrumb_widget = Paragraph::new(vec![breadcrumb_line, separator_line]);
+        f.render_widget(breadcrumb_widget, area);
+        return;
+    }
+
+    // Otherwise show view selection tabs
     let views = GroupBy::all();
     let standings_view = state.view;
     let focused = state.subtab_focused;
-
-    let base_style = base_tab_style(focused);
 
     // Build subtab line with separators
     let mut subtab_spans = Vec::new();
@@ -72,6 +87,11 @@ pub fn render_content(
     state: &mut State,
     selection_fg: Color,
 ) {
+    if state.team_detail_view_active {
+        render_team_detail(f, area, state, selection_fg);
+        return;
+    }
+
     // Build layout if standings data is available
     let layout = match &state.layout_cache {
         Some(layout) => layout.clone(),
@@ -331,4 +351,152 @@ fn find_team_line_index(lines: &[Line], team_name: &str) -> Option<usize> {
         }
     }
     None
+}
+
+fn render_team_detail(f: &mut Frame, area: Rect, state: &mut State, selection_fg: Color) {
+    let team_name = state.selected_team_name.as_deref().unwrap_or("Unknown Team");
+
+    let mut lines = Vec::new();
+    let mut player_line_index = 0;
+    let mut selected_player_line_number: Option<usize> = None;
+
+    lines.push(Line::raw(""));
+    lines.push(Line::raw(format!("  {}", team_name)));
+    lines.push(Line::raw(format!("  {}", "═".repeat(team_name.len()))));
+    lines.push(Line::raw(""));
+
+    lines.push(Line::raw("  Team Information"));
+    lines.push(Line::raw("  ────────────────"));
+    lines.push(Line::raw(""));
+    lines.push(Line::raw("  City:          Toronto"));
+    lines.push(Line::raw("  Arena:         Scotiabank Arena"));
+    lines.push(Line::raw("  Founded:       1917"));
+    lines.push(Line::raw("  Conference:    Eastern"));
+    lines.push(Line::raw("  Division:      Atlantic"));
+    lines.push(Line::raw(""));
+    lines.push(Line::raw(""));
+
+    lines.push(Line::raw("  Player Statistics"));
+    lines.push(Line::raw("  ═════════════════"));
+    lines.push(Line::raw(""));
+
+    lines.push(Line::raw(format!(
+        "  {:<25} {:>4} {:>4} {:>4} {:>5}",
+        "Player", "GP", "G", "A", "PTS"
+    )));
+    lines.push(Line::raw(format!(
+        "  {}",
+        "─".repeat(46)
+    )));
+
+    let fake_players = [
+        ("Auston Matthews", 58, 42, 31, 73),
+        ("Mitchell Marner", 58, 18, 48, 66),
+        ("William Nylander", 56, 28, 35, 63),
+        ("John Tavares", 58, 22, 28, 50),
+        ("Morgan Rielly", 58, 8, 32, 40),
+        ("Matthew Knies", 52, 15, 18, 33),
+        ("Tyler Bertuzzi", 55, 14, 16, 30),
+        ("Max Domi", 54, 12, 16, 28),
+        ("Jake McCabe", 58, 3, 15, 18),
+        ("T.J. Brodie", 56, 2, 14, 16),
+        ("Calle Jarnkrok", 42, 6, 8, 14),
+        ("Bobby McMann", 38, 7, 5, 12),
+        ("David Kampf", 48, 4, 6, 10),
+        ("Timothy Liljegren", 35, 2, 8, 10),
+        ("Noah Gregor", 40, 5, 4, 9),
+    ];
+
+    for (name, gp, g, a, pts) in &fake_players {
+        let is_selected = state.team_detail_player_selection_active
+            && state.team_detail_selected_player_index == player_line_index;
+
+        if is_selected {
+            selected_player_line_number = Some(lines.len());
+        }
+
+        let line_text = format!(
+            "  {:<25} {:>4} {:>4} {:>4} {:>5}",
+            name, gp, g, a, pts
+        );
+
+        if is_selected {
+            lines.push(Line::from(vec![
+                Span::styled(line_text, Style::default().fg(selection_fg))
+            ]));
+        } else {
+            lines.push(Line::raw(line_text));
+        }
+
+        player_line_index += 1;
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(Line::raw(""));
+
+    lines.push(Line::raw("  Goaltender Statistics"));
+    lines.push(Line::raw("  ═════════════════════"));
+    lines.push(Line::raw(""));
+
+    lines.push(Line::raw(format!(
+        "  {:<25} {:>4} {:>6} {:>6} {:>6}",
+        "Goaltender", "GP", "GAA", "SV%", "SO"
+    )));
+    lines.push(Line::raw(format!(
+        "  {}",
+        "─".repeat(50)
+    )));
+
+    let fake_goalies = [
+        ("Ilya Samsonov", 35, "2.89", ".903", 2),
+        ("Joseph Woll", 23, "2.52", ".915", 1),
+    ];
+
+    for (name, gp, gaa, sv_pct, so) in &fake_goalies {
+        let is_selected = state.team_detail_player_selection_active
+            && state.team_detail_selected_player_index == player_line_index;
+
+        if is_selected {
+            selected_player_line_number = Some(lines.len());
+        }
+
+        let line_text = format!(
+            "  {:<25} {:>4} {:>6} {:>6} {:>6}",
+            name, gp, gaa, sv_pct, so
+        );
+
+        if is_selected {
+            lines.push(Line::from(vec![
+                Span::styled(line_text, Style::default().fg(selection_fg))
+            ]));
+        } else {
+            lines.push(Line::raw(line_text));
+        }
+
+        player_line_index += 1;
+    }
+
+    lines.push(Line::raw(""));
+
+    state.team_detail_scrollable.update_viewport_height(area.height);
+    state.team_detail_scrollable.update_content_height(lines.len());
+
+    if state.team_detail_player_selection_active {
+        if let Some(line_idx) = selected_player_line_number {
+            let scroll_offset = state.team_detail_scrollable.scroll_offset as usize;
+            let viewport_height = state.team_detail_scrollable.viewport_height as usize;
+            let viewport_end = scroll_offset + viewport_height;
+
+            if line_idx < scroll_offset {
+                state.team_detail_scrollable.scroll_offset = line_idx as u16;
+            } else if line_idx >= viewport_end {
+                let new_offset = (line_idx + 1).saturating_sub(viewport_height);
+                state.team_detail_scrollable.scroll_offset = new_offset as u16;
+            }
+        }
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .scroll((state.team_detail_scrollable.scroll_offset, 0));
+    f.render_widget(paragraph, area);
 }

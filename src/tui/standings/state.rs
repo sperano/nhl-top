@@ -8,8 +8,13 @@ pub struct State {
     pub scrollable: Scrollable,
     pub team_selection_active: bool,
     pub selected_team_index: usize,
-    pub selected_column: usize, // 0 = left, 1 = right (for Division/Conference views)
-    pub layout_cache: Option<StandingsLayout>, // Cached layout for current view
+    pub selected_column: usize,
+    pub layout_cache: Option<StandingsLayout>,
+    pub team_detail_view_active: bool,
+    pub team_detail_scrollable: Scrollable,
+    pub selected_team_name: Option<String>,
+    pub team_detail_player_selection_active: bool,
+    pub team_detail_selected_player_index: usize,
 }
 
 impl State {
@@ -22,6 +27,11 @@ impl State {
             selected_team_index: 0,
             selected_column: 0,
             layout_cache: None,
+            team_detail_view_active: false,
+            team_detail_scrollable: Scrollable::new(),
+            selected_team_name: None,
+            team_detail_player_selection_active: false,
+            team_detail_selected_player_index: 0,
         }
     }
 
