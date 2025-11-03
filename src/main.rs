@@ -30,12 +30,15 @@ pub struct SharedData {
     pub period_scores: Arc<HashMap<i64, commands::scores_format::PeriodScores>>,
     pub game_info: Arc<HashMap<i64, nhl_api::GameMatchup>>,
     pub boxscore: Arc<Option<nhl_api::Boxscore>>,
+    pub club_stats: Arc<HashMap<String, nhl_api::ClubStats>>,
     pub config: config::Config,
     pub last_refresh: Option<SystemTime>,
     pub game_date: nhl_api::GameDate,
     pub error_message: Option<String>,
     pub selected_game_id: Option<i64>,
     pub boxscore_loading: bool,
+    pub selected_team_abbrev: Option<String>,
+    pub club_stats_loading: bool,
 }
 
 impl Default for SharedData {
@@ -46,12 +49,15 @@ impl Default for SharedData {
             period_scores: Arc::new(HashMap::new()),
             game_info: Arc::new(HashMap::new()),
             boxscore: Arc::new(None),
+            club_stats: Arc::new(HashMap::new()),
             config: config::Config::default(),
             last_refresh: None,
             game_date: nhl_api::GameDate::today(),
             error_message: None,
             selected_game_id: None,
             boxscore_loading: false,
+            selected_team_abbrev: None,
+            club_stats_loading: false,
         }
     }
 }
@@ -140,6 +146,8 @@ enum Commands {
         #[arg(short, long)]
         date: Option<String>,
     },
+    /// Display all NHL franchises
+    Franchises,
     /// Display current configuration
     Config,
 }
@@ -271,6 +279,9 @@ async fn execute_command(client: &Client, command: Commands) -> anyhow::Result<(
         }
         Commands::Scores { date } => {
             commands::scores::run(client, date).await
+        }
+        Commands::Franchises => {
+            commands::franchises::run(client).await
         }
     }
 }

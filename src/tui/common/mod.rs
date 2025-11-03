@@ -3,3 +3,4 @@ pub mod status_bar;
 pub mod separator;
 pub mod styling;
 pub mod scrollable;
+pub mod breadcrumb;

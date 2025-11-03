@@ -1,6 +1,8 @@
 use crate::commands::standings::GroupBy;
 use crate::tui::common::scrollable::Scrollable;
+use crate::tui::navigation::NavigationContext;
 use super::layout::StandingsLayout;
+use super::panel::{StandingsPanel, PanelData};
 
 pub struct State {
     pub view: GroupBy,
@@ -10,11 +12,10 @@ pub struct State {
     pub selected_team_index: usize,
     pub selected_column: usize,
     pub layout_cache: Option<StandingsLayout>,
-    pub team_detail_view_active: bool,
-    pub team_detail_scrollable: Scrollable,
-    pub selected_team_name: Option<String>,
-    pub team_detail_player_selection_active: bool,
-    pub team_detail_selected_player_index: usize,
+    pub navigation: Option<NavigationContext<StandingsPanel, String, PanelData>>,
+    pub panel_scrollable: Scrollable,
+    pub panel_selection_active: bool,
+    pub panel_selected_index: usize,
 }
 
 impl State {
@@ -27,11 +28,10 @@ impl State {
             selected_team_index: 0,
             selected_column: 0,
             layout_cache: None,
-            team_detail_view_active: false,
-            team_detail_scrollable: Scrollable::new(),
-            selected_team_name: None,
-            team_detail_player_selection_active: false,
-            team_detail_selected_player_index: 0,
+            navigation: None,
+            panel_scrollable: Scrollable::new(),
+            panel_selection_active: false,
+            panel_selected_index: 0,
         }
     }
 

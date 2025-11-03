@@ -3,6 +3,7 @@ pub mod boxscore;
 pub mod schedule;
 pub mod scores;
 pub mod scores_format;
+pub mod franchises;
 
 use nhl_api::GameDate;
 use chrono::NaiveDate;

@@ -7,6 +7,7 @@ mod settings;
 mod app;
 mod error;
 pub mod traits;
+pub mod navigation;
 
 use std::io;
 use std::sync::Arc;
@@ -154,7 +155,7 @@ async fn handle_arrow_and_enter_keys(
                         scores::handle_key(key, &mut app_state.scores, shared_data, refresh_tx).await
                     }
                     CurrentTab::Standings => {
-                        standings::handle_key(key, &mut app_state.standings)
+                        standings::handle_key(key, &mut app_state.standings, shared_data, refresh_tx).await
                     }
                     CurrentTab::Stats => false,
                     CurrentTab::Players => false,
@@ -257,6 +258,7 @@ struct RenderData {
     period_scores: Arc<HashMap<i64, PeriodScores>>,
     game_info: Arc<HashMap<i64, GameMatchup>>,
     boxscore: Arc<Option<nhl_api::Boxscore>>,
+    club_stats: Arc<HashMap<String, nhl_api::ClubStats>>,
     western_first: bool,
     last_refresh: Option<SystemTime>,
     time_format: String,
@@ -264,6 +266,7 @@ struct RenderData {
     error_message: Option<String>,
     theme: crate::config::ThemeConfig,
     boxscore_loading: bool,
+    selected_team_abbrev: Option<String>,
 }
 
 /// Renders a single frame with the current application state and data
@@ -315,6 +318,8 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
                 chunks[content_chunk_idx],
                 &mut app_state.standings,
                 data.theme.selection_fg,
+                &data.club_stats,
+                &data.selected_team_abbrev,
             );
         }
         CurrentTab::Stats => {
@@ -354,6 +359,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 period_scores: Arc::clone(&data.period_scores),
                 game_info: Arc::clone(&data.game_info),
                 boxscore: Arc::clone(&data.boxscore),
+                club_stats: Arc::clone(&data.club_stats),
                 western_first: data.config.display_standings_western_first,
                 last_refresh: data.last_refresh,
                 time_format: data.config.time_format.clone(),
@@ -361,6 +367,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 error_message: data.error_message.clone(),
                 theme: data.config.theme.clone(),
                 boxscore_loading: data.boxscore_loading,
+                selected_team_abbrev: data.selected_team_abbrev.clone(),
             }
         };
 

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use std::time::{Duration, SystemTime};
 use futures::future::join_all;
+use chrono::Datelike;
 use crate::{SharedDataHandle, commands};
 
 /// Fetch league standings and update shared state
@@ -131,6 +132,60 @@ async fn fetch_boxscore(client: &Client, shared_data: &SharedDataHandle) {
     }
 }
 
+/// Fetch club stats for selected team
+async fn fetch_club_stats(client: &Client, shared_data: &SharedDataHandle) {
+    // Get the selected team abbreviation
+    let selected_team_abbrev = {
+        let shared = shared_data.read().await;
+        shared.selected_team_abbrev.clone()
+    };
+
+    if let Some(team_abbrev) = selected_team_abbrev {
+        // Check if we already have the data cached
+        let already_cached = {
+            let shared = shared_data.read().await;
+            shared.club_stats.contains_key(&team_abbrev)
+        };
+
+        if already_cached {
+            return;
+        }
+
+        // Set loading state
+        {
+            let mut shared = shared_data.write().await;
+            shared.club_stats_loading = true;
+        }
+
+        // Determine current season (format: 20242025)
+        let now = chrono::Local::now();
+        let year = now.year();
+        let season = if now.month() >= 9 {
+            // September onwards is next season (e.g., Sept 2024 = 20242025 season)
+            year * 10000 + (year + 1)
+        } else {
+            // Before September is current season (e.g., Jan 2025 = 20242025 season)
+            (year - 1) * 10000 + year
+        };
+
+        // Fetch the club stats
+        match client.club_stats(&team_abbrev, season, 2).await {
+            Ok(stats) => {
+                let mut shared = shared_data.write().await;
+                let mut new_club_stats = (*shared.club_stats).clone();
+                new_club_stats.insert(team_abbrev, stats);
+                shared.club_stats = Arc::new(new_club_stats);
+                shared.club_stats_loading = false;
+            }
+            Err(e) => {
+                let mut shared = shared_data.write().await;
+                shared.club_stats_loading = false;
+                shared.error_message = Some(format!("Failed to fetch club stats: {}", e));
+            }
+        }
+    }
+}
+
 /// Background task loop that periodically fetches NHL data
 pub async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, interval: u64, mut refresh_rx: mpsc::Receiver<()>) {
     let mut interval_timer = tokio::time::interval(Duration::from_secs(interval));
@@ -143,6 +198,9 @@ pub async fn fetch_data_loop(client: Client, shared_data: SharedDataHandle, inte
 
         // Fetch boxscore if a game is selected
         fetch_boxscore(&client, &shared_data).await;
+
+        // Fetch club stats if a team is selected
+        fetch_club_stats(&client, &shared_data).await;
 
         // Wait for either the interval timer or a manual refresh signal
         tokio::select! {
