@@ -315,7 +315,7 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, 
     output
 }
 
-fn build_score_table(
+pub fn build_score_table(
     away_team: &str,
     home_team: &str,
     away_score: Option<i32>,
@@ -542,6 +542,81 @@ fn render_team_periods(
             output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // SO
         }
     }
+}
+
+/// Build a shots on goal table (with period data as placeholders since API doesn't provide it)
+pub fn build_shots_table(
+    away_team: &str,
+    home_team: &str,
+    away_shots: Option<i32>,
+    home_shots: Option<i32>,
+    has_ot: bool,
+    has_so: bool,
+) -> String {
+    let mut output = String::new();
+
+    // Calculate column count
+    let base_cols = BASE_SCORE_COLUMNS; // empty, 1, 2, 3, T
+    let ot_cols = if has_ot { 1 } else { 0 };
+    let so_cols = if has_so { 1 } else { 0 };
+    let total_cols = base_cols + ot_cols + so_cols;
+    let max_width = SCORE_TABLE_MAX_WIDTH;
+
+    // Build table components
+    output.push_str(&build_top_border(total_cols, max_width));
+    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width));
+    output.push_str(&build_middle_border(total_cols, max_width));
+
+    // Build team rows with dashes for period data (not available from API)
+    output.push_str(&build_shots_team_row(away_team, away_shots, has_ot, has_so, total_cols, max_width));
+    output.push_str(&build_shots_team_row(home_team, home_shots, has_ot, has_so, total_cols, max_width));
+    output.push_str(&build_bottom_border(total_cols, max_width));
+
+    output
+}
+
+/// Build a team row for shots table (with dashes for period data)
+fn build_shots_team_row(
+    team_abbrev: &str,
+    team_shots: Option<i32>,
+    has_ot: bool,
+    has_so: bool,
+    total_cols: usize,
+    max_width: usize,
+) -> String {
+    let mut row = String::new();
+    row.push('│');
+    row.push_str(&format!("{:^5}", team_abbrev));
+    row.push('│');
+
+    // Period 1-3 (show dashes since data not available)
+    row.push_str(&format!("{:^4}", "-"));
+    row.push('│');
+    row.push_str(&format!("{:^4}", "-"));
+    row.push('│');
+    row.push_str(&format!("{:^4}", "-"));
+
+    if has_ot {
+        row.push('│');
+        row.push_str(&format!("{:^4}", "-"));
+    }
+
+    if has_so {
+        row.push('│');
+        row.push_str(&format!("{:^4}", "-"));
+    }
+
+    // Total shots
+    row.push('│');
+    row.push_str(&format!("{:^4}", team_shots.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+    row.push_str("│");
+
+    let padding = calculate_padding(total_cols, max_width);
+    if padding > 0 {
+        row.push_str(&" ".repeat(padding));
+    }
+    row.push('\n');
+    row
 }
 
 /// Build a team row with period scores

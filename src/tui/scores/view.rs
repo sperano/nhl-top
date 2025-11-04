@@ -130,7 +130,7 @@ pub fn render_content(
 ) {
     // If boxscore view is active, render boxscore instead of game list
     if state.boxscore_view_active {
-        render_boxscore_content(f, area, state, boxscore, boxscore_loading);
+        render_boxscore_content(f, area, state, boxscore, boxscore_loading, period_scores, game_info);
         return;
     }
 
@@ -327,6 +327,152 @@ fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, them
     Text::from(styled_lines)
 }
 
+/// Combine two tables side by side with headers above each
+fn combine_tables_with_headers(
+    left_header: &str,
+    left_table: &str,
+    right_header: &str,
+    right_table: &str,
+) -> String {
+    let mut output = String::new();
+
+    // Split tables into lines
+    let left_lines: Vec<&str> = left_table.lines().collect();
+    let right_lines: Vec<&str> = right_table.lines().collect();
+
+    // Add headers (assuming each table is 37 chars wide)
+    output.push_str(left_header);
+    output.push_str(&" ".repeat(37 - left_header.len() + 2)); // Padding + gap
+    output.push_str(right_header);
+    output.push('\n');
+
+    // Combine tables line by line
+    let max_lines = left_lines.len().max(right_lines.len());
+
+    for i in 0..max_lines {
+        // Get left line or pad with spaces
+        if i < left_lines.len() {
+            output.push_str(left_lines[i]);
+        } else {
+            output.push_str(&" ".repeat(37));
+        }
+
+        // Add gap between tables
+        output.push_str("  ");
+
+        // Get right line or pad with spaces
+        if i < right_lines.len() {
+            output.push_str(right_lines[i]);
+        } else {
+            output.push_str(&" ".repeat(37));
+        }
+
+        output.push('\n');
+    }
+
+    output
+}
+
+/// Format boxscore with period score box at the top
+fn format_boxscore_with_period_box(
+    boxscore: &nhl_api::Boxscore,
+    period_scores: Option<&crate::commands::scores_format::PeriodScores>,
+    game_info: Option<&nhl_api::GameMatchup>,
+) -> String {
+    let mut output = String::new();
+
+    // Display game header
+    output.push_str(&format!("\n{} @ {}\n",
+        boxscore.away_team.common_name.default,
+        boxscore.home_team.common_name.default
+    ));
+    output.push_str(&format!("{}\n", "═".repeat(60)));
+    output.push_str(&format!("Date: {} | Venue: {}\n",
+        boxscore.game_date,
+        boxscore.venue.default
+    ));
+    output.push_str(&format!("Status: {} | Period: {}\n",
+        boxscore.game_state,
+        boxscore.period_descriptor.number
+    ));
+    if boxscore.clock.running || !boxscore.clock.in_intermission {
+        output.push_str(&format!("Time: {}\n", boxscore.clock.time_remaining));
+    }
+
+    // Add period score and shots boxes side by side
+    output.push_str("\n");
+
+    // Determine if game has OT or SO
+    let (has_ot, has_so, away_periods, home_periods) = if let Some(scores) = period_scores {
+        (scores.has_ot, scores.has_so, Some(&scores.away_periods), Some(&scores.home_periods))
+    } else {
+        (false, false, None, None)
+    };
+
+    // Determine current period for in-progress games
+    let current_period_num = if boxscore.game_state.has_started() && !boxscore.game_state.is_final() {
+        game_info.and_then(|info| {
+            match info.period_descriptor.period_type.as_str() {
+                "REG" => Some(info.period_descriptor.number),
+                "OT" => Some(4),
+                "SO" => Some(5),
+                _ => Some(info.period_descriptor.number),
+            }
+        })
+    } else {
+        None
+    };
+
+    // Build both tables
+    let score_table = crate::commands::scores_format::build_score_table(
+        &boxscore.away_team.abbrev,
+        &boxscore.home_team.abbrev,
+        Some(boxscore.away_team.score),
+        Some(boxscore.home_team.score),
+        has_ot,
+        has_so,
+        away_periods,
+        home_periods,
+        current_period_num,
+    );
+
+    let shots_table = crate::commands::scores_format::build_shots_table(
+        &boxscore.away_team.abbrev,
+        &boxscore.home_team.abbrev,
+        Some(boxscore.away_team.sog),
+        Some(boxscore.home_team.sog),
+        has_ot,
+        has_so,
+    );
+
+    // Combine tables side by side with headers
+    let combined = combine_tables_with_headers(
+        "Scores",
+        &score_table,
+        "Shots on goal",
+        &shots_table,
+    );
+
+    output.push_str(&combined);
+
+    // Add game statistics comparison table
+    let away_team_stats = nhl_api::TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.away_team);
+    let home_team_stats = nhl_api::TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.home_team);
+    let game_stats_table = crate::commands::boxscore::format_game_stats_table(
+        &boxscore.away_team.abbrev,
+        &boxscore.home_team.abbrev,
+        &away_team_stats,
+        &home_team_stats,
+    );
+    output.push_str(&game_stats_table);
+
+    // Display player stats using the existing helper functions from boxscore module
+    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.away_team.abbrev, &boxscore.player_by_game_stats.away_team);
+    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.home_team.abbrev, &boxscore.player_by_game_stats.home_team);
+
+    output
+}
+
 /// Render boxscore content in place of game list (scrollable)
 fn render_boxscore_content(
     f: &mut Frame,
@@ -334,12 +480,14 @@ fn render_boxscore_content(
     state: &mut State,
     boxscore: &Option<nhl_api::Boxscore>,
     loading: bool,
+    period_scores: &HashMap<i64, crate::commands::scores_format::PeriodScores>,
+    game_info: &HashMap<i64, nhl_api::GameMatchup>,
 ) {
     // Render the boxscore content
     let content_text = if loading {
         "Loading boxscore...".to_string()
     } else if let Some(ref bs) = boxscore {
-        crate::commands::boxscore::format_boxscore(bs)
+        format_boxscore_with_period_box(bs, period_scores.get(&bs.id), game_info.get(&bs.id))
     } else {
         "No boxscore available".to_string()
     };

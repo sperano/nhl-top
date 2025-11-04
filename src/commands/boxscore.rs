@@ -1,4 +1,4 @@
-use nhl_api::{Client, GameId, Boxscore};
+use nhl_api::{Client, GameId, Boxscore, TeamGameStats};
 use anyhow::{Context, Result};
 
 /// Format skater (forwards/defense) stats table
@@ -54,7 +54,7 @@ fn format_goalie_stats(
 }
 
 /// Format all player stats for a team
-fn format_team_stats(
+pub fn format_team_stats(
     output: &mut String,
     team_abbrev: &str,
     stats: &nhl_api::TeamPlayerStats
@@ -62,6 +62,104 @@ fn format_team_stats(
     format_skater_stats(output, team_abbrev, "Forwards", &stats.forwards);
     format_skater_stats(output, team_abbrev, "Defense", &stats.defense);
     format_goalie_stats(output, team_abbrev, &stats.goalies);
+}
+
+/// Format a game stats comparison bar showing relative values
+fn format_stat_bar(away_val: i32, home_val: i32, bar_width: usize) -> String {
+    let total = away_val + home_val;
+    if total == 0 {
+        return format!("{:width$}", "", width = bar_width);
+    }
+
+    let away_width = ((away_val as f64 / total as f64) * bar_width as f64).round() as usize;
+    let home_width = bar_width.saturating_sub(away_width);
+
+    format!("{}{}", "█".repeat(away_width), "█".repeat(home_width))
+}
+
+/// Format game statistics comparison table
+pub fn format_game_stats_table(
+    _away_abbrev: &str,
+    _home_abbrev: &str,
+    away_stats: &TeamGameStats,
+    home_stats: &TeamGameStats,
+) -> String {
+    let mut output = String::new();
+
+    output.push_str("\nGame Stats\n");
+    output.push_str(&format!("{}\n", "═".repeat(60)));
+
+    let bar_width = 30;
+
+    // Shots on Goal
+    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+        "Shots On Goal",
+        away_stats.shots_on_goal,
+        format_stat_bar(away_stats.shots_on_goal, home_stats.shots_on_goal, bar_width),
+        home_stats.shots_on_goal
+    ));
+
+    // Face-off %
+    let away_fo_pct = away_stats.faceoff_percentage();
+    let home_fo_pct = home_stats.faceoff_percentage();
+    output.push_str(&format!("{:<20} {:>3.1}%  {:^30}  {:<3.1}%\n",
+        "Face-off %",
+        away_fo_pct,
+        format!("{}/{}", away_stats.faceoff_wins, away_stats.faceoff_total),
+        home_fo_pct
+    ));
+
+    // Power Play %
+    let away_pp_pct = away_stats.power_play_percentage();
+    let home_pp_pct = home_stats.power_play_percentage();
+    output.push_str(&format!("{:<20} {:>3.1}%  {:^30}  {:<3.1}%\n",
+        "Power Play %",
+        away_pp_pct,
+        format!("{}/{}", away_stats.power_play_goals, away_stats.power_play_opportunities),
+        home_pp_pct
+    ));
+
+    // Penalty Minutes
+    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+        "Penalty Minutes",
+        away_stats.penalty_minutes,
+        format_stat_bar(away_stats.penalty_minutes, home_stats.penalty_minutes, bar_width),
+        home_stats.penalty_minutes
+    ));
+
+    // Hits
+    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+        "Hits",
+        away_stats.hits,
+        format_stat_bar(away_stats.hits, home_stats.hits, bar_width),
+        home_stats.hits
+    ));
+
+    // Blocked Shots
+    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+        "Blocked Shots",
+        away_stats.blocked_shots,
+        format_stat_bar(away_stats.blocked_shots, home_stats.blocked_shots, bar_width),
+        home_stats.blocked_shots
+    ));
+
+    // Giveaways
+    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+        "Giveaways",
+        away_stats.giveaways,
+        format_stat_bar(away_stats.giveaways, home_stats.giveaways, bar_width),
+        home_stats.giveaways
+    ));
+
+    // Takeaways
+    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+        "Takeaways",
+        away_stats.takeaways,
+        format_stat_bar(away_stats.takeaways, home_stats.takeaways, bar_width),
+        home_stats.takeaways
+    ));
+
+    output
 }
 
 pub fn format_boxscore(boxscore: &Boxscore) -> String {
@@ -107,6 +205,16 @@ pub fn format_boxscore(boxscore: &Boxscore) -> String {
     output.push_str(&format!("{:<20} {:>3}\n",
         boxscore.home_team.abbrev,
         boxscore.home_team.sog
+    ));
+
+    // Display game statistics comparison table
+    let away_team_stats = TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.away_team);
+    let home_team_stats = TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.home_team);
+    output.push_str(&format_game_stats_table(
+        &boxscore.away_team.abbrev,
+        &boxscore.home_team.abbrev,
+        &away_team_stats,
+        &home_team_stats,
     ));
 
     // Display player stats using extracted helper functions
