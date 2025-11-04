@@ -2,6 +2,7 @@ mod tui;
 mod commands;
 mod background;
 pub mod config;
+mod cache;
 
 use nhl_api::{Client, Standing, DailySchedule};
 

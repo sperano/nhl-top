@@ -6,10 +6,14 @@ use std::time::{Duration, SystemTime};
 use futures::future::join_all;
 use chrono::Datelike;
 use crate::{SharedDataHandle, commands};
+use crate::cache::{
+    fetch_standings_cached, fetch_schedule_cached, fetch_game_cached,
+    fetch_boxscore_cached, fetch_club_stats_cached, fetch_player_info_cached,
+};
 
 /// Fetch league standings and update shared state
 pub async fn fetch_standings(client: &Client, shared_data: &SharedDataHandle) {
-    match client.current_league_standings().await {
+    match fetch_standings_cached(client).await {
         Ok(data) => {
             let mut shared = shared_data.write().await;
             shared.standings = Arc::new(data);
@@ -34,10 +38,10 @@ async fn fetch_all_started_games(client: &Client, schedule: &DailySchedule) -> H
 
     // Create futures for all landing requests
     let fetch_futures = games_to_fetch.iter().map(|game| {
-        let game_id = nhl_api::GameId::new(game.id);
+        let game_id = game.id;
         let game_clone = (*game).clone();
         async move {
-            let result = client.landing(&game_id).await;
+            let result = fetch_game_cached(client, game_id).await;
             (game_clone.id, result)
         }
     });
@@ -78,7 +82,7 @@ pub async fn fetch_schedule_with_games(client: &Client, shared_data: &SharedData
         shared.game_date.clone()
     };
 
-    match client.daily_schedule(Some(date)).await {
+    match fetch_schedule_cached(client, date).await {
         Ok(schedule) => {
             // Fetch all started games in parallel
             let game_info = fetch_all_started_games(client, &schedule).await;
@@ -117,7 +121,7 @@ async fn fetch_boxscore(client: &Client, shared_data: &SharedDataHandle) {
         }
 
         // Fetch the boxscore
-        match client.boxscore(&nhl_api::GameId::new(game_id)).await {
+        match fetch_boxscore_cached(client, game_id).await {
             Ok(boxscore) => {
                 let mut shared = shared_data.write().await;
                 shared.boxscore = Arc::new(Some(boxscore));
@@ -158,7 +162,7 @@ async fn fetch_player_info(client: &Client, shared_data: &SharedDataHandle) {
         }
 
         // Fetch the player info
-        match client.player_landing(player_id).await {
+        match fetch_player_info_cached(client, player_id).await {
             Ok(info) => {
                 let mut shared = shared_data.write().await;
                 let mut new_player_info = (*shared.player_info).clone();
@@ -212,7 +216,7 @@ async fn fetch_club_stats(client: &Client, shared_data: &SharedDataHandle) {
         };
 
         // Fetch the club stats
-        match client.club_stats(&team_abbrev, season, 2).await {
+        match fetch_club_stats_cached(client, &team_abbrev, season).await {
             Ok(stats) => {
                 let mut shared = shared_data.write().await;
                 let mut new_club_stats = (*shared.club_stats).clone();
