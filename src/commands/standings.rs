@@ -1,6 +1,8 @@
 use nhl_api::{Client, Standing};
 use std::collections::BTreeMap;
 use crate::commands::parse_game_date;
+use crate::formatting::format_header;
+use crate::config::{Config, DisplayConfig};
 use anyhow::{Context, Result};
 
 // Layout Constants
@@ -74,7 +76,7 @@ impl GroupBy {
     }
 }
 
-pub fn format_standings_table(standings: &[Standing]) -> String {
+pub fn format_standings_table(standings: &[Standing], display: &DisplayConfig) -> String {
     let mut output = String::new();
 
     // Print table header
@@ -88,7 +90,8 @@ pub fn format_standings_table(standings: &[Standing]) -> String {
         ot_width = OT_COL_WIDTH,
         pts_width = PTS_COL_WIDTH
     ));
-    output.push_str(&format!("{}\n", "─".repeat(SEPARATOR_LINE_WIDTH)));
+    let separator_char = if display.use_unicode { "─" } else { "-" };
+    output.push_str(&format!("{}\n", separator_char.repeat(SEPARATOR_LINE_WIDTH)));
 
     // Print each team's stats
     for standing in standings {
@@ -113,14 +116,14 @@ pub fn format_standings_table(standings: &[Standing]) -> String {
     output
 }
 
-fn format_group_with_header(name: &str, teams: &[Standing]) -> Vec<String> {
+fn format_group_with_header(name: &str, teams: &[Standing], display: &DisplayConfig) -> Vec<String> {
     let mut lines = Vec::new();
-    lines.push(format!("{}", name));
-    lines.push(format!("{}", "═".repeat(name.len())));
+    let header = format_header(name, true, display);
+    lines.extend(header.lines().map(|s| s.to_string()));
     lines.push(String::new()); // Empty line between header and table
 
     // Add table rows
-    let table = format_standings_table(teams);
+    let table = format_standings_table(teams, display);
     lines.extend(table.lines().map(|s| s.to_string()));
 
     lines
@@ -133,14 +136,14 @@ fn format_group_with_header(name: &str, teams: &[Standing]) -> Vec<String> {
 ///
 /// # Returns
 /// A vector of formatted strings representing the division column
-fn format_division_column(divisions: &[(String, Vec<Standing>)]) -> Vec<String> {
+fn format_division_column(divisions: &[(String, Vec<Standing>)], display: &DisplayConfig) -> Vec<String> {
     let mut lines = Vec::new();
 
     for (div_name, teams) in divisions {
         if !lines.is_empty() {
             lines.push(String::new()); // Add blank line between divisions
         }
-        lines.extend(format_group_with_header(div_name, teams));
+        lines.extend(format_group_with_header(div_name, teams, display));
     }
 
     lines
@@ -168,7 +171,7 @@ fn merge_columns(left_lines: Vec<String>, right_lines: Vec<String>, column_width
 }
 
 /// Formats standings in division view with two-column layout
-fn format_division_view(sorted_standings: Vec<Standing>, western_first: bool) -> String {
+fn format_division_view(sorted_standings: Vec<Standing>, western_first: bool, display: &DisplayConfig) -> String {
     let mut grouped: BTreeMap<String, Vec<_>> = BTreeMap::new();
     for standing in sorted_standings {
         grouped
@@ -201,8 +204,8 @@ fn format_division_view(sorted_standings: Vec<Standing>, western_first: bool) ->
     };
 
     // Format each column as stacked divisions
-    let col1_lines = format_division_column(&col1_divs);
-    let col2_lines = format_division_column(&col2_divs);
+    let col1_lines = format_division_column(&col1_divs, display);
+    let col2_lines = format_division_column(&col2_divs, display);
 
     let mut output = String::new();
     output.push('\n');
@@ -211,7 +214,7 @@ fn format_division_view(sorted_standings: Vec<Standing>, western_first: bool) ->
 }
 
 /// Formats standings in conference view with two-column layout
-fn format_conference_view(sorted_standings: Vec<Standing>, western_first: bool) -> String {
+fn format_conference_view(sorted_standings: Vec<Standing>, western_first: bool, display: &DisplayConfig) -> String {
     let mut grouped: BTreeMap<String, Vec<_>> = BTreeMap::new();
     for standing in sorted_standings {
         let conference = standing.conference_name
@@ -237,15 +240,14 @@ fn format_conference_view(sorted_standings: Vec<Standing>, western_first: bool) 
     output.push('\n');
 
     if groups.len() == 2 {
-        let left_lines = format_group_with_header(&groups[0].0, &groups[0].1);
-        let right_lines = format_group_with_header(&groups[1].0, &groups[1].1);
+        let left_lines = format_group_with_header(&groups[0].0, &groups[0].1, display);
+        let right_lines = format_group_with_header(&groups[1].0, &groups[1].1, display);
         output.push_str(&merge_columns(left_lines, right_lines, STANDINGS_COLUMN_WIDTH));
     } else {
         // Fallback to single column if not exactly 2 conferences
         for (conference, teams) in groups {
-            output.push_str(&format!("\n{}\n", conference));
-            output.push_str(&format!("{}\n", "═".repeat(conference.len())));
-            output.push_str(&format_standings_table(&teams));
+            output.push_str(&format!("\n{}", format_header(&conference, true, display)));
+            output.push_str(&format_standings_table(&teams, display));
         }
     }
 
@@ -253,10 +255,10 @@ fn format_conference_view(sorted_standings: Vec<Standing>, western_first: bool) 
 }
 
 /// Formats standings in league-wide view (single column, sorted by points)
-fn format_league_view(sorted_standings: Vec<Standing>) -> String {
+fn format_league_view(sorted_standings: Vec<Standing>, display: &DisplayConfig) -> String {
     let mut output = String::new();
     output.push('\n');
-    output.push_str(&format_standings_table(&sorted_standings));
+    output.push_str(&format_standings_table(&sorted_standings, display));
     output
 }
 
@@ -266,20 +268,21 @@ fn format_wildcard_conference(
     div1_teams: &[Standing],
     div2_name: &str,
     div2_teams: &[Standing],
+    display: &DisplayConfig,
 ) -> Vec<String> {
     let mut lines = Vec::new();
 
     // Division 1 - top 3
     let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
     if !div1_top3.is_empty() {
-        lines.extend(format_group_with_header(div1_name, &div1_top3));
+        lines.extend(format_group_with_header(div1_name, &div1_top3, display));
         lines.push(String::new()); // Blank line after division
     }
 
     // Division 2 - top 3
     let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
     if !div2_top3.is_empty() {
-        lines.extend(format_group_with_header(div2_name, &div2_top3));
+        lines.extend(format_group_with_header(div2_name, &div2_top3, display));
         lines.push(String::new()); // Blank line after division
     }
 
@@ -294,7 +297,7 @@ fn format_wildcard_conference(
     wildcard_teams.sort_by(|a, b| b.points.cmp(&a.points));
 
     if !wildcard_teams.is_empty() {
-        lines.extend(format_group_with_header("Wildcard", &wildcard_teams));
+        lines.extend(format_group_with_header("Wildcard", &wildcard_teams, display));
 
         // Add playoff cutoff line after 2nd wildcard team (if there are at least 2)
         if wildcard_teams.len() >= 2 {
@@ -302,7 +305,8 @@ fn format_wildcard_conference(
             // Header has 3 lines (title, underline, blank) + table header (2 lines) + teams
             let cutoff_line_idx = 3 + 2 + 2; // After 2nd team row
             if lines.len() > cutoff_line_idx {
-                lines.insert(cutoff_line_idx, format!("{}", "─".repeat(SEPARATOR_LINE_WIDTH)));
+                let separator_char = if display.use_unicode { "─" } else { "-" };
+                lines.insert(cutoff_line_idx, format!("{}", separator_char.repeat(SEPARATOR_LINE_WIDTH)));
             }
         }
     }
@@ -311,7 +315,7 @@ fn format_wildcard_conference(
 }
 
 /// Formats standings in wildcard view with two-column layout
-fn format_wildcard_view(sorted_standings: Vec<Standing>, western_first: bool) -> String {
+fn format_wildcard_view(sorted_standings: Vec<Standing>, western_first: bool, display: &DisplayConfig) -> String {
     // Group teams by division
     let mut atlantic: Vec<_> = sorted_standings
         .iter()
@@ -347,6 +351,7 @@ fn format_wildcard_view(sorted_standings: Vec<Standing>, western_first: bool) ->
         &atlantic,
         "Metropolitan",
         &metropolitan,
+        display,
     );
 
     // Build Western Conference wildcard groups
@@ -355,6 +360,7 @@ fn format_wildcard_view(sorted_standings: Vec<Standing>, western_first: bool) ->
         &central,
         "Pacific",
         &pacific,
+        display,
     );
 
     let (col1_lines, col2_lines) = if western_first {
@@ -369,7 +375,7 @@ fn format_wildcard_view(sorted_standings: Vec<Standing>, western_first: bool) ->
     output
 }
 
-pub fn format_standings_by_group(standings: &[Standing], by: GroupBy, western_first: bool) -> String {
+pub fn format_standings_by_group(standings: &[Standing], by: GroupBy, western_first: bool, display: &DisplayConfig) -> String {
     if standings.is_empty() {
         return "Loading standings...".to_string();
     }
@@ -378,14 +384,14 @@ pub fn format_standings_by_group(standings: &[Standing], by: GroupBy, western_fi
     sorted_standings.sort_by(|a, b| b.points.cmp(&a.points));
 
     match by {
-        GroupBy::Division => format_division_view(sorted_standings, western_first),
-        GroupBy::Conference => format_conference_view(sorted_standings, western_first),
-        GroupBy::League => format_league_view(sorted_standings),
-        GroupBy::Wildcard => format_wildcard_view(sorted_standings, western_first),
+        GroupBy::Division => format_division_view(sorted_standings, western_first, display),
+        GroupBy::Conference => format_conference_view(sorted_standings, western_first, display),
+        GroupBy::League => format_league_view(sorted_standings, display),
+        GroupBy::Wildcard => format_wildcard_view(sorted_standings, western_first, display),
     }
 }
 
-pub async fn run(client: &Client, season: Option<i64>, date: Option<String>, by: GroupBy) -> Result<()> {
+pub async fn run(client: &Client, season: Option<i64>, date: Option<String>, by: GroupBy, config: &Config) -> Result<()> {
     let standings = if date.is_some() {
         // Parse date string and get standings for that date
         let game_date = parse_game_date(date)?;
@@ -402,7 +408,7 @@ pub async fn run(client: &Client, season: Option<i64>, date: Option<String>, by:
     };
 
     // Use the shared formatting function (CLI always uses default order)
-    let output = format_standings_by_group(&standings, by, false);
+    let output = format_standings_by_group(&standings, by, false, &config.display);
     print!("{}", output);
 
     Ok(())
@@ -431,8 +437,9 @@ mod tests {
 
     #[test]
     fn test_format_standings_by_group_empty() {
+        let display = DisplayConfig::default();
         let standings = vec![];
-        let output = format_standings_by_group(&standings, GroupBy::Division, false);
+        let output = format_standings_by_group(&standings, GroupBy::Division, false, &display);
         assert_eq!(output, "Loading standings...");
     }
 

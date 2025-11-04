@@ -35,20 +35,20 @@ where
     for (i, tab_name) in tab_names.enumerate() {
         if i > 0 {
             // Add horizontal line before separator
-            separator_spans.push(Span::raw("─".repeat(SEPARATOR_LINE_BEFORE)));
-            separator_spans.push(Span::raw("┴"));
-            separator_spans.push(Span::raw("─".repeat(SEPARATOR_LINE_AFTER)));
+            separator_spans.push(Span::styled("─".repeat(SEPARATOR_LINE_BEFORE), style));
+            separator_spans.push(Span::styled("┴", style));
+            separator_spans.push(Span::styled("─".repeat(SEPARATOR_LINE_AFTER), style));
             pos += SEPARATOR_TOTAL_WIDTH;
         }
         // Add horizontal line under tab
-        separator_spans.push(Span::raw("─".repeat(tab_name.len())));
+        separator_spans.push(Span::styled("─".repeat(tab_name.len()), style));
         pos += tab_name.len();
     }
 
     // Fill rest of line
     if pos < area_width {
-        separator_spans.push(Span::raw("─".repeat(area_width - pos)));
+        separator_spans.push(Span::styled("─".repeat(area_width - pos), style));
     }
 
-    Line::from(separator_spans).style(style)
+    Line::from(separator_spans)
 }

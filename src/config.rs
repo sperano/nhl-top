@@ -12,12 +12,13 @@ pub struct Config {
     pub refresh_interval: u32,
     pub display_standings_western_first: bool,
     pub time_format: String,
-    pub theme: ThemeConfig,
+    pub display: DisplayConfig,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
-pub struct ThemeConfig {
+pub struct DisplayConfig {
+    pub use_unicode: bool,
     #[serde(deserialize_with = "deserialize_color")]
     #[serde(serialize_with = "serialize_color")]
     pub selection_fg: Color,
@@ -35,21 +36,22 @@ impl Default for Config {
             refresh_interval: 60,
             display_standings_western_first: false,
             time_format: "%H:%M:%S".to_string(),
-            theme: ThemeConfig::default(),
+            display: DisplayConfig::default(),
         }
     }
 }
 
-impl Default for ThemeConfig {
+impl Default for DisplayConfig {
     fn default() -> Self {
-        ThemeConfig {
+        DisplayConfig {
+            use_unicode: true,
             selection_fg: Color::Rgb(255, 165, 0), // Orange
             unfocused_selection_fg: None,
         }
     }
 }
 
-impl ThemeConfig {
+impl DisplayConfig {
     /// Get the unfocused selection color, calculating 50% darker if not explicitly set
     pub fn unfocused_selection_fg(&self) -> Color {
         self.unfocused_selection_fg.unwrap_or_else(|| darken_color(self.selection_fg, 0.5))
@@ -293,15 +295,17 @@ mod tests {
     }
 
     #[test]
-    fn test_theme_config_default() {
-        let theme = ThemeConfig::default();
-        assert_eq!(theme.selection_fg, Color::Rgb(255, 165, 0));
+    fn test_display_config_default() {
+        let display = DisplayConfig::default();
+        assert_eq!(display.selection_fg, Color::Rgb(255, 165, 0));
+        assert_eq!(display.use_unicode, true);
     }
 
     #[test]
-    fn test_config_default_includes_theme() {
+    fn test_config_default_includes_display() {
         let config = Config::default();
-        assert_eq!(config.theme.selection_fg, Color::Rgb(255, 165, 0));
+        assert_eq!(config.display.selection_fg, Color::Rgb(255, 165, 0));
+        assert_eq!(config.display.use_unicode, true);
     }
 
     #[test]
@@ -313,12 +317,12 @@ refresh_interval = 60
 display_standings_western_first = false
 time_format = "%H:%M:%S"
 
-[theme]
+[display]
 selection_fg = "cyan"
         "#;
 
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.theme.selection_fg, Color::Cyan);
+        assert_eq!(config.display.selection_fg, Color::Cyan);
     }
 
     #[test]
@@ -330,12 +334,12 @@ refresh_interval = 60
 display_standings_western_first = false
 time_format = "%H:%M:%S"
 
-[theme]
+[display]
 selection_fg = "#00FFFF"
         "###;
 
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.theme.selection_fg, Color::Rgb(0, 255, 255));
+        assert_eq!(config.display.selection_fg, Color::Rgb(0, 255, 255));
     }
 
     #[test]
@@ -347,12 +351,12 @@ refresh_interval = 60
 display_standings_western_first = false
 time_format = "%H:%M:%S"
 
-[theme]
+[display]
 selection_fg = "128,0,128"
         "#;
 
         let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.theme.selection_fg, Color::Rgb(128, 0, 128));
+        assert_eq!(config.display.selection_fg, Color::Rgb(128, 0, 128));
     }
 
     #[test]
@@ -371,7 +375,7 @@ selection_fg = "128,0,128"
     #[test]
     fn test_config_to_toml() {
         let mut config = Config::default();
-        config.theme.selection_fg = Color::Rgb(128, 0, 128);
+        config.display.selection_fg = Color::Rgb(128, 0, 128);
         config.refresh_interval = 30;
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -384,8 +388,9 @@ selection_fg = "128,0,128"
     #[test]
     fn test_roundtrip_serialization() {
         let mut config = Config::default();
-        config.theme.selection_fg = Color::Rgb(255, 100, 50);
-        config.theme.unfocused_selection_fg = Some(Color::Cyan);
+        config.display.selection_fg = Color::Rgb(255, 100, 50);
+        config.display.unfocused_selection_fg = Some(Color::Cyan);
+        config.display.use_unicode = false;
         config.refresh_interval = 45;
         config.display_standings_western_first = true;
 
@@ -395,8 +400,9 @@ selection_fg = "128,0,128"
         // Deserialize back
         let deserialized: Config = toml::from_str(&toml_str).unwrap();
 
-        assert_eq!(deserialized.theme.selection_fg, Color::Rgb(255, 100, 50));
-        assert_eq!(deserialized.theme.unfocused_selection_fg, Some(Color::Cyan));
+        assert_eq!(deserialized.display.selection_fg, Color::Rgb(255, 100, 50));
+        assert_eq!(deserialized.display.unfocused_selection_fg, Some(Color::Cyan));
+        assert_eq!(deserialized.display.use_unicode, false);
         assert_eq!(deserialized.refresh_interval, 45);
         assert_eq!(deserialized.display_standings_western_first, true);
     }

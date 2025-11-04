@@ -7,15 +7,13 @@ use ratatui::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::config::ThemeConfig;
+use ratatui::text::ToLine;
+use crate::config::DisplayConfig;
+use crate::formatting::format_header;
 use super::State;
 use super::state::DATE_WINDOW_SIZE;
 use crate::tui::common::separator::build_tab_separator_line;
 use crate::tui::common::styling::{base_tab_style, selection_style};
-
-// Subtab Layout Constants
-/// Left margin for subtab bar (spaces before date tabs) - REMOVED
-const SUBTAB_LEFT_MARGIN: usize = 0;
 
 /// Calculate the date window based on game_date and selected_index
 /// The window has a fixed base date (leftmost date) that only shifts when reaching edges
@@ -49,7 +47,7 @@ fn build_date_subtab_spans(
     selected_index: usize,
     base_style: Style,
     focused: bool,
-    theme: &Arc<ThemeConfig>,
+    theme: &Arc<DisplayConfig>,
 ) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
 
@@ -76,7 +74,7 @@ pub fn render_subtabs(
     area: Rect,
     state: &State,
     game_date: &nhl_api::GameDate,
-    theme: &Arc<ThemeConfig>,
+    theme: &Arc<DisplayConfig>,
 ) {
     let focused = state.subtab_focused && !state.box_selection_active;
     let base_style = base_tab_style(focused);
@@ -95,22 +93,18 @@ pub fn render_subtabs(
 
     let separator_line = build_tab_separator_line(
         date_strings.into_iter(),
-        area.width.saturating_sub(SUBTAB_LEFT_MARGIN as u16) as usize,
+        area.width as usize,
         base_style,
     );
 
-    let separator_with_margin = Line::from(vec![
-        Span::styled(" ".repeat(SUBTAB_LEFT_MARGIN), base_style),
-        Span::styled(separator_line.to_string(), base_style),
-    ]);
+    let separator = Span::styled(separator_line.to_string(), base_style);
 
-    let subtab_widget = Paragraph::new(vec![subtab_line, separator_with_margin])
+    let subtab_widget = Paragraph::new(vec![subtab_line, separator.to_line()])
         .block(Block::default().borders(Borders::NONE));
 
     f.render_widget(subtab_widget, area);
 }
 
-// Layout Constants - must match scores_format.rs
 /// Terminal width threshold for 3-column layout
 const THREE_COLUMN_WIDTH: u16 = 115;
 
@@ -124,13 +118,13 @@ pub fn render_content(
     schedule: &Option<nhl_api::DailySchedule>,
     period_scores: &HashMap<i64, crate::commands::scores_format::PeriodScores>,
     game_info: &HashMap<i64, nhl_api::GameMatchup>,
-    theme: &Arc<ThemeConfig>,
+    display: &Arc<DisplayConfig>,
     boxscore: &Option<nhl_api::Boxscore>,
     boxscore_loading: bool,
 ) {
     // If boxscore view is active, render boxscore instead of game list
     if state.boxscore_view_active {
-        render_boxscore_content(f, area, state, boxscore, boxscore_loading, period_scores, game_info);
+        render_boxscore_content(f, area, state, boxscore, boxscore_loading, period_scores, game_info, display);
         return;
     }
 
@@ -180,7 +174,7 @@ pub fn render_content(
 
         // If a box is selected, apply styling and render with scroll
         if let Some((sel_row, sel_col)) = selected_box {
-            let styled_text = apply_box_styling_ratatui(&content, sel_row, sel_col, theme);
+            let styled_text = apply_box_styling_ratatui(&content, sel_row, sel_col, display);
 
             let paragraph = Paragraph::new(styled_text)
                 .block(Block::default().borders(Borders::NONE))
@@ -265,7 +259,7 @@ fn char_positions_to_byte_indices(line: &str, start_col: usize, end_col: usize) 
 }
 
 /// Create styled spans for a line, applying selection color to the specified byte range
-fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, theme: &Arc<ThemeConfig>) -> Vec<Span<'static>> {
+fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, theme: &Arc<DisplayConfig>) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
 
     // Before the box
@@ -305,7 +299,7 @@ fn create_styled_spans(line: &str, byte_start: usize, byte_end: usize, theme: &A
 /// 6. Home team row
 /// 7. Bottom border (╰─...╯)
 /// Plus 1 blank line between rows
-fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, theme: &Arc<ThemeConfig>) -> Text<'static> {
+fn apply_box_styling_ratatui(content: &str, sel_row: usize, sel_col: usize, theme: &Arc<DisplayConfig>) -> Text<'static> {
     let lines: Vec<&str> = content.lines().collect();
     let mut styled_lines: Vec<Line> = Vec::new();
 
@@ -378,15 +372,16 @@ fn format_boxscore_with_period_box(
     boxscore: &nhl_api::Boxscore,
     period_scores: Option<&crate::commands::scores_format::PeriodScores>,
     game_info: Option<&nhl_api::GameMatchup>,
+    display: &DisplayConfig,
 ) -> String {
     let mut output = String::new();
 
     // Display game header
-    output.push_str(&format!("\n{} @ {}\n",
+    let header = format!("{} @ {}",
         boxscore.away_team.common_name.default,
         boxscore.home_team.common_name.default
-    ));
-    output.push_str(&format!("{}\n", "═".repeat(60)));
+    );
+    output.push_str(&format!("\n{}", format_header(&header, true, display)));
     output.push_str(&format!("Date: {} | Venue: {}\n",
         boxscore.game_date,
         boxscore.venue.default
@@ -455,20 +450,22 @@ fn format_boxscore_with_period_box(
 
     output.push_str(&combined);
 
-    // Add game statistics comparison table
-    let away_team_stats = nhl_api::TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.away_team);
-    let home_team_stats = nhl_api::TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.home_team);
-    let game_stats_table = crate::commands::boxscore::format_game_stats_table(
-        &boxscore.away_team.abbrev,
-        &boxscore.home_team.abbrev,
-        &away_team_stats,
-        &home_team_stats,
-    );
-    output.push_str(&game_stats_table);
+    #[cfg(feature = "game_stats")]
+    {
+        let away_team_stats = nhl_api::TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.away_team);
+        let home_team_stats = nhl_api::TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.home_team);
+        let game_stats_table = crate::commands::boxscore::format_game_stats_table(
+            &boxscore.away_team.abbrev,
+            &boxscore.home_team.abbrev,
+            &away_team_stats,
+            &home_team_stats,
+        );
+        output.push_str(&game_stats_table);
+    }
 
     // Display player stats using the existing helper functions from boxscore module
-    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.away_team.abbrev, &boxscore.player_by_game_stats.away_team);
-    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.home_team.abbrev, &boxscore.player_by_game_stats.home_team);
+    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.away_team.abbrev, &boxscore.player_by_game_stats.away_team, display);
+    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.home_team.abbrev, &boxscore.player_by_game_stats.home_team, display);
 
     output
 }
@@ -482,12 +479,13 @@ fn render_boxscore_content(
     loading: bool,
     period_scores: &HashMap<i64, crate::commands::scores_format::PeriodScores>,
     game_info: &HashMap<i64, nhl_api::GameMatchup>,
+    display: &DisplayConfig,
 ) {
     // Render the boxscore content
     let content_text = if loading {
         "Loading boxscore...".to_string()
     } else if let Some(ref bs) = boxscore {
-        format_boxscore_with_period_box(bs, period_scores.get(&bs.id), game_info.get(&bs.id))
+        format_boxscore_with_period_box(bs, period_scores.get(&bs.id), game_info.get(&bs.id), display)
     } else {
         "No boxscore available".to_string()
     };

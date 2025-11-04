@@ -7,7 +7,7 @@ use ratatui::{
 };
 use super::State;
 use std::sync::Arc;
-use crate::config::ThemeConfig;
+use crate::config::DisplayConfig;
 
 /// 24 beautiful, professionally-chosen colors for the color picker (4x6 grid)
 pub const COLORS: [(Color, &str); 24] = [
@@ -48,7 +48,7 @@ pub const COLORS: [(Color, &str); 24] = [
     (Color::Rgb(50, 205, 50), "Lime Green"),       // Electric lime
 ];
 
-pub fn render_content(f: &mut Frame, area: Rect, state: &State, theme: &Arc<ThemeConfig>) {
+pub fn render_content(f: &mut Frame, area: Rect, state: &State, theme: &Arc<DisplayConfig>) {
     let mut lines = Vec::new();
 
     lines.push(Line::raw(""));

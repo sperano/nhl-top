@@ -7,7 +7,7 @@ use ratatui::{
 };
 use std::sync::Arc;
 use std::collections::HashMap;
-use crate::config::ThemeConfig;
+use crate::config::DisplayConfig;
 use crate::commands::standings::GroupBy;
 use crate::NHL_LEAGUE_ABBREV;
 use super::{State, layout::StandingsLayout};
@@ -27,7 +27,7 @@ const PTS_COL_WIDTH: usize = 4;
 const STANDINGS_COLUMN_WIDTH: usize = 48; // Actual table width with all columns
 const COLUMN_SPACING: usize = 4;
 
-pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<ThemeConfig>) {
+pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<DisplayConfig>) {
     let base_style = base_tab_style(state.subtab_focused);
 
     if let Some(nav_ctx) = &state.navigation {
@@ -85,7 +85,7 @@ pub fn render_content(
     f: &mut Frame,
     area: Rect,
     state: &mut State,
-    theme: &Arc<ThemeConfig>,
+    theme: &Arc<DisplayConfig>,
     club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>,
     selected_team_abbrev: &Option<String>,
     player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
@@ -123,7 +123,7 @@ pub fn render_content(
 }
 
 /// Render the standings layout to a vector of lines
-fn render_layout(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfig>) -> Vec<Line<'static>> {
+fn render_layout(layout: &StandingsLayout, state: &State, theme: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     // Add initial blank line
@@ -138,7 +138,7 @@ fn render_layout(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfi
 }
 
 /// Render a single-column layout (League view)
-fn render_single_column(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfig>, lines: &mut Vec<Line<'static>>) {
+fn render_single_column(layout: &StandingsLayout, state: &State, theme: &Arc<DisplayConfig>, lines: &mut Vec<Line<'static>>) {
     let column = &layout.columns[0];
 
     for group in &column.groups {
@@ -168,7 +168,7 @@ fn render_single_column(layout: &StandingsLayout, state: &State, theme: &Arc<The
 }
 
 /// Render a two-column layout (Conference/Division view)
-fn render_two_columns(layout: &StandingsLayout, state: &State, theme: &Arc<ThemeConfig>, lines: &mut Vec<Line<'static>>) {
+fn render_two_columns(layout: &StandingsLayout, state: &State, theme: &Arc<DisplayConfig>, lines: &mut Vec<Line<'static>>) {
     let left_lines = render_column(&layout.columns[0], state, theme, 0);
     let right_lines = if layout.columns.len() > 1 {
         render_column(&layout.columns[1], state, theme, 1)
@@ -212,7 +212,7 @@ fn render_two_columns(layout: &StandingsLayout, state: &State, theme: &Arc<Theme
 }
 
 /// Render a single column (for two-column layouts)
-fn render_column(column: &super::layout::StandingsColumn, state: &State, theme: &Arc<ThemeConfig>, col_idx: usize) -> Vec<Line<'static>> {
+fn render_column(column: &super::layout::StandingsColumn, state: &State, theme: &Arc<DisplayConfig>, col_idx: usize) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let mut team_idx = 0;
 
@@ -360,7 +360,7 @@ fn find_team_line_index(lines: &[Line], team_name: &str) -> Option<usize> {
     None
 }
 
-fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, theme: &Arc<ThemeConfig>, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
+fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, theme: &Arc<DisplayConfig>, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
     match panel {
         StandingsPanel::TeamDetail { team_name, .. } => {
             render_team_panel(f, area, state, team_name, theme.selection_fg, club_stats, selected_team_abbrev);

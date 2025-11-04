@@ -5,11 +5,11 @@ use ratatui::{
     Frame,
 };
 use std::sync::Arc;
-use crate::config::ThemeConfig;
+use crate::config::DisplayConfig;
 use super::separator::build_tab_separator_line;
 use super::styling::{base_tab_style, selection_style};
 
-pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, focused: bool, theme: &Arc<ThemeConfig>) {
+pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, focused: bool, theme: &Arc<DisplayConfig>) {
     let base_style = base_tab_style(focused);
 
     // Build tab line with separators

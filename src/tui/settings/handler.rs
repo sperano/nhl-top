@@ -51,7 +51,7 @@ pub async fn handle_key(key: KeyEvent, state: &mut State, shared_data: &SharedDa
 
             // Update the theme in SharedData
             let mut data = shared_data.write().await;
-            data.config.theme.selection_fg = selected_color;
+            data.config.display.selection_fg = selected_color;
 
             // Set status message
             state.status_message = Some(format!("✓ Theme color changed to {}", selected_name));

@@ -3,6 +3,7 @@ mod commands;
 mod background;
 pub mod config;
 mod cache;
+mod formatting;
 
 use nhl_api::{Client, Standing, DailySchedule};
 
@@ -227,10 +228,10 @@ fn handle_config_command() {
     println!("time_format: {}", cfg.time_format);
     println!();
     println!("[theme]");
-    println!("selection_fg: {:?}", cfg.theme.selection_fg);
+    println!("selection_fg: {:?}", cfg.display.selection_fg);
     println!("unfocused_selection_fg: {:?}{}",
-        cfg.theme.unfocused_selection_fg(),
-        if cfg.theme.unfocused_selection_fg.is_none() { " (auto: 50% darker)" } else { "" }
+        cfg.display.unfocused_selection_fg(),
+        if cfg.display.unfocused_selection_fg.is_none() { " (auto: 50% darker)" } else { "" }
     );
 }
 
@@ -274,15 +275,15 @@ async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler
-async fn execute_command(client: &Client, command: Commands) -> anyhow::Result<()> {
+async fn execute_command(client: &Client, command: Commands, config: &config::Config) -> anyhow::Result<()> {
     match command {
         Commands::Config => unreachable!("Config command should be handled before execute_command"),
         Commands::Standings { season, date, by } => {
             let group_by = by.to_standings_groupby();
-            commands::standings::run(client, season, date, group_by).await
+            commands::standings::run(client, season, date, group_by, config).await
         }
         Commands::Boxscore { game_id } => {
-            commands::boxscore::run(client, game_id).await
+            commands::boxscore::run(client, game_id, config).await
         }
         Commands::Schedule { date } => {
             commands::schedule::run(client, date).await
@@ -326,7 +327,7 @@ async fn main() {
 
     // Create client and execute command
     let client = create_client();
-    if let Err(e) = execute_command(&client, command).await {
+    if let Err(e) = execute_command(&client, command, &config).await {
         eprintln!("Error: {:#}", e);
         tracing::error!("Command failed: {:#}", e);
         std::process::exit(1);

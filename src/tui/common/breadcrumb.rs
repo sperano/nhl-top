@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 use std::sync::Arc;
-use crate::config::ThemeConfig;
+use crate::config::DisplayConfig;
 
 /// Render a breadcrumb trail
 ///
@@ -24,7 +24,7 @@ pub fn render_breadcrumb(
     area: Rect,
     trail: &[String],
     separator: &str,
-    theme: &Arc<ThemeConfig>,
+    theme: &Arc<DisplayConfig>,
     base_style: Style,
 ) {
     if trail.is_empty() {
@@ -55,7 +55,7 @@ pub fn render_breadcrumb_simple(
     f: &mut Frame,
     area: Rect,
     trail: &[String],
-    theme: &Arc<ThemeConfig>,
+    theme: &Arc<DisplayConfig>,
     base_style: Style,
 ) {
     render_breadcrumb(f, area, trail, " ▸ ", theme, base_style);
