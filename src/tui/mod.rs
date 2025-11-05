@@ -26,7 +26,7 @@ use ratatui::{
 };
 use crate::SharedDataHandle;
 use crate::commands::scores_format::PeriodScores;
-use crate::config::DisplayConfig;
+use crate::config::{self, DisplayConfig};
 use app::{AppState, CurrentTab};
 use tokio::sync::mpsc;
 use nhl_api::{Standing, DailySchedule, GameMatchup, GameDate};
@@ -199,6 +199,15 @@ async fn handle_key_event(
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
 ) -> bool {
+    // Special case: if Settings tab is in editing mode or showing modal, route ALL keys to it
+    if matches!(app_state.current_tab, CurrentTab::Settings)
+        && (app_state.settings.editing.is_some()
+            || app_state.settings.list_modal.is_some()
+            || app_state.settings.color_modal.is_some()) {
+        settings::handle_key(key, &mut app_state.settings, shared_data).await;
+        return false;
+    }
+
     // Handle Q key globally to quit from anywhere
     if key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q') {
         return true; // Exit app
@@ -269,6 +278,7 @@ struct RenderData {
     game_date: GameDate,
     error_message: Option<String>,
     display: Arc<DisplayConfig>,
+    config: Arc<config::Config>,
     boxscore_loading: bool,
     selected_team_abbrev: Option<String>,
 }
@@ -334,7 +344,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
             players::render_content(f, chunks[content_chunk_idx]);
         }
         CurrentTab::Settings => {
-            settings::render_content(f, chunks[content_chunk_idx], &mut app_state.settings, &data.display);
+            settings::render_content(f, chunks[content_chunk_idx], &mut app_state.settings, &data.config);
         }
     }
 
@@ -372,6 +382,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 game_date: data.game_date.clone(),
                 error_message: data.error_message.clone(),
                 display: Arc::new(data.config.display.clone()),
+                config: Arc::new(data.config.clone()),
                 boxscore_loading: data.boxscore_loading,
                 selected_team_abbrev: data.selected_team_abbrev.clone(),
             }
