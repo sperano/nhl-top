@@ -90,8 +90,7 @@ pub fn format_standings_table(standings: &[Standing], display: &DisplayConfig) -
         ot_width = OT_COL_WIDTH,
         pts_width = PTS_COL_WIDTH
     ));
-    let separator_char = if display.use_unicode { "─" } else { "-" };
-    output.push_str(&format!("{}\n", separator_char.repeat(SEPARATOR_LINE_WIDTH)));
+    output.push_str(&format!("{}\n", display.box_chars.horizontal.repeat(SEPARATOR_LINE_WIDTH)));
 
     // Print each team's stats
     for standing in standings {
@@ -305,8 +304,7 @@ fn format_wildcard_conference(
             // Header has 3 lines (title, underline, blank) + table header (2 lines) + teams
             let cutoff_line_idx = 3 + 2 + 2; // After 2nd team row
             if lines.len() > cutoff_line_idx {
-                let separator_char = if display.use_unicode { "─" } else { "-" };
-                lines.insert(cutoff_line_idx, format!("{}", separator_char.repeat(SEPARATOR_LINE_WIDTH)));
+                lines.insert(cutoff_line_idx, format!("{}", display.box_chars.horizontal.repeat(SEPARATOR_LINE_WIDTH)));
             }
         }
     }

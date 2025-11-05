@@ -63,6 +63,7 @@ pub async fn handle_key(key: KeyEvent, state: &mut State, shared_data: &SharedDa
                     match setting.key.as_str() {
                         "Use Unicode" => {
                             data.config.display.use_unicode = new_value;
+                            data.config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(new_value);
                             state.status_message = Some(format!("✓ Use Unicode: {}", if new_value { "enabled" } else { "disabled" }));
                         }
                         "Western Teams First" => {

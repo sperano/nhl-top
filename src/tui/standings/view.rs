@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::collections::HashMap;
 use crate::config::DisplayConfig;
 use crate::commands::standings::GroupBy;
+use crate::formatting::format_header;
 use crate::NHL_LEAGUE_ABBREV;
 use super::{State, layout::StandingsLayout};
 use super::panel::{StandingsPanel, PlayerStat, GoalieStat};
@@ -44,11 +45,12 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<Disp
     let focused = state.subtab_focused;
 
     // Build subtab line with separators
+    let separator = format!(" {} ", theme.box_chars.vertical);
     let mut subtab_spans = Vec::new();
 
     for (i, view) in views.iter().enumerate() {
         if i > 0 {
-            subtab_spans.push(Span::styled(" │ ", base_style));
+            subtab_spans.push(Span::styled(&separator, base_style));
         }
 
         let tab_text = format!("{}", view.name());
@@ -68,7 +70,8 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<Disp
     let separator_line = build_tab_separator_line(
         tab_names,
         area.width as usize,
-        base_style
+        base_style,
+        &theme.box_chars,
     );
 
     let separator_with_margin = Line::from(vec![
@@ -123,36 +126,41 @@ pub fn render_content(
 }
 
 /// Render the standings layout to a vector of lines
-fn render_layout(layout: &StandingsLayout, state: &State, theme: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
+fn render_layout(layout: &StandingsLayout, state: &State, display: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
 
     // Add initial blank line
     lines.push(Line::raw(""));
 
     match layout.view {
-        GroupBy::League => render_single_column(layout, state, theme, &mut lines),
-        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard => render_two_columns(layout, state, theme, &mut lines),
+        GroupBy::League => render_single_column(layout, state, display, &mut lines),
+        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard => render_two_columns(layout, state, display, &mut lines),
     }
 
     lines
 }
 
 /// Render a single-column layout (League view)
-fn render_single_column(layout: &StandingsLayout, state: &State, theme: &Arc<DisplayConfig>, lines: &mut Vec<Line<'static>>) {
+fn render_single_column(layout: &StandingsLayout, state: &State, display: &Arc<DisplayConfig>, lines: &mut Vec<Line<'static>>) {
     let column = &layout.columns[0];
 
     for group in &column.groups {
         // Render header if present
         if !group.header.is_empty() {
-            lines.push(Line::raw(format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), group.header)));
-            lines.push(Line::raw(format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), "═".repeat(group.header.len()))));
-            lines.push(Line::raw(""));
+            let header = format_header(&group.header, true, display);
+            for line in header.lines() {
+                if !line.is_empty() {
+                    lines.push(Line::raw(format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), line)));
+                } else {
+                    lines.push(Line::raw(""));
+                }
+            }
         }
 
         // Render table header
         lines.push(render_table_header());
         // Separator line should exclude the margin since we add it separately
-        lines.push(Line::raw(format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), "─".repeat(STANDINGS_COLUMN_WIDTH - CONTENT_LEFT_MARGIN))));
+        lines.push(Line::raw(format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), display.box_chars.horizontal.repeat(STANDINGS_COLUMN_WIDTH - CONTENT_LEFT_MARGIN))));
 
         // Render teams
         let mut team_idx = 0;
@@ -161,17 +169,17 @@ fn render_single_column(layout: &StandingsLayout, state: &State, theme: &Arc<Dis
                 && state.selected_column == 0
                 && state.selected_team_index == team_idx;
 
-            lines.push(render_team_row(team, is_selected, theme.selection_fg, CONTENT_LEFT_MARGIN));
+            lines.push(render_team_row(team, is_selected, display.selection_fg, CONTENT_LEFT_MARGIN));
             team_idx += 1;
         }
     }
 }
 
 /// Render a two-column layout (Conference/Division view)
-fn render_two_columns(layout: &StandingsLayout, state: &State, theme: &Arc<DisplayConfig>, lines: &mut Vec<Line<'static>>) {
-    let left_lines = render_column(&layout.columns[0], state, theme, 0);
+fn render_two_columns(layout: &StandingsLayout, state: &State, display: &Arc<DisplayConfig>, lines: &mut Vec<Line<'static>>) {
+    let left_lines = render_column(&layout.columns[0], state, display, 0);
     let right_lines = if layout.columns.len() > 1 {
-        render_column(&layout.columns[1], state, theme, 1)
+        render_column(&layout.columns[1], state, display, 1)
     } else {
         vec![]
     };
@@ -212,7 +220,7 @@ fn render_two_columns(layout: &StandingsLayout, state: &State, theme: &Arc<Displ
 }
 
 /// Render a single column (for two-column layouts)
-fn render_column(column: &super::layout::StandingsColumn, state: &State, theme: &Arc<DisplayConfig>, col_idx: usize) -> Vec<Line<'static>> {
+fn render_column(column: &super::layout::StandingsColumn, state: &State, display: &Arc<DisplayConfig>, col_idx: usize) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
     let mut team_idx = 0;
 
@@ -227,15 +235,20 @@ fn render_column(column: &super::layout::StandingsColumn, state: &State, theme: 
 
         // Render header if present
         if !group.header.is_empty() {
-            lines.push(Line::raw(format!("{}{}", " ".repeat(margin), group.header)));
-            lines.push(Line::raw(format!("{}{}", " ".repeat(margin), "═".repeat(group.header.len()))));
-            lines.push(Line::raw(""));
+            let header = format_header(&group.header, true, display);
+            for line in header.lines() {
+                if !line.is_empty() {
+                    lines.push(Line::raw(format!("{}{}", " ".repeat(margin), line)));
+                } else {
+                    lines.push(Line::raw(""));
+                }
+            }
         }
 
         // Render table header
         lines.push(render_table_header_with_margin(margin));
         // Separator line should exclude the margin since we add it separately
-        lines.push(Line::raw(format!("{}{}", " ".repeat(margin), "─".repeat(STANDINGS_COLUMN_WIDTH - margin))));
+        lines.push(Line::raw(format!("{}{}", " ".repeat(margin), display.box_chars.horizontal.repeat(STANDINGS_COLUMN_WIDTH - margin))));
 
         // Render teams
         for (idx_in_group, team) in group.teams.iter().enumerate() {
@@ -243,12 +256,12 @@ fn render_column(column: &super::layout::StandingsColumn, state: &State, theme: 
                 && state.selected_column == col_idx
                 && state.selected_team_index == team_idx;
 
-            lines.push(render_team_row(team, is_selected, theme.selection_fg, margin));
+            lines.push(render_team_row(team, is_selected, display.selection_fg, margin));
 
             // Draw playoff cutoff line after specified team index (for wildcard view)
             if let Some(cutoff_idx) = group.playoff_cutoff_after {
                 if idx_in_group == cutoff_idx {
-                    lines.push(Line::raw(format!("{}{}", " ".repeat(margin), "─".repeat(STANDINGS_COLUMN_WIDTH - margin))));
+                    lines.push(Line::raw(format!("{}{}", " ".repeat(margin), display.box_chars.horizontal.repeat(STANDINGS_COLUMN_WIDTH - margin))));
                 }
             }
 
@@ -360,18 +373,18 @@ fn find_team_line_index(lines: &[Line], team_name: &str) -> Option<usize> {
     None
 }
 
-fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, theme: &Arc<DisplayConfig>, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
+fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, display: &Arc<DisplayConfig>, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
     match panel {
         StandingsPanel::TeamDetail { team_name, .. } => {
-            render_team_panel(f, area, state, team_name, theme.selection_fg, club_stats, selected_team_abbrev);
+            render_team_panel(f, area, state, team_name, display, club_stats, selected_team_abbrev);
         }
         StandingsPanel::PlayerDetail { player_id, player_name, .. } => {
-            render_player_panel(f, area, state, *player_id, player_name, theme.selection_fg, player_info);
+            render_player_panel(f, area, state, *player_id, player_name, display, player_info);
         }
     }
 }
 
-fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &str, selection_fg: Color, club_stats_map: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>) {
+fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &str, display: &Arc<DisplayConfig>, club_stats_map: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>) {
     // Try to get real club stats data
     let club_stats_data = selected_team_abbrev.as_ref()
         .and_then(|abbrev| club_stats_map.get(abbrev))
@@ -382,9 +395,14 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     let mut selected_item_line_number: Option<usize> = None;
 
     lines.push(Line::raw(""));
-    lines.push(Line::raw(format!("  {}", team_name)));
-    lines.push(Line::raw(format!("  {}", "═".repeat(team_name.len()))));
-    lines.push(Line::raw(""));
+    let header = format_header(team_name, true, display);
+    for line in header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::raw(format!("  {}", line)));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
 
     // Show loading message if we don't have data yet
     if club_stats_data.is_none() {
@@ -425,9 +443,14 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     // Sort by games played (highest to lowest)
     goalies.sort_by(|a, b| b.gp.cmp(&a.gp));
 
-    lines.push(Line::raw("  Player Statistics"));
-    lines.push(Line::raw("  ═════════════════"));
-    lines.push(Line::raw(""));
+    let player_header = format_header("Player Statistics", true, display);
+    for line in player_header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::raw(format!("  {}", line)));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
 
     lines.push(Line::raw(format!(
         "  {:<25} {:>4} {:>4} {:>4} {:>5}",
@@ -435,7 +458,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     )));
     lines.push(Line::raw(format!(
         "  {}",
-        "─".repeat(46)
+        display.box_chars.horizontal.repeat(46)
     )));
 
     for player in &players {
@@ -452,7 +475,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
 
         if is_selected {
             lines.push(Line::from(vec![
-                Span::styled(line_text, Style::default().fg(selection_fg))
+                Span::styled(line_text, Style::default().fg(display.selection_fg))
             ]));
         } else {
             lines.push(Line::raw(line_text));
@@ -464,9 +487,14 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     lines.push(Line::raw(""));
     lines.push(Line::raw(""));
 
-    lines.push(Line::raw("  Goaltender Statistics"));
-    lines.push(Line::raw("  ═════════════════════"));
-    lines.push(Line::raw(""));
+    let goalie_header = format_header("Goaltender Statistics", true, display);
+    for line in goalie_header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::raw(format!("  {}", line)));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
 
     lines.push(Line::raw(format!(
         "  {:<25} {:>4} {:>6} {:>6} {:>6}",
@@ -474,7 +502,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     )));
     lines.push(Line::raw(format!(
         "  {}",
-        "─".repeat(50)
+        display.box_chars.horizontal.repeat(50)
     )));
 
     for goalie in &goalies {
@@ -491,7 +519,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
 
         if is_selected {
             lines.push(Line::from(vec![
-                Span::styled(line_text, Style::default().fg(selection_fg))
+                Span::styled(line_text, Style::default().fg(display.selection_fg))
             ]));
         } else {
             lines.push(Line::raw(line_text));
@@ -525,15 +553,20 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     f.render_widget(paragraph, area);
 }
 
-fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: i64, player_name: &str, selection_fg: Color, player_info_map: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
+fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: i64, player_name: &str, display: &Arc<DisplayConfig>, player_info_map: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
     let mut lines = Vec::new();
     let mut item_index = 0;
     let mut selected_item_line_number: Option<usize> = None;
 
     lines.push(Line::raw(""));
-    lines.push(Line::raw(format!("  {}", player_name)));
-    lines.push(Line::raw(format!("  {}", "═".repeat(player_name.len()))));
-    lines.push(Line::raw(""));
+    let header = format_header(player_name, true, display);
+    for line in header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::raw(format!("  {}", line)));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
 
     // Get real player data
     let player_data = player_info_map.get(&player_id);
@@ -554,9 +587,14 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
     let player = player_data.unwrap();
 
     // Player Information
-    lines.push(Line::raw("  Player Information"));
-    lines.push(Line::raw("  ──────────────────"));
-    lines.push(Line::raw(""));
+    let player_info_header = format_header("Player Information", false, display);
+    for line in player_info_header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::raw(format!("  {}", line)));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
     lines.push(Line::raw(format!("  Position:      {}", player.position)));
     if let Some(num) = player.sweater_number {
         lines.push(Line::raw(format!("  Number:        #{}", num)));
@@ -598,9 +636,14 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
             .collect();
 
         if !nhl_seasons.is_empty() {
-            lines.push(Line::raw("  NHL Career Statistics"));
-            lines.push(Line::raw("  ═════════════════════"));
-            lines.push(Line::raw(""));
+            let career_header = format_header("NHL Career Statistics", true, display);
+            for line in career_header.lines() {
+                if !line.is_empty() {
+                    lines.push(Line::raw(format!("  {}", line)));
+                } else {
+                    lines.push(Line::raw(""));
+                }
+            }
 
             lines.push(Line::raw(format!(
                 "  {:<10} {:<20} {:>4} {:>4} {:>4} {:>5}",
@@ -608,7 +651,7 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
             )));
             lines.push(Line::raw(format!(
                 "  {}",
-                "─".repeat(52)
+                display.box_chars.horizontal.repeat(52)
             )));
 
             for season in nhl_seasons.iter().rev() {
@@ -633,7 +676,7 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
 
                 if is_selected {
                     lines.push(Line::from(vec![
-                        Span::styled(line_text, Style::default().fg(selection_fg))
+                        Span::styled(line_text, Style::default().fg(display.selection_fg))
                     ]));
                 } else {
                     lines.push(Line::raw(line_text));

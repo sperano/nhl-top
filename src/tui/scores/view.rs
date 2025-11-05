@@ -49,11 +49,12 @@ fn build_date_subtab_spans(
     focused: bool,
     theme: &Arc<DisplayConfig>,
 ) -> Vec<Span<'static>> {
+    let separator = format!(" {} ", theme.box_chars.vertical);
     let mut spans = Vec::new();
 
     for (i, date_str) in date_strings.iter().enumerate() {
         if i > 0 {
-            spans.push(Span::styled(" │ ", base_style));
+            spans.push(Span::styled(separator.clone(), base_style));
         }
 
         let style = selection_style(
@@ -95,11 +96,10 @@ pub fn render_subtabs(
         date_strings.into_iter(),
         area.width as usize,
         base_style,
+        &theme.box_chars,
     );
 
-    let separator = Span::styled(separator_line.to_string(), base_style);
-
-    let subtab_widget = Paragraph::new(vec![subtab_line, separator.to_line()])
+    let subtab_widget = Paragraph::new(vec![subtab_line, separator_line])
         .block(Block::default().borders(Borders::NONE));
 
     f.render_widget(subtab_widget, area);
@@ -162,7 +162,8 @@ pub fn render_content(
             schedule,
             period_scores,
             game_info,
-            Some(area.width as usize)
+            Some(area.width as usize),
+            &display.box_chars,
         );
 
         // Update viewport and content height
@@ -429,6 +430,7 @@ fn format_boxscore_with_period_box(
         away_periods,
         home_periods,
         current_period_num,
+        &display.box_chars,
     );
 
     let shots_table = crate::commands::scores_format::build_shots_table(
@@ -438,6 +440,7 @@ fn format_boxscore_with_period_box(
         Some(boxscore.home_team.sog),
         has_ot,
         has_so,
+        &display.box_chars,
     );
 
     // Combine tables side by side with headers

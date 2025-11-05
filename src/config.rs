@@ -26,6 +26,8 @@ pub struct DisplayConfig {
     #[serde(serialize_with = "serialize_color_optional")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unfocused_selection_fg: Option<Color>,
+    #[serde(skip)]
+    pub box_chars: crate::formatting::BoxChars,
 }
 
 impl Default for Config {
@@ -47,6 +49,7 @@ impl Default for DisplayConfig {
             use_unicode: true,
             selection_fg: Color::Rgb(255, 165, 0), // Orange
             unfocused_selection_fg: None,
+            box_chars: crate::formatting::BoxChars::unicode(),
         }
     }
 }
@@ -223,7 +226,10 @@ pub fn read() -> Config {
         Err(_) => return Config::default(),
     };
 
-    toml::from_str(&content).unwrap_or_else(|_| Config::default())
+    let mut config: Config = toml::from_str(&content).unwrap_or_else(|_| Config::default());
+    // Initialize box_chars based on use_unicode (since it's not serialized)
+    config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(config.display.use_unicode);
+    config
 }
 
 /// Write a config to the config file

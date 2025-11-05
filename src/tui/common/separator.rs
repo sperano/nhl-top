@@ -2,6 +2,7 @@ use ratatui::{
     style::Style,
     text::{Line, Span},
 };
+use crate::formatting::BoxChars;
 
 // Separator Constants
 /// Length of horizontal line before separator connector
@@ -16,38 +17,43 @@ const SEPARATOR_TOTAL_WIDTH: usize = 3;
 /// Helper function to build a separator line with box-drawing connectors for tabs
 ///
 /// This creates a horizontal line with "┴" connectors positioned under the gaps between tabs.
+/// Uses box-drawing characters from the provided BoxChars configuration.
 /// Used for rendering subtab separators in the TUI.
 ///
 /// # Arguments
 /// * `tab_names` - Iterator of tab name strings (used to calculate spacing)
 /// * `area_width` - Total width available for the separator line
 /// * `style` - Style to apply to the separator line
+/// * `box_chars` - Box-drawing characters to use for rendering
 ///
 /// # Returns
 /// A `Line` containing the separator with box-drawing characters
-pub fn build_tab_separator_line<'a, I>(tab_names: I, area_width: usize, style: Style) -> Line<'a>
+pub fn build_tab_separator_line<'a, I>(tab_names: I, area_width: usize, style: Style, box_chars: &'a BoxChars) -> Line<'a>
 where
     I: Iterator<Item = String>,
 {
+    let horizontal = &box_chars.horizontal;
+    let connector = &box_chars.connector2;
+
     let mut separator_spans = Vec::new();
     let mut pos = 0;
 
     for (i, tab_name) in tab_names.enumerate() {
         if i > 0 {
             // Add horizontal line before separator
-            separator_spans.push(Span::styled("─".repeat(SEPARATOR_LINE_BEFORE), style));
-            separator_spans.push(Span::styled("┴", style));
-            separator_spans.push(Span::styled("─".repeat(SEPARATOR_LINE_AFTER), style));
+            separator_spans.push(Span::styled(horizontal.repeat(SEPARATOR_LINE_BEFORE), style));
+            separator_spans.push(Span::styled(connector.as_str(), style));
+            separator_spans.push(Span::styled(horizontal.repeat(SEPARATOR_LINE_AFTER), style));
             pos += SEPARATOR_TOTAL_WIDTH;
         }
         // Add horizontal line under tab
-        separator_spans.push(Span::styled("─".repeat(tab_name.len()), style));
+        separator_spans.push(Span::styled(horizontal.repeat(tab_name.len()), style));
         pos += tab_name.len();
     }
 
     // Fill rest of line
     if pos < area_width {
-        separator_spans.push(Span::styled("─".repeat(area_width - pos), style));
+        separator_spans.push(Span::styled(horizontal.repeat(area_width - pos), style));
     }
 
     Line::from(separator_spans)

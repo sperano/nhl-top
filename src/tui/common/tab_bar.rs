@@ -11,12 +11,13 @@ use super::styling::{base_tab_style, selection_style};
 
 pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, focused: bool, theme: &Arc<DisplayConfig>) {
     let base_style = base_tab_style(focused);
+    let separator = format!(" {} ", theme.box_chars.vertical);
 
     // Build tab line with separators
     let mut tab_spans = Vec::new();
     for (i, tab_name) in tabs.iter().enumerate() {
         if i > 0 {
-            tab_spans.push(Span::styled(" │ ", base_style));
+            tab_spans.push(Span::styled(&separator, base_style));
         }
 
         let style = selection_style(
@@ -32,7 +33,7 @@ pub fn render(f: &mut Frame, area: Rect, tabs: &[&str], selected_index: usize, f
 
     // Build separator line with connectors
     let tab_names = tabs.iter().map(|s| s.to_string());
-    let separator_line = build_tab_separator_line(tab_names, area.width as usize, base_style);
+    let separator_line = build_tab_separator_line(tab_names, area.width as usize, base_style, &theme.box_chars);
 
     // Render custom tabs
     let tabs_widget = Paragraph::new(vec![tab_line, separator_line])

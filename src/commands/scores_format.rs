@@ -1,5 +1,6 @@
 use nhl_api::{DailySchedule, ScheduleGame, GameSummary};
 use std::collections::HashMap;
+use crate::formatting::BoxChars;
 
 // Layout Constants
 /// Terminal width threshold for 3-column layout (37*3 + 2*2 gaps = 115)
@@ -100,6 +101,7 @@ pub fn format_scores_for_tui_with_width(
     period_scores: &HashMap<i64, PeriodScores>,
     game_info: &HashMap<i64, nhl_api::GameMatchup>,
     terminal_width: Option<usize>,
+    box_chars: &BoxChars,
 ) -> String {
     let mut output = String::new();
 
@@ -126,7 +128,7 @@ pub fn format_scores_for_tui_with_width(
         // Format each game in the row as a table
         let formatted_games: Vec<String> = row
             .iter()
-            .map(|game| format_game_table(game, period_scores.get(&game.id), game_info.get(&game.id)))
+            .map(|game| format_game_table(game, period_scores.get(&game.id), game_info.get(&game.id), &box_chars))
             .collect();
 
         // Combine games horizontally
@@ -236,7 +238,7 @@ fn generate_game_header(
     }
 }
 
-fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, game_info: Option<&nhl_api::GameMatchup>) -> String {
+fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, game_info: Option<&nhl_api::GameMatchup>, box_chars: &BoxChars) -> String {
     let mut output = String::new();
 
     // Determine if game has started
@@ -282,6 +284,7 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, 
                 away_periods,
                 home_periods,
                 current_period_num,
+                box_chars,
             ));
         } else {
             // Game started but no scores yet - show table with dashes
@@ -295,6 +298,7 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, 
                 None,
                 None,
                 current_period_num,
+                box_chars,
             ));
         }
     } else {
@@ -309,6 +313,7 @@ fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, 
             None,
             None,
             None,
+            box_chars,
         ));
     }
 
@@ -325,6 +330,7 @@ pub fn build_score_table(
     away_periods: Option<&Vec<i32>>,
     home_periods: Option<&Vec<i32>>,
     current_period_num: Option<i32>,
+    box_chars: &BoxChars,
 ) -> String {
     let mut output = String::new();
 
@@ -341,9 +347,9 @@ pub fn build_score_table(
     };
 
     // Build table components
-    output.push_str(&build_top_border(total_cols, max_width));
-    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width));
-    output.push_str(&build_middle_border(total_cols, max_width));
+    output.push_str(&build_top_border(total_cols, max_width, box_chars));
+    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width, box_chars));
+    output.push_str(&build_middle_border(total_cols, max_width, box_chars));
     output.push_str(&build_team_row(
         away_team,
         away_score,
@@ -353,6 +359,7 @@ pub fn build_score_table(
         total_cols,
         max_width,
         &should_show_period,
+        box_chars,
     ));
     output.push_str(&build_team_row(
         home_team,
@@ -363,8 +370,9 @@ pub fn build_score_table(
         total_cols,
         max_width,
         &should_show_period,
+        box_chars,
     ));
-    output.push_str(&build_bottom_border(total_cols, max_width));
+    output.push_str(&build_bottom_border(total_cols, max_width, box_chars));
 
     output
 }
@@ -381,15 +389,15 @@ fn calculate_padding(total_cols: usize, max_width: usize) -> usize {
 }
 
 /// Build top border for the score table
-fn build_top_border(total_cols: usize, max_width: usize) -> String {
+fn build_top_border(total_cols: usize, max_width: usize, box_chars: &BoxChars) -> String {
     let mut border = String::new();
-    border.push('╭');
-    border.push_str(&"─".repeat(TEAM_ABBREV_COL_WIDTH)); // team name column
+    border.push_str(&box_chars.top_left);
+    border.push_str(&box_chars.horizontal.repeat(TEAM_ABBREV_COL_WIDTH)); // team name column
     for _ in 1..total_cols {
-        border.push('┬');
-        border.push_str(&"─".repeat(PERIOD_COL_WIDTH));
+        border.push_str(&box_chars.top_junction);
+        border.push_str(&box_chars.horizontal.repeat(PERIOD_COL_WIDTH));
     }
-    border.push_str("╮");
+    border.push_str(&box_chars.top_right);
 
     let padding = calculate_padding(total_cols, max_width);
     if padding > 0 {
@@ -400,15 +408,15 @@ fn build_top_border(total_cols: usize, max_width: usize) -> String {
 }
 
 /// Build middle border for the score table
-fn build_middle_border(total_cols: usize, max_width: usize) -> String {
+fn build_middle_border(total_cols: usize, max_width: usize, box_chars: &BoxChars) -> String {
     let mut border = String::new();
-    border.push('├');
-    border.push_str(&"─".repeat(TEAM_ABBREV_COL_WIDTH));
+    border.push_str(&box_chars.left_junction);
+    border.push_str(&box_chars.horizontal.repeat(TEAM_ABBREV_COL_WIDTH));
     for _ in 1..total_cols {
-        border.push('┼');
-        border.push_str(&"─".repeat(PERIOD_COL_WIDTH));
+        border.push_str(&box_chars.cross);
+        border.push_str(&box_chars.horizontal.repeat(PERIOD_COL_WIDTH));
     }
-    border.push_str("┤");
+    border.push_str(&box_chars.right_junction);
 
     let padding = calculate_padding(total_cols, max_width);
     if padding > 0 {
@@ -419,15 +427,15 @@ fn build_middle_border(total_cols: usize, max_width: usize) -> String {
 }
 
 /// Build bottom border for the score table
-fn build_bottom_border(total_cols: usize, max_width: usize) -> String {
+fn build_bottom_border(total_cols: usize, max_width: usize, box_chars: &BoxChars) -> String {
     let mut border = String::new();
-    border.push('╰');
-    border.push_str(&"─".repeat(TEAM_ABBREV_COL_WIDTH));
+    border.push_str(&box_chars.bottom_left);
+    border.push_str(&box_chars.horizontal.repeat(TEAM_ABBREV_COL_WIDTH));
     for _ in 1..total_cols {
-        border.push('┴');
-        border.push_str(&"─".repeat(PERIOD_COL_WIDTH));
+        border.push_str(&box_chars.bottom_junction);
+        border.push_str(&box_chars.horizontal.repeat(PERIOD_COL_WIDTH));
     }
-    border.push_str("╯");
+    border.push_str(&box_chars.bottom_right);
 
     let padding = calculate_padding(total_cols, max_width);
     if padding > 0 {
@@ -438,30 +446,30 @@ fn build_bottom_border(total_cols: usize, max_width: usize) -> String {
 }
 
 /// Build header row showing period numbers (1, 2, 3, OT, SO, T)
-fn build_header_row(has_ot: bool, has_so: bool, total_cols: usize, max_width: usize) -> String {
+fn build_header_row(has_ot: bool, has_so: bool, total_cols: usize, max_width: usize, box_chars: &BoxChars) -> String {
     let mut row = String::new();
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^5}", ""));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", "1"));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", "2"));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", "3"));
 
     if has_ot {
-        row.push('│');
+        row.push_str(&box_chars.vertical);
         row.push_str(&format!("{:^4}", "OT"));
     }
 
     if has_so {
-        row.push('│');
+        row.push_str(&box_chars.vertical);
         row.push_str(&format!("{:^4}", "SO"));
     }
 
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", "T"));
-    row.push_str("│");
+    row.push_str(&box_chars.vertical);
 
     let padding = calculate_padding(total_cols, max_width);
     if padding > 0 {
@@ -478,6 +486,7 @@ fn render_team_periods(
     has_ot: bool,
     has_so: bool,
     should_show_period: &impl Fn(i32) -> bool,
+    box_chars: &BoxChars,
 ) {
     if let Some(periods) = periods {
         // Period 1
@@ -487,7 +496,7 @@ fn render_team_periods(
             "-".to_string()
         };
         output.push_str(&format!("{:^width$}", p1_value, width = PERIOD_COL_WIDTH));
-        output.push('│');
+        output.push_str(&box_chars.vertical);
 
         // Period 2
         let p2_value = if should_show_period(2) {
@@ -496,7 +505,7 @@ fn render_team_periods(
             "-".to_string()
         };
         output.push_str(&format!("{:^width$}", p2_value, width = PERIOD_COL_WIDTH));
-        output.push('│');
+        output.push_str(&box_chars.vertical);
 
         // Period 3
         let p3_value = if should_show_period(3) {
@@ -507,7 +516,7 @@ fn render_team_periods(
         output.push_str(&format!("{:^width$}", p3_value, width = PERIOD_COL_WIDTH));
 
         if has_ot {
-            output.push('│');
+            output.push_str(&box_chars.vertical);
             let ot_value = if should_show_period(OVERTIME_PERIOD_NUM) {
                 periods.get(OVERTIME_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
             } else {
@@ -517,7 +526,7 @@ fn render_team_periods(
         }
 
         if has_so {
-            output.push('│');
+            output.push_str(&box_chars.vertical);
             let so_value = if should_show_period(SHOOTOUT_PERIOD_NUM) {
                 periods.get(SHOOTOUT_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
             } else {
@@ -527,18 +536,18 @@ fn render_team_periods(
         }
     } else {
         output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // P1
-        output.push('│');
+        output.push_str(&box_chars.vertical);
         output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // P2
-        output.push('│');
+        output.push_str(&box_chars.vertical);
         output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // P3
 
         if has_ot {
-            output.push('│');
+            output.push_str(&box_chars.vertical);
             output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // OT
         }
 
         if has_so {
-            output.push('│');
+            output.push_str(&box_chars.vertical);
             output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // SO
         }
     }
@@ -552,6 +561,7 @@ pub fn build_shots_table(
     home_shots: Option<i32>,
     has_ot: bool,
     has_so: bool,
+    box_chars: &BoxChars,
 ) -> String {
     let mut output = String::new();
 
@@ -563,14 +573,14 @@ pub fn build_shots_table(
     let max_width = SCORE_TABLE_MAX_WIDTH;
 
     // Build table components
-    output.push_str(&build_top_border(total_cols, max_width));
-    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width));
-    output.push_str(&build_middle_border(total_cols, max_width));
+    output.push_str(&build_top_border(total_cols, max_width, &box_chars));
+    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width, &box_chars));
+    output.push_str(&build_middle_border(total_cols, max_width, &box_chars));
 
     // Build team rows with dashes for period data (not available from API)
-    output.push_str(&build_shots_team_row(away_team, away_shots, has_ot, has_so, total_cols, max_width));
-    output.push_str(&build_shots_team_row(home_team, home_shots, has_ot, has_so, total_cols, max_width));
-    output.push_str(&build_bottom_border(total_cols, max_width));
+    output.push_str(&build_shots_team_row(away_team, away_shots, has_ot, has_so, total_cols, max_width, &box_chars));
+    output.push_str(&build_shots_team_row(home_team, home_shots, has_ot, has_so, total_cols, max_width, &box_chars));
+    output.push_str(&build_bottom_border(total_cols, max_width, &box_chars));
 
     output
 }
@@ -583,33 +593,34 @@ fn build_shots_team_row(
     has_so: bool,
     total_cols: usize,
     max_width: usize,
+    box_chars: &BoxChars,
 ) -> String {
     let mut row = String::new();
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^5}", team_abbrev));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
 
     // Period 1-3 (show dashes since data not available)
     row.push_str(&format!("{:^4}", "-"));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", "-"));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", "-"));
 
     if has_ot {
-        row.push('│');
+        row.push_str(&box_chars.vertical);
         row.push_str(&format!("{:^4}", "-"));
     }
 
     if has_so {
-        row.push('│');
+        row.push_str(&box_chars.vertical);
         row.push_str(&format!("{:^4}", "-"));
     }
 
     // Total shots
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", team_shots.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
-    row.push_str("│");
+    row.push_str(&box_chars.vertical);
 
     let padding = calculate_padding(total_cols, max_width);
     if padding > 0 {
@@ -629,17 +640,18 @@ fn build_team_row(
     total_cols: usize,
     max_width: usize,
     should_show_period: &impl Fn(i32) -> bool,
+    box_chars: &BoxChars,
 ) -> String {
     let mut row = String::new();
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^5}", team_abbrev));
-    row.push('│');
+    row.push_str(&box_chars.vertical);
 
-    render_team_periods(&mut row, team_periods, has_ot, has_so, should_show_period);
+    render_team_periods(&mut row, team_periods, has_ot, has_so, should_show_period, box_chars);
 
-    row.push('│');
+    row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^4}", team_score.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
-    row.push_str("│");
+    row.push_str(&box_chars.vertical);
 
     let padding = calculate_padding(total_cols, max_width);
     if padding > 0 {
@@ -753,7 +765,8 @@ mod tests {
 
     #[test]
     fn test_build_top_border() {
-        let border = build_top_border(5, 37);
+        let box_chars = BoxChars::unicode();
+        let border = build_top_border(5, 37, &box_chars);
         assert!(border.starts_with('╭'));
         assert!(border.contains('┬'));
         assert!(border.contains('╮'));
@@ -762,7 +775,8 @@ mod tests {
 
     #[test]
     fn test_build_middle_border() {
-        let border = build_middle_border(5, 37);
+        let box_chars = BoxChars::unicode();
+        let border = build_middle_border(5, 37, &box_chars);
         assert!(border.starts_with('├'));
         assert!(border.contains('┼'));
         assert!(border.contains('┤'));
@@ -771,7 +785,8 @@ mod tests {
 
     #[test]
     fn test_build_bottom_border() {
-        let border = build_bottom_border(5, 37);
+        let box_chars = BoxChars::unicode();
+        let border = build_bottom_border(5, 37, &box_chars);
         assert!(border.starts_with('╰'));
         assert!(border.contains('┴'));
         assert!(border.contains('╯'));
@@ -780,7 +795,8 @@ mod tests {
 
     #[test]
     fn test_build_header_row_basic() {
-        let header = build_header_row(false, false, 5, 37);
+        let box_chars = BoxChars::unicode();
+        let header = build_header_row(false, false, 5, 37, &box_chars);
         assert!(header.contains('│'));
         assert!(header.contains('1'));
         assert!(header.contains('2'));
@@ -792,20 +808,23 @@ mod tests {
 
     #[test]
     fn test_build_header_row_with_ot() {
-        let header = build_header_row(true, false, 6, 37);
+        let box_chars = BoxChars::unicode();
+        let header = build_header_row(true, false, 6, 37, &box_chars);
         assert!(header.contains("OT"));
         assert!(!header.contains("SO"));
     }
 
     #[test]
     fn test_build_header_row_with_shootout() {
-        let header = build_header_row(true, true, 7, 37);
+        let box_chars = BoxChars::unicode();
+        let header = build_header_row(true, true, 7, 37, &box_chars);
         assert!(header.contains("OT"));
         assert!(header.contains("SO"));
     }
 
     #[test]
     fn test_build_score_table_no_scores() {
+        let box_chars = BoxChars::unicode();
         let table = build_score_table(
             "TOR",
             "MTL",
@@ -816,6 +835,7 @@ mod tests {
             None,
             None,
             None,
+            &box_chars,
         );
 
         // Should contain team names
@@ -835,6 +855,7 @@ mod tests {
     fn test_build_score_table_with_scores() {
         let away_periods = vec![1, 2, 0];
         let home_periods = vec![0, 1, 2];
+        let box_chars = BoxChars::unicode();
 
         let table = build_score_table(
             "BOS",
@@ -846,6 +867,7 @@ mod tests {
             Some(&away_periods),
             Some(&home_periods),
             None,
+            &box_chars,
         );
 
         // Should contain team names
@@ -865,6 +887,7 @@ mod tests {
     fn test_build_score_table_with_overtime() {
         let away_periods = vec![1, 1, 1, 1];
         let home_periods = vec![1, 1, 1, 0];
+        let box_chars = BoxChars::unicode();
 
         let table = build_score_table(
             "EDM",
@@ -876,6 +899,7 @@ mod tests {
             Some(&away_periods),
             Some(&home_periods),
             None,
+            &box_chars,
         );
 
         // Should contain OT header
