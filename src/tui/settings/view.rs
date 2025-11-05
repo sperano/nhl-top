@@ -11,41 +11,41 @@ use crate::config::{Config, DisplayConfig};
 
 /// 24 beautiful, professionally-chosen colors for the color picker (4x6 grid)
 pub const COLORS: [(Color, &str); 24] = [
-    // Row 1 - Vibrant primary colors
-    (Color::Rgb(255, 107, 107), "Coral Red"),      // Soft coral red
-    (Color::Rgb(255, 165, 0), "Bright Orange"),    // Vibrant orange (like current selection)
-    (Color::Rgb(255, 215, 0), "Golden Yellow"),    // Rich gold
-    (Color::Rgb(144, 238, 144), "Mint Green"),     // Soft mint green
+    // Row 1
+    (Color::Rgb(226, 74, 74), "Deep Red"),
+    (Color::Rgb(255, 107, 107), "Coral"),
+    (Color::Rgb(255, 140, 66), "Burnt Orange"),
+    (Color::Rgb(255, 200, 87), "Amber"),
 
-    // Row 2 - Cool colors
-    (Color::Rgb(100, 200, 255), "Sky Blue"),       // Bright sky blue
-    (Color::Rgb(138, 112, 229), "Claude Purple"),  // Purple like Claude Code
-    (Color::Rgb(255, 105, 180), "Hot Pink"),       // Vibrant pink
-    (Color::Rgb(64, 224, 208), "Turquoise"),       // Beautiful turquoise
+    // Row 2
+    (Color::Rgb(232, 185, 35), "Goldenrod"),
+    (Color::Rgb(166, 166, 89), "Olive"),
+    (Color::Rgb(140, 207, 77), "Chartreuse"),
+    (Color::Rgb(88, 196, 114), "Green Apple"),
 
-    // Row 3 - Pastel/soft colors
-    (Color::Rgb(255, 182, 193), "Light Pink"),     // Soft pink
-    (Color::Rgb(176, 224, 230), "Powder Blue"),    // Powder blue
-    (Color::Rgb(221, 160, 221), "Plum"),           // Soft plum
-    (Color::Rgb(240, 230, 140), "Khaki"),          // Warm khaki
+    // Row 3
+    (Color::Rgb(46, 184, 114), "Emerald"),
+    (Color::Rgb(42, 168, 118), "Teal"),
+    (Color::Rgb(0, 184, 169), "Seafoam"),
+    (Color::Rgb(77, 208, 225), "Cyan Sky"),
 
-    // Row 4 - Deep/rich colors
-    (Color::Rgb(72, 201, 176), "Teal"),            // Modern teal
-    (Color::Rgb(156, 89, 182), "Amethyst"),        // Deep purple
-    (Color::Rgb(230, 126, 34), "Pumpkin"),         // Rich pumpkin
-    (Color::Rgb(52, 152, 219), "Ocean Blue"),      // Deep ocean blue
+    // Row 4
+    (Color::Rgb(33, 150, 243), "Azure"),
+    (Color::Rgb(61, 90, 254), "Cobalt Blue"),
+    (Color::Rgb(92, 107, 192), "Indigo"),
+    (Color::Rgb(126, 87, 194), "Violet"),
 
-    // Row 5 - Earth tones & warm colors
-    (Color::Rgb(210, 105, 30), "Chocolate"),       // Rich chocolate brown
-    (Color::Rgb(188, 143, 143), "Rosy Brown"),     // Warm dusty rose
-    (Color::Rgb(255, 140, 105), "Salmon"),         // Peachy salmon
-    (Color::Rgb(189, 183, 107), "Olive"),          // Muted olive green
+    // Row 5
+    (Color::Rgb(186, 104, 200), "Orchid"),
+    (Color::Rgb(224, 86, 253), "Magenta"),
+    (Color::Rgb(255, 119, 169), "Hot Pink"),
+    (Color::Rgb(255, 158, 157), "Salmon"),
 
-    // Row 6 - Jewel tones & saturated colors
-    (Color::Rgb(220, 20, 60), "Crimson"),          // Deep crimson
-    (Color::Rgb(0, 206, 209), "Cyan"),             // Pure cyan
-    (Color::Rgb(75, 0, 130), "Indigo"),            // Deep indigo
-    (Color::Rgb(50, 205, 50), "Lime Green"),       // Electric lime
+    // Row 6
+    (Color::Rgb(234, 210, 172), "Beige"),
+    (Color::Rgb(159, 168, 176), "Cool Gray"),
+    (Color::Rgb(96, 125, 139), "Slate"),
+    (Color::Rgb(55, 71, 79), "Charcoal"),
 ];
 
 use ratatui::layout::{Layout, Constraint, Direction};
