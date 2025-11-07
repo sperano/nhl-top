@@ -147,14 +147,7 @@ fn render_single_column(layout: &StandingsLayout, state: &State, display: &Arc<D
     for group in &column.groups {
         // Render header if present
         if !group.header.is_empty() {
-            let header = format_header(&group.header, true, display);
-            for line in header.lines() {
-                if !line.is_empty() {
-                    lines.push(Line::raw(format!("{}{}", " ".repeat(CONTENT_LEFT_MARGIN), line)));
-                } else {
-                    lines.push(Line::raw(""));
-                }
-            }
+            lines.extend(render_header_lines(&group.header, CONTENT_LEFT_MARGIN, display));
         }
 
         // Render table header
@@ -235,14 +228,7 @@ fn render_column(column: &super::layout::StandingsColumn, state: &State, display
 
         // Render header if present
         if !group.header.is_empty() {
-            let header = format_header(&group.header, true, display);
-            for line in header.lines() {
-                if !line.is_empty() {
-                    lines.push(Line::raw(format!("{}{}", " ".repeat(margin), line)));
-                } else {
-                    lines.push(Line::raw(""));
-                }
-            }
+            lines.extend(render_header_lines(&group.header, margin, display));
         }
 
         // Render table header
@@ -327,6 +313,40 @@ fn render_team_row(team: &nhl_api::Standing, is_selected: bool, selection_fg: Co
     Line::from(spans)
 }
 
+/// Render a division/group header with color
+fn render_header_lines(header_text: &str, margin: usize, display: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let header = format_header(header_text, true, display);
+    for line in header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::from(vec![
+                Span::raw(" ".repeat(margin)),
+                Span::styled(line.to_string(), Style::default().fg(display.division_header_fg))
+            ]));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
+    lines
+}
+
+/// Render a single-line header with color (for subsections)
+fn render_header_lines_single(header_text: &str, margin: usize, display: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let header = format_header(header_text, false, display);
+    for line in header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::from(vec![
+                Span::raw(" ".repeat(margin)),
+                Span::styled(line.to_string(), Style::default().fg(display.division_header_fg))
+            ]));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
+    lines
+}
+
 /// Convert a Line to a plain string (for padding calculations)
 fn line_to_string(line: &Line) -> String {
     line.spans.iter().map(|span| span.content.as_ref()).collect()
@@ -395,14 +415,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     let mut selected_item_line_number: Option<usize> = None;
 
     lines.push(Line::raw(""));
-    let header = format_header(team_name, true, display);
-    for line in header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::raw(format!("  {}", line)));
-        } else {
-            lines.push(Line::raw(""));
-        }
-    }
+    lines.extend(render_header_lines(team_name, 2, display));
 
     // Show loading message if we don't have data yet
     if club_stats_data.is_none() {
@@ -443,14 +456,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     // Sort by games played (highest to lowest)
     goalies.sort_by(|a, b| b.gp.cmp(&a.gp));
 
-    let player_header = format_header("Player Statistics", true, display);
-    for line in player_header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::raw(format!("  {}", line)));
-        } else {
-            lines.push(Line::raw(""));
-        }
-    }
+    lines.extend(render_header_lines("Player Statistics", 2, display));
 
     lines.push(Line::raw(format!(
         "  {:<25} {:>4} {:>4} {:>4} {:>5}",
@@ -487,14 +493,7 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     lines.push(Line::raw(""));
     lines.push(Line::raw(""));
 
-    let goalie_header = format_header("Goaltender Statistics", true, display);
-    for line in goalie_header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::raw(format!("  {}", line)));
-        } else {
-            lines.push(Line::raw(""));
-        }
-    }
+    lines.extend(render_header_lines("Goaltender Statistics", 2, display));
 
     lines.push(Line::raw(format!(
         "  {:<25} {:>4} {:>6} {:>6} {:>6}",
@@ -559,14 +558,7 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
     let mut selected_item_line_number: Option<usize> = None;
 
     lines.push(Line::raw(""));
-    let header = format_header(player_name, true, display);
-    for line in header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::raw(format!("  {}", line)));
-        } else {
-            lines.push(Line::raw(""));
-        }
-    }
+    lines.extend(render_header_lines(player_name, 2, display));
 
     // Get real player data
     let player_data = player_info_map.get(&player_id);
@@ -587,14 +579,7 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
     let player = player_data.unwrap();
 
     // Player Information
-    let player_info_header = format_header("Player Information", false, display);
-    for line in player_info_header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::raw(format!("  {}", line)));
-        } else {
-            lines.push(Line::raw(""));
-        }
-    }
+    lines.extend(render_header_lines_single("Player Information", 2, display));
     lines.push(Line::raw(format!("  Position:      {}", player.position)));
     if let Some(num) = player.sweater_number {
         lines.push(Line::raw(format!("  Number:        #{}", num)));
@@ -636,14 +621,7 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
             .collect();
 
         if !nhl_seasons.is_empty() {
-            let career_header = format_header("NHL Career Statistics", true, display);
-            for line in career_header.lines() {
-                if !line.is_empty() {
-                    lines.push(Line::raw(format!("  {}", line)));
-                } else {
-                    lines.push(Line::raw(""));
-                }
-            }
+            lines.extend(render_header_lines("NHL Career Statistics", 2, display));
 
             lines.push(Line::raw(format!(
                 "  {:<10} {:<20} {:>4} {:>4} {:>4} {:>5}",

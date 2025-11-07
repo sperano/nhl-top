@@ -26,6 +26,12 @@ pub struct DisplayConfig {
     #[serde(serialize_with = "serialize_color_optional")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unfocused_selection_fg: Option<Color>,
+    #[serde(deserialize_with = "deserialize_color")]
+    #[serde(serialize_with = "serialize_color")]
+    pub division_header_fg: Color,
+    #[serde(deserialize_with = "deserialize_color")]
+    #[serde(serialize_with = "serialize_color")]
+    pub error_fg: Color,
     #[serde(skip)]
     pub box_chars: crate::formatting::BoxChars,
 }
@@ -49,6 +55,8 @@ impl Default for DisplayConfig {
             use_unicode: true,
             selection_fg: Color::Rgb(255, 165, 0), // Orange
             unfocused_selection_fg: None,
+            division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
+            error_fg: Color::Rgb(255, 0, 0), // Red
             box_chars: crate::formatting::BoxChars::unicode(),
         }
     }
@@ -170,6 +178,29 @@ fn parse_color(s: &str) -> Option<Color> {
         "lightcyan" => return Some(Color::LightCyan),
         "white" => return Some(Color::White),
         "orange" => return Some(Color::Rgb(255, 165, 0)),
+        "seafoam" => return Some(Color::Rgb(159, 226, 191)),
+        "deepred" | "deep red" => return Some(Color::Rgb(226, 74, 74)),
+        "coral" => return Some(Color::Rgb(255, 107, 107)),
+        "burntorange" | "burnt orange" => return Some(Color::Rgb(255, 140, 66)),
+        "amber" => return Some(Color::Rgb(255, 200, 87)),
+        "goldenrod" => return Some(Color::Rgb(232, 185, 35)),
+        "olive" => return Some(Color::Rgb(166, 166, 89)),
+        "chartreuse" => return Some(Color::Rgb(140, 207, 77)),
+        "greenapple" | "green apple" => return Some(Color::Rgb(88, 196, 114)),
+        "emerald" => return Some(Color::Rgb(46, 184, 114)),
+        "teal" => return Some(Color::Rgb(42, 168, 118)),
+        "cyansky" | "cyan sky" => return Some(Color::Rgb(77, 208, 225)),
+        "azure" => return Some(Color::Rgb(33, 150, 243)),
+        "cobaltblue" | "cobalt blue" => return Some(Color::Rgb(61, 90, 254)),
+        "indigo" => return Some(Color::Rgb(92, 107, 192)),
+        "violet" => return Some(Color::Rgb(126, 87, 194)),
+        "orchid" => return Some(Color::Rgb(186, 104, 200)),
+        "hotpink" | "hot pink" => return Some(Color::Rgb(255, 119, 169)),
+        "salmon" => return Some(Color::Rgb(255, 158, 157)),
+        "beige" => return Some(Color::Rgb(234, 210, 172)),
+        "coolgray" | "cool gray" => return Some(Color::Rgb(159, 168, 176)),
+        "slate" => return Some(Color::Rgb(96, 125, 139)),
+        "charcoal" => return Some(Color::Rgb(55, 71, 79)),
         _ => {}
     }
 

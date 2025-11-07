@@ -18,11 +18,14 @@ pub async fn fetch_standings(client: &Client, shared_data: &SharedDataHandle) {
             let mut shared = shared_data.write().await;
             shared.standings = Arc::new(data);
             shared.last_refresh = Some(SystemTime::now());
-            shared.error_message = None;
+            // Clear only error messages on successful refresh
+            if shared.status_is_error {
+                shared.clear_status();
+            }
         }
         Err(e) => {
             let mut shared = shared_data.write().await;
-            shared.error_message = Some(format!("Failed to fetch standings: {}", e));
+            shared.set_error(format!("Failed to fetch standings: {}", e));
         }
     }
 }
@@ -95,11 +98,14 @@ pub async fn fetch_schedule_with_games(client: &Client, shared_data: &SharedData
             shared.schedule = Arc::new(Some(schedule));
             shared.period_scores = Arc::new(period_scores);
             shared.game_info = Arc::new(game_info);
-            shared.error_message = None;
+            // Clear only error messages on successful refresh
+            if shared.status_is_error {
+                shared.clear_status();
+            }
         }
         Err(e) => {
             let mut shared = shared_data.write().await;
-            shared.error_message = Some(format!("Failed to fetch schedule: {}", e));
+            shared.set_error(format!("Failed to fetch schedule: {}", e));
         }
     }
 }
@@ -130,7 +136,7 @@ async fn fetch_boxscore(client: &Client, shared_data: &SharedDataHandle) {
             Err(e) => {
                 let mut shared = shared_data.write().await;
                 shared.boxscore_loading = false;
-                shared.error_message = Some(format!("Failed to fetch boxscore: {}", e));
+                shared.set_error(format!("Failed to fetch boxscore: {}", e));
             }
         }
     }
@@ -173,7 +179,7 @@ async fn fetch_player_info(client: &Client, shared_data: &SharedDataHandle) {
             Err(e) => {
                 let mut shared = shared_data.write().await;
                 shared.player_info_loading = false;
-                shared.error_message = Some(format!("Failed to fetch player info: {}", e));
+                shared.set_error(format!("Failed to fetch player info: {}", e));
             }
         }
     }
@@ -227,7 +233,7 @@ async fn fetch_club_stats(client: &Client, shared_data: &SharedDataHandle) {
             Err(e) => {
                 let mut shared = shared_data.write().await;
                 shared.club_stats_loading = false;
-                shared.error_message = Some(format!("Failed to fetch club stats: {}", e));
+                shared.set_error(format!("Failed to fetch club stats: {}", e));
             }
         }
     }

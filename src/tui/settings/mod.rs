@@ -68,6 +68,14 @@ pub fn build_settings_list(config: &Config) -> Vec<Setting> {
             value: SettingValue::Color(config.display.selection_fg),
         },
         Setting {
+            key: "Division Header FG".to_string(),
+            value: SettingValue::Color(config.display.division_header_fg),
+        },
+        Setting {
+            key: "Error FG".to_string(),
+            value: SettingValue::Color(config.display.error_fg),
+        },
+        Setting {
             key: "Western Teams First".to_string(),
             value: SettingValue::Bool(config.display_standings_western_first),
         },

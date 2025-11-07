@@ -39,7 +39,7 @@ const TAB_BAR_HEIGHT: u16 = 2;
 const SUBTAB_BAR_HEIGHT: u16 = 2;
 
 /// Height of status bar at bottom
-const STATUS_BAR_HEIGHT: u16 = 1;
+const STATUS_BAR_HEIGHT: u16 = 2;
 
 /// Event polling interval in milliseconds
 const EVENT_POLL_INTERVAL_MS: u64 = 100;
@@ -274,9 +274,11 @@ struct RenderData {
     player_info: Arc<HashMap<i64, nhl_api::PlayerLanding>>,
     western_first: bool,
     last_refresh: Option<SystemTime>,
+    #[allow(dead_code)]
     time_format: String,
     game_date: GameDate,
-    error_message: Option<String>,
+    status_message: Option<String>,
+    status_is_error: bool,
     display: Arc<DisplayConfig>,
     config: Arc<config::Config>,
     boxscore_loading: bool,
@@ -350,7 +352,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
 
     // Render status bar at the bottom
     let status_chunk_idx = chunks.len() - 1;
-    common::status_bar::render(f, chunks[status_chunk_idx], data.last_refresh, &data.time_format, data.error_message.as_deref());
+    common::status_bar::render(f, chunks[status_chunk_idx], data.last_refresh, data.config.refresh_interval, data.status_message.as_deref(), data.status_is_error, data.config.display.error_fg, &data.display.box_chars);
 }
 
 pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) -> Result<(), io::Error> {
@@ -380,7 +382,8 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
                 last_refresh: data.last_refresh,
                 time_format: data.config.time_format.clone(),
                 game_date: data.game_date.clone(),
-                error_message: data.error_message.clone(),
+                status_message: data.status_message.clone(),
+                status_is_error: data.status_is_error,
                 display: Arc::new(data.config.display.clone()),
                 config: Arc::new(data.config.clone()),
                 boxscore_loading: data.boxscore_loading,

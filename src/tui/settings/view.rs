@@ -142,15 +142,6 @@ pub fn render_content(f: &mut Frame, area: Rect, state: &State, config: &Arc<Con
         lines.push(Line::from(line_spans));
     }
 
-    // Show status message if present
-    if let Some(msg) = &state.status_message {
-        lines.push(Line::raw(""));
-        lines.push(Line::from(vec![
-            Span::raw("  "),
-            Span::styled(msg.clone(), Style::default().fg(Color::Green)),
-        ]));
-    }
-
     let paragraph = Paragraph::new(lines).block(Block::default().borders(Borders::NONE));
     f.render_widget(paragraph, area);
 
@@ -264,7 +255,15 @@ fn render_color_modal(
             let idx = row * 4 + col;
             let (color, name) = COLORS[idx];
             let is_selected = selected_color_index == idx;
-            let is_current = color == config.display.selection_fg;
+            let is_current = if setting_name == "Selection FG" {
+                color == config.display.selection_fg
+            } else if setting_name == "Division Header FG" {
+                color == config.display.division_header_fg
+            } else if setting_name == "Error FG" {
+                color == config.display.error_fg
+            } else {
+                false
+            };
 
             // Show selection indicator
             if is_selected {

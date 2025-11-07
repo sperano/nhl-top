@@ -368,6 +368,88 @@ fn combine_tables_with_headers(
     output
 }
 
+/// Format the scoring summary by period
+fn format_scoring_summary(scoring: &[nhl_api::PeriodScoring], display: &DisplayConfig) -> String {
+    if scoring.is_empty() {
+        return String::new();
+    }
+
+    let mut output = String::new();
+
+    for period_scoring in scoring {
+        if period_scoring.goals.is_empty() {
+            continue;
+        }
+
+        let period_name = match period_scoring.period_descriptor.period_type.as_str() {
+            "REG" => format!("{}st Period", period_scoring.period_descriptor.number)
+                .replace("1st", "1st")
+                .replace("2st", "2nd")
+                .replace("3st", "3rd"),
+            "OT" => "Overtime".to_string(),
+            "SO" => "Shootout".to_string(),
+            _ => format!("Period {}", period_scoring.period_descriptor.number),
+        };
+
+        output.push_str(&format_header(&period_name, false, display));
+        output.push('\n');
+
+        for goal in &period_scoring.goals {
+            let scorer = format!("{} ({})",
+                goal.name.default,
+                goal.goals_to_date.unwrap_or(0)
+            );
+
+            let assists = if goal.assists.is_empty() {
+                String::new()
+            } else {
+                let assist_names: Vec<String> = goal.assists.iter()
+                    .map(|a| format!("{} ({})", a.name.default, a.assists_to_date))
+                    .collect();
+                format!("\n    {}", assist_names.join(", "))
+            };
+
+            let score_line = format!("{}-{} {}",
+                goal.away_score,
+                goal.home_score,
+                goal.team_abbrev.default
+            );
+
+            let strength_modifier = match (goal.strength.as_str(), goal.goal_modifier.as_str()) {
+                (s, m) if s != "EV" || m != "NONE" => {
+                    let mut parts = Vec::new();
+                    if s == "PP" { parts.push("PPG"); }
+                    else if s == "SH" { parts.push("SHG"); }
+                    if m == "empty-net" { parts.push("EN"); }
+                    if !parts.is_empty() {
+                        format!(" {}", parts.join(", "))
+                    } else {
+                        String::new()
+                    }
+                }
+                _ => String::new()
+            };
+
+            output.push_str(&format!("{:<15} {} {:<10} {:<15} {}\n",
+                score_line,
+                scorer,
+                strength_modifier,
+                goal.time_in_period,
+                goal.shot_type
+            ));
+
+            if !assists.is_empty() {
+                output.push_str(&assists);
+                output.push('\n');
+            }
+        }
+
+        output.push('\n');
+    }
+
+    output
+}
+
 /// Format boxscore with period score box at the top
 fn format_boxscore_with_period_box(
     boxscore: &nhl_api::Boxscore,
@@ -452,6 +534,13 @@ fn format_boxscore_with_period_box(
     );
 
     output.push_str(&combined);
+
+    if let Some(game_matchup) = game_info {
+        if let Some(ref summary) = game_matchup.summary {
+            output.push_str("\n");
+            output.push_str(&format_scoring_summary(&summary.scoring, display));
+        }
+    }
 
     #[cfg(feature = "game_stats")]
     {

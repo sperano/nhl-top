@@ -22,7 +22,7 @@ pub async fn handle_key(key: KeyEvent, state: &mut State, shared_data: &SharedDa
 
     // Clear any existing status message when navigating
     if matches!(key.code, KeyCode::Up | KeyCode::Down) {
-        state.status_message = None;
+        shared_data.write().await.clear_status();
     }
 
     // Get the number of settings
@@ -64,48 +64,51 @@ pub async fn handle_key(key: KeyEvent, state: &mut State, shared_data: &SharedDa
                         "Use Unicode" => {
                             data.config.display.use_unicode = new_value;
                             data.config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(new_value);
-                            state.status_message = Some(format!("✓ Use Unicode: {}", if new_value { "enabled" } else { "disabled" }));
+                            data.set_status(format!("Use Unicode: {}", if new_value { "enabled" } else { "disabled" }));
                         }
                         "Western Teams First" => {
                             data.config.display_standings_western_first = new_value;
-                            state.status_message = Some(format!("✓ Western Teams First: {}", if new_value { "enabled" } else { "disabled" }));
+                            data.set_status(format!("Western Teams First: {}", if new_value { "enabled" } else { "disabled" }));
                         }
                         _ => {
-                            state.status_message = Some(format!("Unknown bool setting: {}", setting.key));
+                            data.set_error(format!("Unknown bool setting: {}", setting.key));
                         }
                     }
 
-                    // Save config to disk
-                    save_config_to_disk(&data.config, state);
-
                     tracing::info!("Toggled {}: {} -> {}", setting.key, current_value, new_value);
+
+                    // Save config to disk
+                    if let Err(e) = save_config_to_disk(&data.config) {
+                        data.set_error(e);
+                    }
+                    drop(data); // Release write lock
                     true
                 }
                 SettingValue::String(current_value) => {
                     // Enter editing mode
                     state.editing = Some((setting.key.clone(), current_value.clone()));
-                    state.status_message = Some("Editing... (Enter to save, Esc to cancel)".to_string());
+                    shared_data.write().await.set_status("Editing... (Enter to save, Esc to cancel)".to_string());
                     tracing::info!("Started editing string setting: {}", setting.key);
                     true
                 }
                 SettingValue::Int(current_value) => {
                     // Enter editing mode with int as string
                     state.editing = Some((setting.key.clone(), current_value.to_string()));
-                    state.status_message = Some("Editing... (Type digits, Up/Down arrows, Enter to save, Esc to cancel)".to_string());
+                    shared_data.write().await.set_status("Editing... (Type digits, Up/Down arrows, Enter to save, Esc to cancel)".to_string());
                     tracing::info!("Started editing int setting: {}", setting.key);
                     true
                 }
                 SettingValue::List { options, current_index } => {
                     // Open list modal
                     state.list_modal = Some((setting.key.clone(), options.clone(), *current_index));
-                    state.status_message = Some("Select option (Up/Down, Enter to confirm, Esc to cancel)".to_string());
+                    shared_data.write().await.set_status("Select option (Up/Down, Enter to confirm, Esc to cancel)".to_string());
                     tracing::info!("Opened list modal for: {}", setting.key);
                     true
                 }
                 SettingValue::Color(_current_color) => {
                     // Open color picker modal
                     state.color_modal = Some(setting.key.clone());
-                    state.status_message = Some("Select color (Arrow keys, Enter to confirm, Esc to cancel)".to_string());
+                    shared_data.write().await.set_status("Select color (Arrow keys, Enter to confirm, Esc to cancel)".to_string());
                     tracing::info!("Opened color picker modal for: {}", setting.key);
                     true
                 }
@@ -134,42 +137,45 @@ async fn handle_editing_mode(
             match setting_name.as_str() {
                 "Log File" => {
                     data.config.log_file = edit_buffer.clone();
-                    state.status_message = Some(format!("✓ Log File updated (restart required): {}", edit_buffer));
+                    data.set_status(format!("Log File updated (restart required): {}", edit_buffer));
                 }
                 "Time Format" => {
                     data.config.time_format = edit_buffer.clone();
-                    state.status_message = Some(format!("✓ Time Format updated to: {}", edit_buffer));
+                    data.set_status(format!("Time Format updated to: {}", edit_buffer));
                 }
                 "Refresh Interval (seconds)" => {
                     // Parse as u32
                     match edit_buffer.parse::<u32>() {
                         Ok(value) => {
                             data.config.refresh_interval = value;
-                            state.status_message = Some(format!("✓ Refresh Interval updated to: {} seconds", value));
+                            data.set_status(format!("Refresh Interval updated to: {} seconds", value));
                         }
                         Err(_) => {
-                            state.status_message = Some("✗ Invalid number".to_string());
+                            data.set_error("Invalid number".to_string());
                             state.editing = None;
                             return true;
                         }
                     }
                 }
                 _ => {
-                    state.status_message = Some(format!("Unknown setting: {}", setting_name));
+                    data.set_error(format!("Unknown setting: {}", setting_name));
                 }
             }
 
-            // Save config to disk
-            save_config_to_disk(&data.config, state);
-
             tracing::info!("Saved {} = {}", setting_name, edit_buffer);
+
+            // Save config to disk
+            if let Err(e) = save_config_to_disk(&data.config) {
+                data.set_error(e);
+            }
+            drop(data); // Release write lock
             state.editing = None;
             true
         }
         KeyCode::Esc => {
             // Cancel editing
             state.editing = None;
-            state.status_message = Some("Editing cancelled".to_string());
+            shared_data.write().await.set_status("Editing cancelled".to_string());
             tracing::info!("Cancelled editing {}", setting_name);
             true
         }
@@ -246,24 +252,27 @@ async fn handle_list_modal(
             match setting_name.as_str() {
                 "Log Level" => {
                     data.config.log_level = selected_value.clone();
-                    state.status_message = Some(format!("✓ Log Level set to: {} (restart required)", selected_value));
+                    data.set_status(format!("Log Level set to: {} (restart required)", selected_value));
                 }
                 _ => {
-                    state.status_message = Some(format!("Unknown list setting: {}", setting_name));
+                    data.set_error(format!("Unknown list setting: {}", setting_name));
                 }
             }
 
-            // Save config to disk
-            save_config_to_disk(&data.config, state);
-
             tracing::info!("Selected {} = {}", setting_name, selected_value);
+
+            // Save config to disk
+            if let Err(e) = save_config_to_disk(&data.config) {
+                data.set_error(e);
+            }
+            drop(data); // Release write lock
             state.list_modal = None;
             true
         }
         KeyCode::Esc => {
             // Cancel modal
             state.list_modal = None;
-            state.status_message = Some("Selection cancelled".to_string());
+            shared_data.write().await.set_status("Selection cancelled".to_string());
             tracing::info!("Cancelled list modal for {}", setting_name);
             true
         }
@@ -317,24 +326,35 @@ async fn handle_color_modal(
             match setting_name.as_str() {
                 "Selection FG" => {
                     data.config.display.selection_fg = selected_color;
-                    state.status_message = Some(format!("✓ Selection FG set to: {}", selected_name));
+                    data.set_status(format!("Selection FG set to: {}", selected_name));
+                }
+                "Division Header FG" => {
+                    data.config.display.division_header_fg = selected_color;
+                    data.set_status(format!("Division Header FG set to: {}", selected_name));
+                }
+                "Error FG" => {
+                    data.config.display.error_fg = selected_color;
+                    data.set_status(format!("Error FG set to: {}", selected_name));
                 }
                 _ => {
-                    state.status_message = Some(format!("Unknown color setting: {}", setting_name));
+                    data.set_error(format!("Unknown color setting: {}", setting_name));
                 }
             }
 
-            // Save config to disk
-            save_config_to_disk(&data.config, state);
-
             tracing::info!("Selected {} = {}", setting_name, selected_name);
+
+            // Save config to disk
+            if let Err(e) = save_config_to_disk(&data.config) {
+                data.set_error(e);
+            }
+            drop(data); // Release write lock
             state.color_modal = None;
             true
         }
         KeyCode::Esc => {
             // Cancel modal
             state.color_modal = None;
-            state.status_message = Some("Color selection cancelled".to_string());
+            shared_data.write().await.set_status("Color selection cancelled".to_string());
             tracing::info!("Cancelled color modal for {}", setting_name);
             true
         }
@@ -343,18 +363,13 @@ async fn handle_color_modal(
 }
 
 /// Helper function to save config to disk
-/// Shows error in status message if write fails
-fn save_config_to_disk(config: &config::Config, state: &mut State) {
-    match config::write(config) {
-        Ok(_) => {
-            tracing::debug!("Config saved to disk successfully");
-        }
-        Err(e) => {
-            let error_msg = format!("✗ Failed to save config: {}", e);
-            state.status_message = Some(error_msg.clone());
-            tracing::error!("{}", error_msg);
-        }
-    }
+/// Returns error if write fails
+fn save_config_to_disk(config: &config::Config) -> Result<(), String> {
+    config::write(config).map_err(|e| {
+        let error_msg = format!("Failed to save config: {}", e);
+        tracing::error!("{}", error_msg);
+        error_msg
+    })
 }
 
 // ============================================================================

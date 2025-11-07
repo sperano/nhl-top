@@ -58,3 +58,130 @@ where
 
     Line::from(separator_spans)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn test_separator_with_two_tabs() {
+        let box_chars = BoxChars::unicode();
+        let tab_names = vec!["Tab1".to_string(), "Tab2".to_string()];
+        let style = Style::default();
+
+        let line = build_tab_separator_line(tab_names.into_iter(), 20, style, &box_chars);
+
+        let text: String = line.spans.iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+
+        assert_eq!(text.chars().count(), 20, "Separator should fill the entire width");
+        assert!(text.contains("┴"), "Should contain connector2 (┴)");
+
+        let connector_count = text.chars().filter(|c| *c == '┴').count();
+        assert_eq!(connector_count, 1, "Should have exactly 1 connector for 2 tabs");
+
+        let dash_count = text.chars().filter(|c| *c == '─').count();
+        assert!(dash_count > 10, "Should be mostly horizontal lines");
+    }
+
+    #[test]
+    fn test_separator_with_three_tabs() {
+        let box_chars = BoxChars::unicode();
+        let tab_names = vec!["AA".to_string(), "BB".to_string(), "CC".to_string()];
+        let style = Style::default();
+
+        let line = build_tab_separator_line(tab_names.into_iter(), 20, style, &box_chars);
+
+        let text: String = line.spans.iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+
+        let connector_count = text.chars().filter(|c| *c == '┴').count();
+        assert_eq!(connector_count, 2, "Should have 2 connectors for 3 tabs");
+    }
+
+    #[test]
+    fn test_separator_ascii_mode() {
+        let box_chars = BoxChars::ascii();
+        let tab_names = vec!["Tab1".to_string(), "Tab2".to_string()];
+        let style = Style::default();
+
+        let line = build_tab_separator_line(tab_names.into_iter(), 20, style, &box_chars);
+
+        let text: String = line.spans.iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+
+        assert!(text.contains("-"), "ASCII mode should use '-' for horizontal");
+        assert!(!text.contains("─"), "ASCII mode should not contain unicode horizontal");
+        assert!(!text.contains("┴"), "ASCII mode should not contain unicode connector");
+    }
+
+    #[test]
+    fn test_separator_fills_width() {
+        let box_chars = BoxChars::unicode();
+        let tab_names = vec!["X".to_string(), "Y".to_string()];
+        let style = Style::default();
+
+        for width in [10, 20, 50, 100] {
+            let line = build_tab_separator_line(tab_names.clone().into_iter(), width, style, &box_chars);
+
+            let text: String = line.spans.iter()
+                .map(|span| span.content.as_ref())
+                .collect();
+
+            assert_eq!(text.chars().count(), width, "Separator should fill width {}", width);
+        }
+    }
+
+    #[test]
+    fn test_separator_connector_spacing() {
+        let box_chars = BoxChars::unicode();
+        let tab_names = vec!["AAAA".to_string(), "BBBB".to_string()];
+        let style = Style::default();
+
+        let line = build_tab_separator_line(tab_names.into_iter(), 20, style, &box_chars);
+
+        let text: String = line.spans.iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+
+        let connector_pos = text.chars().position(|c| c == '┴').expect("Should contain connector");
+
+        assert_eq!(connector_pos, 5, "Connector should be after first tab (4) + 1 horizontal = position 5");
+    }
+
+    #[test]
+    fn test_separator_with_style() {
+        let box_chars = BoxChars::unicode();
+        let tab_names = vec!["A".to_string(), "B".to_string()];
+        let style = Style::default().fg(Color::Blue);
+
+        let line = build_tab_separator_line(tab_names.into_iter(), 20, style, &box_chars);
+
+        for span in &line.spans {
+            assert_eq!(span.style.fg, Some(Color::Blue), "All spans should have the specified style");
+        }
+    }
+
+    #[test]
+    fn test_separator_single_tab() {
+        let box_chars = BoxChars::unicode();
+        let tab_names = vec!["OnlyTab".to_string()];
+        let style = Style::default();
+
+        let line = build_tab_separator_line(tab_names.into_iter(), 20, style, &box_chars);
+
+        let text: String = line.spans.iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+
+        let connector_count = text.chars().filter(|c| *c == '┴').count();
+        assert_eq!(connector_count, 0, "Single tab should have no connectors");
+
+        assert_eq!(text.chars().count(), 20, "Should still fill the width");
+        assert!(text.chars().all(|c| c == '─'), "Should be all horizontal lines");
+    }
+}

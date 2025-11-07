@@ -40,7 +40,8 @@ pub struct SharedData {
     pub config: config::Config,
     pub last_refresh: Option<SystemTime>,
     pub game_date: nhl_api::GameDate,
-    pub error_message: Option<String>,
+    pub status_message: Option<String>,
+    pub status_is_error: bool,
     pub selected_game_id: Option<i64>,
     pub boxscore_loading: bool,
     pub selected_team_abbrev: Option<String>,
@@ -62,7 +63,8 @@ impl Default for SharedData {
             config: config::Config::default(),
             last_refresh: None,
             game_date: nhl_api::GameDate::today(),
-            error_message: None,
+            status_message: None,
+            status_is_error: false,
             selected_game_id: None,
             boxscore_loading: false,
             selected_team_abbrev: None,
@@ -79,6 +81,24 @@ impl SharedData {
         self.selected_game_id = None;
         self.boxscore = Arc::new(None);
         self.boxscore_loading = false;
+    }
+
+    /// Set an error status message
+    pub fn set_error(&mut self, msg: String) {
+        self.status_message = Some(msg);
+        self.status_is_error = true;
+    }
+
+    /// Set a non-error status message
+    pub fn set_status(&mut self, msg: String) {
+        self.status_message = Some(msg);
+        self.status_is_error = false;
+    }
+
+    /// Clear the status message
+    pub fn clear_status(&mut self) {
+        self.status_message = None;
+        self.status_is_error = false;
     }
 }
 

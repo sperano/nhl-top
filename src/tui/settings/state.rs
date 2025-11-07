@@ -3,8 +3,6 @@ pub struct State {
     pub selected_setting_index: usize,
     /// Whether subtab mode is focused (for main TUI navigation)
     pub subtab_focused: bool,
-    /// Optional status message to display
-    pub status_message: Option<String>,
     /// Editing state: Some((setting_name, edit_buffer)) when editing a string/int
     pub editing: Option<(String, String)>,
     /// List modal state: Some((setting_name, options, selected_index)) when showing dropdown
@@ -20,7 +18,6 @@ impl State {
         State {
             selected_setting_index: 0,
             subtab_focused: false,
-            status_message: None,
             editing: None,
             list_modal: None,
             color_modal: None,

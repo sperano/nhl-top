@@ -4,7 +4,6 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use super::State;
 use super::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX};
-use crate::tui::error::TuiError;
 use crate::{SharedData, SharedDataHandle};
 
 /// Clears schedule-related data to show "Loading..." state while fetching new data
@@ -124,6 +123,11 @@ async fn handle_box_navigation(
         return false;
     }
 
+    // Clear status message when navigating between boxes
+    if matches!(key.code, KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right) {
+        shared_data.write().await.clear_status();
+    }
+
     match key.code {
         KeyCode::Up => {
             if row == 0 {
@@ -207,7 +211,7 @@ async fn select_game_for_boxscore(state: &mut State, shared_data: &SharedDataHan
 
             // Check if game has started
             if !game.game_state.has_started() {
-                data.error_message = Some(TuiError::GameNotStarted.to_string());
+                data.set_status("Game has not started yet".to_string());
                 return;
             }
 
