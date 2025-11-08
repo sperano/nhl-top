@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use super::{State, build_settings_list, SettingValue};
 use crate::SharedDataHandle;
 use crate::config;

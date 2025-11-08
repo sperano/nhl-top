@@ -35,13 +35,6 @@ impl Panel for StandingsPanel {
     }
 }
 
-/// Data cached for each panel type
-#[derive(Clone, Debug)]
-pub enum PanelData {
-    Team(TeamDetailData),
-    Player(PlayerDetailData),
-}
-
 #[derive(Clone, Debug)]
 pub struct TeamDetailData {
     pub team_name: String,
@@ -70,28 +63,6 @@ pub struct GoalieStat {
     pub gaa: String,
     pub sv_pct: String,
     pub so: i32,
-}
-
-#[derive(Clone, Debug)]
-pub struct PlayerDetailData {
-    pub name: String,
-    pub position: String,
-    pub number: i32,
-    pub height: String,
-    pub weight: String,
-    pub birthplace: String,
-    pub career_stats: Vec<SeasonStat>,
-}
-
-#[derive(Clone, Debug)]
-pub struct SeasonStat {
-    pub season: String,
-    pub team: String,
-    pub team_id: i64,
-    pub gp: i32,
-    pub g: i32,
-    pub a: i32,
-    pub pts: i32,
 }
 
 /// Generate fake team data for testing
@@ -123,56 +94,6 @@ pub fn fake_team_data(team_name: &str) -> TeamDetailData {
         goalies: vec![
             GoalieStat { name: "Ilya Samsonov".into(), gp: 35, gaa: "2.89".into(), sv_pct: ".903".into(), so: 2 },
             GoalieStat { name: "Joseph Woll".into(), gp: 23, gaa: "2.52".into(), sv_pct: ".915".into(), so: 1 },
-        ],
-    }
-}
-
-/// Generate fake player data for testing
-pub fn fake_player_data(player_name: &str) -> PlayerDetailData {
-    PlayerDetailData {
-        name: player_name.to_string(),
-        position: "Center".to_string(),
-        number: 34,
-        height: "6'1\"".to_string(),
-        weight: "220 lbs".to_string(),
-        birthplace: "Toronto, ON".to_string(),
-        career_stats: vec![
-            SeasonStat {
-                season: "2023-24".into(),
-                team: "Canadiens".into(),
-                team_id: 1,
-                gp: 58,
-                g: 22,
-                a: 28,
-                pts: 50,
-            },
-            SeasonStat {
-                season: "2022-23".into(),
-                team: "Columbus".into(),
-                team_id: 2,
-                gp: 72,
-                g: 18,
-                a: 24,
-                pts: 42,
-            },
-            SeasonStat {
-                season: "2021-22".into(),
-                team: "Columbus".into(),
-                team_id: 2,
-                gp: 65,
-                g: 15,
-                a: 20,
-                pts: 35,
-            },
-            SeasonStat {
-                season: "2020-21".into(),
-                team: "Florida".into(),
-                team_id: 3,
-                gp: 48,
-                g: 12,
-                a: 15,
-                pts: 27,
-            },
         ],
     }
 }

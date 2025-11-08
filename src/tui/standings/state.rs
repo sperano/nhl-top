@@ -2,7 +2,7 @@ use crate::commands::standings::GroupBy;
 use crate::tui::common::scrollable::Scrollable;
 use crate::tui::navigation::NavigationContext;
 use super::layout::StandingsLayout;
-use super::panel::{StandingsPanel, PanelData};
+use super::panel::StandingsPanel;
 
 pub struct State {
     pub view: GroupBy,
@@ -12,7 +12,7 @@ pub struct State {
     pub selected_team_index: usize,
     pub selected_column: usize,
     pub layout_cache: Option<StandingsLayout>,
-    pub navigation: Option<NavigationContext<StandingsPanel, String, PanelData>>,
+    pub navigation: Option<NavigationContext<StandingsPanel, String, ()>>,
     pub panel_scrollable: Scrollable,
     pub panel_selection_active: bool,
     pub panel_selected_index: usize,

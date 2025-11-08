@@ -4,14 +4,36 @@
 /// Inspired by OO UI frameworks, widgets are small, focused components that can be
 /// composed together to build complex interfaces.
 
-// TODO: buffer_utils module has compilation errors - needs to be fixed separately
-// pub mod buffer_utils;
-
 #[cfg(test)]
 pub mod testing;
 
-pub mod team_row;
-pub use team_row::TeamRow;
+// Widget implementations
+pub mod scoring_table;
+pub use scoring_table::ScoringTable;
+
+pub mod score_table;
+pub use score_table::ScoreTable;
+
+pub mod game_box;
+pub use game_box::{GameBox, GameState};
+
+pub mod game_grid;
+pub use game_grid::GameGrid;
+
+pub mod standings_table;
+pub use standings_table::StandingsTable;
+
+pub mod player_stats_table;
+pub use player_stats_table::PlayerStatsTable;
+
+pub mod goalie_stats_table;
+pub use goalie_stats_table::GoalieStatsTable;
+
+pub mod career_stats_table;
+pub use career_stats_table::CareerStatsTable;
+
+pub mod player_bio_card;
+pub use player_bio_card::PlayerBioCard;
 
 use ratatui::{
     buffer::Buffer,
@@ -34,7 +56,7 @@ use crate::config::DisplayConfig;
 /// ```rust
 /// let widgets: Vec<Box<dyn RenderableWidget>> = vec![
 ///     Box::new(GameBox { ... }),
-///     Box::new(TeamRow { ... }),
+///     Box::new(ScoreTable { ... }),
 /// ];
 ///
 /// for widget in widgets {

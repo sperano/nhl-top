@@ -7,7 +7,7 @@ use ratatui::{
 };
 use super::{State, build_settings_list, SettingValue, KEY_VALUE_MARGIN};
 use std::sync::Arc;
-use crate::config::{Config, DisplayConfig};
+use crate::config::Config;
 
 /// 24 beautiful, professionally-chosen colors for the color picker (4x6 grid)
 pub const COLORS: [(Color, &str); 24] = [
@@ -48,7 +48,6 @@ pub const COLORS: [(Color, &str); 24] = [
     (Color::Rgb(55, 71, 79), "Charcoal"),
 ];
 
-use ratatui::layout::{Layout, Constraint, Direction};
 use ratatui::widgets::Clear;
 
 pub fn render_content(f: &mut Frame, area: Rect, state: &State, config: &Arc<Config>) {

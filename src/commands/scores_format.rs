@@ -1,19 +1,5 @@
-use nhl_api::{DailySchedule, ScheduleGame, GameSummary};
-use std::collections::HashMap;
+use nhl_api::GameSummary;
 use crate::formatting::BoxChars;
-
-// Layout Constants
-/// Terminal width threshold for 3-column layout (37*3 + 2*2 gaps = 115)
-const THREE_COLUMN_WIDTH: usize = 115;
-
-/// Terminal width threshold for 2-column layout (37*2 + 2 gap = 76)
-const TWO_COLUMN_WIDTH: usize = 76;
-
-/// Width of a single game box to accommodate all 5 periods (1, 2, 3, OT, SO)
-const GAME_BOX_WIDTH: usize = 37;
-
-/// Gap between game boxes when displayed side-by-side
-const GAME_BOX_GAP: usize = 2;
 
 // Score Table Constants
 /// Number of base columns in score table (empty, 1, 2, 3, T)
@@ -27,12 +13,6 @@ const PERIOD_COL_WIDTH: usize = 4;
 
 /// Maximum width of score table with all periods
 const SCORE_TABLE_MAX_WIDTH: usize = 37;
-
-/// Header text left padding (1 space)
-const HEADER_LEFT_PADDING: usize = 1;
-
-/// Header text width (36 characters for content)
-const HEADER_CONTENT_WIDTH: usize = 36;
 
 // Period Index Constants
 /// Array index for period 1 scores
@@ -65,119 +45,8 @@ pub struct PeriodScores {
     pub has_so: bool,
 }
 
-/// Format scores for TUI display with period-by-period breakdown
-// pub fn format_scores_for_tui(
-//     schedule: &DailySchedule,
-//     period_scores: &HashMap<i64, PeriodScores>,
-// ) -> String {
-//     let empty_game_info = HashMap::new();
-//     format_scores_for_tui_with_width(schedule, period_scores, &empty_game_info, None)
-// }
-
-/// Calculate the number of columns to display based on terminal width.
-/// Each game box is 37 characters wide to accommodate all 5 periods (1, 2, 3, OT, SO).
-///
-/// Returns:
-/// - 3 columns for wide terminals (width >= 115)
-/// - 2 columns for medium terminals (width >= 76)
-/// - 1 column for narrow terminals or when width is not provided
-fn calculate_columns_from_width(terminal_width: Option<usize>) -> usize {
-    if let Some(width) = terminal_width {
-        if width >= THREE_COLUMN_WIDTH {
-            3
-        } else if width >= TWO_COLUMN_WIDTH {
-            2
-        } else {
-            1
-        }
-    } else {
-        1 // Default to 1 column if width not provided
-    }
-}
-
-/// Format scores with specific terminal width for column layout
-pub fn format_scores_for_tui_with_width(
-    schedule: &DailySchedule,
-    period_scores: &HashMap<i64, PeriodScores>,
-    game_info: &HashMap<i64, nhl_api::GameMatchup>,
-    terminal_width: Option<usize>,
-    box_chars: &BoxChars,
-) -> String {
-    let mut output = String::new();
-
-    // Display header
-    //output.push_str(&format!("{}\n", schedule.date));
-
-    if schedule.number_of_games == 0 {
-        output.push_str("No games scheduled for today.\n");
-        return output;
-    }
-
-    // Determine number of columns based on terminal width
-    let num_columns = calculate_columns_from_width(terminal_width);
-
-    // Group games into rows
-    let games: Vec<_> = schedule.games.iter().collect();
-    let rows: Vec<_> = games.chunks(num_columns).collect();
-
-    for (row_idx, row) in rows.iter().enumerate() {
-        if row_idx > 0 {
-            output.push('\n');
-        }
-
-        // Format each game in the row as a table
-        let formatted_games: Vec<String> = row
-            .iter()
-            .map(|game| format_game_table(game, period_scores.get(&game.id), game_info.get(&game.id), &box_chars))
-            .collect();
-
-        // Combine games horizontally
-        output.push_str(&combine_tables_horizontally(&formatted_games));
-    }
-
-    output
-}
-
-/// Combine multiple game tables horizontally (side-by-side)
-fn combine_tables_horizontally(tables: &[String]) -> String {
-    if tables.is_empty() {
-        return String::new();
-    }
-
-    // Split each table into lines
-    let table_lines: Vec<Vec<&str>> = tables
-        .iter()
-        .map(|t| t.lines().collect())
-        .collect();
-
-    // Find the maximum number of lines
-    let max_lines = table_lines.iter().map(|t| t.len()).max().unwrap_or(0);
-
-    let mut output = String::new();
-
-    // Combine line by line
-    for line_idx in 0..max_lines {
-        for (table_idx, lines) in table_lines.iter().enumerate() {
-            if table_idx > 0 {
-                output.push_str(&" ".repeat(GAME_BOX_GAP)); // Gap between tables
-            }
-
-            // Get the line or use empty space if this table is shorter
-            if line_idx < lines.len() {
-                output.push_str(lines[line_idx]);
-            } else {
-                // Pad with spaces to match table width (all 5 periods)
-                output.push_str(&" ".repeat(GAME_BOX_WIDTH));
-            }
-        }
-        output.push('\n');
-    }
-
-    output
-}
-
 /// Format period text (e.g., "1st Period", "Overtime", "Shootout")
-fn format_period_text(period_type: &str, period_number: i32) -> String {
+pub fn format_period_text(period_type: &str, period_number: i32) -> String {
     match period_type {
         "REG" => {
             let ordinal = match period_number {
@@ -192,132 +61,6 @@ fn format_period_text(period_type: &str, period_number: i32) -> String {
         "SO" => "Shootout".to_string(),
         _ => format!("Period {}", period_number),
     }
-}
-
-/// Format header for live game (with period and time info)
-fn format_live_game_header(info: &nhl_api::GameMatchup) -> String {
-    let period_text = format_period_text(
-        &info.period_descriptor.period_type,
-        info.period_descriptor.number
-    );
-
-    if let Some(clock) = &info.clock {
-        if clock.in_intermission {
-            format!("{} - Intermission", period_text)
-        } else {
-            format!("{} - {}", period_text, clock.time_remaining)
-        }
-    } else {
-        period_text
-    }
-}
-
-/// Format header for scheduled game (showing start time)
-fn format_scheduled_game_header(start_time_utc: &str) -> String {
-    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(start_time_utc) {
-        let local_time: chrono::DateTime<chrono::Local> = parsed.into();
-        local_time.format("%I:%M %p").to_string()
-    } else {
-        start_time_utc.to_string()
-    }
-}
-
-/// Generate appropriate header text based on game state
-fn generate_game_header(
-    game: &ScheduleGame,
-    game_info: Option<&nhl_api::GameMatchup>
-) -> String {
-    if game.game_state.is_final() {
-        "Final Score".to_string()
-    } else if game.game_state.has_started() {
-        game_info
-            .map(format_live_game_header)
-            .unwrap_or_else(|| "In Progress".to_string())
-    } else {
-        format_scheduled_game_header(&game.start_time_utc)
-    }
-}
-
-fn format_game_table(game: &ScheduleGame, period_scores: Option<&PeriodScores>, game_info: Option<&nhl_api::GameMatchup>, box_chars: &BoxChars) -> String {
-    let mut output = String::new();
-
-    // Determine if game has started
-    let game_started = game.game_state.has_started();
-
-    // Generate header using extracted function
-    let header = generate_game_header(game, game_info);
-
-    // Add left padding, then left-align the header
-    output.push_str(&format!("{}{:<width$}\n", " ".repeat(HEADER_LEFT_PADDING), header, width = HEADER_CONTENT_WIDTH));
-
-    // Determine current period for in-progress games
-    let current_period_num = if game_started && !game.game_state.is_final() {
-        game_info.and_then(|info| {
-            // Get the current period number based on period type
-            match info.period_descriptor.period_type.as_str() {
-                "REG" => Some(info.period_descriptor.number),
-                "OT" => Some(OVERTIME_PERIOD_NUM),
-                "SO" => Some(SHOOTOUT_PERIOD_NUM),
-                _ => Some(info.period_descriptor.number),
-            }
-        })
-    } else {
-        None
-    };
-
-    if game_started {
-        if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
-            // Use period scores if available
-            let (has_ot, has_so, away_periods, home_periods) = if let Some(scores) = period_scores {
-                (scores.has_ot, scores.has_so, Some(&scores.away_periods), Some(&scores.home_periods))
-            } else {
-                (false, false, None, None)
-            };
-
-            output.push_str(&build_score_table(
-                &game.away_team.abbrev,
-                &game.home_team.abbrev,
-                Some(away_score),
-                Some(home_score),
-                has_ot,
-                has_so,
-                away_periods,
-                home_periods,
-                current_period_num,
-                box_chars,
-            ));
-        } else {
-            // Game started but no scores yet - show table with dashes
-            output.push_str(&build_score_table(
-                &game.away_team.abbrev,
-                &game.home_team.abbrev,
-                None,
-                None,
-                false,
-                false,
-                None,
-                None,
-                current_period_num,
-                box_chars,
-            ));
-        }
-    } else {
-        // Game hasn't started - show table with dashes
-        output.push_str(&build_score_table(
-            &game.away_team.abbrev,
-            &game.home_team.abbrev,
-            None,
-            None,
-            false,
-            false,
-            None,
-            None,
-            None,
-            box_chars,
-        ));
-    }
-
-    output
 }
 
 pub fn build_score_table(
@@ -734,24 +477,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_calculate_columns_from_width() {
-        // Wide terminal should give 3 columns
-        assert_eq!(calculate_columns_from_width(Some(120)), 3);
-        assert_eq!(calculate_columns_from_width(Some(115)), 3);
-
-        // Medium terminal should give 2 columns
-        assert_eq!(calculate_columns_from_width(Some(100)), 2);
-        assert_eq!(calculate_columns_from_width(Some(76)), 2);
-
-        // Narrow terminal should give 1 column
-        assert_eq!(calculate_columns_from_width(Some(75)), 1);
-        assert_eq!(calculate_columns_from_width(Some(50)), 1);
-
-        // None should default to 1 column
-        assert_eq!(calculate_columns_from_width(None), 1);
-    }
-
-    #[test]
     fn test_calculate_padding() {
         // Test basic padding calculation
         // With 5 total_cols: current_width = 1 + 5 + (5-1)*5 + 1 = 27
@@ -923,31 +648,6 @@ mod tests {
         assert_eq!(scores.home_periods.len(), 3);
         assert!(!scores.has_ot);
         assert!(!scores.has_so);
-    }
-
-    #[test]
-    fn test_combine_tables_horizontally_empty() {
-        let result = combine_tables_horizontally(&[]);
-        assert_eq!(result, "");
-    }
-
-    #[test]
-    fn test_combine_tables_horizontally_single() {
-        let table = "Line 1\nLine 2\nLine 3\n".to_string();
-        let result = combine_tables_horizontally(&[table.clone()]);
-        assert_eq!(result, "Line 1\nLine 2\nLine 3\n");
-    }
-
-    #[test]
-    fn test_combine_tables_horizontally_multiple() {
-        let table1 = "A1\nA2\nA3".to_string();
-        let table2 = "B1\nB2\nB3".to_string();
-        let result = combine_tables_horizontally(&[table1, table2]);
-
-        // Should have both tables side by side with 2-space gap
-        assert!(result.contains("A1  B1"));
-        assert!(result.contains("A2  B2"));
-        assert!(result.contains("A3  B3"));
     }
 
     #[test]

@@ -6,7 +6,6 @@ mod players;
 mod settings;
 mod app;
 mod error;
-pub mod traits;
 pub mod navigation;
 pub mod widgets;
 

@@ -5,7 +5,7 @@ use ratatui::{
     style::{Color, Style},
     Frame,
 };
-use std::time::{SystemTime, Duration};
+use std::time::SystemTime;
 use crate::formatting::BoxChars;
 
 pub fn render(f: &mut Frame, area: Rect, last_refresh: Option<SystemTime>, refresh_interval: u32, status_message: Option<&str>, status_is_error: bool, error_fg: Color, box_chars: &BoxChars) {
@@ -85,6 +85,7 @@ mod tests {
     use super::*;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use std::time::Duration;
 
     #[test]
     fn test_status_bar_loading_state() {
@@ -99,7 +100,6 @@ mod tests {
         let buffer = terminal.backend().buffer();
 
         let line1 = buffer.content().iter()
-            .skip(0)
             .take(80)
             .map(|cell| cell.symbol())
             .collect::<String>();
@@ -182,7 +182,6 @@ mod tests {
         let buffer = terminal.backend().buffer();
 
         let line1 = buffer.content().iter()
-            .skip(0)
             .take(80)
             .map(|cell| cell.symbol())
             .collect::<String>();
@@ -247,7 +246,6 @@ mod tests {
         let buffer = terminal.backend().buffer();
 
         let line1 = buffer.content().iter()
-            .skip(0)
             .take(80)
             .map(|cell| cell.symbol())
             .collect::<String>();
