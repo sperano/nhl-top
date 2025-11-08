@@ -4,8 +4,14 @@
 /// Inspired by OO UI frameworks, widgets are small, focused components that can be
 /// composed together to build complex interfaces.
 
+// TODO: buffer_utils module has compilation errors - needs to be fixed separately
+// pub mod buffer_utils;
+
 #[cfg(test)]
 pub mod testing;
+
+pub mod team_row;
+pub use team_row::TeamRow;
 
 use ratatui::{
     buffer::Buffer,

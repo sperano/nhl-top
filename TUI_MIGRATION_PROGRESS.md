@@ -59,13 +59,15 @@
 - **Files Created:** `src/tui/widgets/mod.rs`, `src/tui/widgets/testing.rs`
 - **Notes:** Created RenderableWidget trait (object-safe). Added comprehensive testing utilities. All tests passing. No visual changes to UI.
 
-### ⏸️ Step 1.2: Buffer Utilities
-- **Status:** ⏸️ Not started
+### 🚀 Step 1.2: Buffer Utilities
+- **Status:** 🚀 Specs ready, awaiting delegation
+- **Model:** Sonnet (3 parallel subtasks)
 - **Branch:** -
 - **Started:** -
 - **Completed:** -
 - **Test Coverage:** -
-- **Notes:** -
+- **Specs:** TUI_MIGRATION_WAVE1_SPECS.md
+- **Notes:** Ready for 3 parallel Sonnet tasks: 1.2a (text utils), 1.2b (border utils), 1.2c (table utils)
 
 ---
 
@@ -127,13 +129,15 @@
 
 ## Phase 4: Standings Components
 
-### ⏸️ Step 4.1: TeamRow Widget
-- **Status:** ⏸️ Not started
+### 🚀 Step 4.1: TeamRow Widget
+- **Status:** 🚀 Specs ready, awaiting delegation
+- **Model:** Sonnet (can run in parallel with 1.2)
 - **Branch:** -
 - **Started:** -
 - **Completed:** -
 - **Test Coverage:** -
-- **Notes:** -
+- **Specs:** TUI_MIGRATION_WAVE1_SPECS.md
+- **Notes:** Independent widget, can be developed in parallel with buffer utilities
 
 ### ⏸️ Step 4.2: StandingsTable Widget
 - **Status:** ⏸️ Not started
