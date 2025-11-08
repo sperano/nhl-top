@@ -11,6 +11,8 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::RenderableWidget;
+use crate::tui::widgets::section_header::render_section_header;
+use crate::tui::widgets::horizontal_separator::render_horizontal_separator;
 
 /// Column width constants
 const SEASON_COL_WIDTH: usize = 10;
@@ -95,25 +97,7 @@ impl<'a> RenderableWidget for CareerStatsTable<'a> {
 
         // Render header if present
         if let Some(header_text) = &self.header {
-            if y < area.bottom() {
-                // Render double-line header with box characters
-                let header_line = crate::formatting::format_header(header_text, true, config);
-                for line in header_line.lines() {
-                    if y >= area.bottom() {
-                        break;
-                    }
-                    if !line.is_empty() {
-                        let formatted = format!("{}{}", " ".repeat(margin as usize), line);
-                        buf.set_string(
-                            area.x,
-                            y,
-                            &formatted,
-                            Style::default().fg(config.division_header_fg),
-                        );
-                    }
-                    y += 1;
-                }
-            }
+            y += render_section_header(header_text, true, margin, area, y, buf, config);
         }
 
         // Render table header
@@ -134,15 +118,7 @@ impl<'a> RenderableWidget for CareerStatsTable<'a> {
         }
 
         // Render separator line
-        if y < area.bottom() {
-            let separator = format!(
-                "{}{}",
-                " ".repeat(margin as usize),
-                config.box_chars.horizontal.repeat(TABLE_WIDTH - margin as usize)
-            );
-            buf.set_string(area.x, y, &separator, Style::default());
-            y += 1;
-        }
+        y += render_horizontal_separator(TABLE_WIDTH, margin, area, y, buf, config);
 
         // Render season rows (in reverse order for most recent first)
         for (idx, season) in self.seasons.iter().rev().enumerate() {

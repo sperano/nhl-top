@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use super::State;
-use super::panel::{StandingsPanel, fake_team_data};
+use super::panel::StandingsPanel;
 use crate::tui::navigation::NavigationContext;
 use crate::SharedDataHandle;
 use crate::NHL_LEAGUE_ABBREV;
@@ -99,9 +99,8 @@ async fn get_panel_item_count(panel: &StandingsPanel, shared_data: &SharedDataHa
                     return stats.skaters.len() + stats.goalies.len();
                 }
             }
-            // Fallback to fake data count if no real data available yet
-            let fake_data = fake_team_data("");
-            fake_data.players.len() + fake_data.goalies.len()
+            // No data available yet
+            0
         }
         StandingsPanel::PlayerDetail { player_id, .. } => {
             // Get real player data from SharedData

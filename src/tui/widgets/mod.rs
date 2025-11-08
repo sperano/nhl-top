@@ -7,6 +7,11 @@
 #[cfg(test)]
 pub mod testing;
 
+// Small reusable widgets
+pub mod section_header;
+pub mod horizontal_separator;
+pub mod settings;
+
 // Widget implementations
 pub mod scoring_table;
 pub use scoring_table::ScoringTable;
@@ -34,6 +39,15 @@ pub use career_stats_table::CareerStatsTable;
 
 pub mod player_bio_card;
 pub use player_bio_card::PlayerBioCard;
+
+pub mod game_skater_stats_table;
+pub use game_skater_stats_table::GameSkaterStatsTable;
+
+pub mod game_goalie_stats_table;
+pub use game_goalie_stats_table::GameGoalieStatsTable;
+
+pub mod team_stats_panel;
+pub use team_stats_panel::TeamStatsPanel;
 
 use ratatui::{
     buffer::Buffer,

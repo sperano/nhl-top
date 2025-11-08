@@ -287,7 +287,7 @@ async fn handle_color_modal(
     shared_data: &SharedDataHandle,
     setting_name: String,
 ) -> bool {
-    use super::view::COLORS;
+    use crate::tui::widgets::settings::COLORS;
 
     match key.code {
         KeyCode::Up => {

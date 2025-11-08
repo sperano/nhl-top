@@ -7,7 +7,7 @@ use ratatui::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use crate::tui::widgets::{GameBox, GameGrid, GameState};
+use crate::tui::widgets::{GameBox, GameGrid, GameState, TeamStatsPanel, RenderableWidget};
 use crate::config::DisplayConfig;
 use crate::formatting::format_header;
 use super::State;
@@ -490,6 +490,42 @@ fn format_scoring_summary(scoring: &[nhl_api::PeriodScoring], display: &DisplayC
     output
 }
 
+/// Helper function to render TeamStatsPanel widget to string
+fn render_team_stats_panel_to_string(
+    team_abbrev: &str,
+    stats: &nhl_api::TeamPlayerStats,
+    display: &DisplayConfig,
+) -> String {
+    use ratatui::buffer::Buffer;
+
+    // Create the widget
+    let panel = TeamStatsPanel::new(team_abbrev, stats, 0);
+
+    // Calculate dimensions
+    let height = panel.preferred_height().unwrap_or(0);
+    let width = panel.preferred_width().unwrap_or(80);
+
+    // Render to buffer
+    let area = Rect::new(0, 0, width, height);
+    let mut buf = Buffer::empty(area);
+    panel.render(area, &mut buf, display);
+
+    // Convert buffer to string
+    let mut output = String::new();
+    for y in 0..buf.area.height {
+        for x in 0..buf.area.width {
+            if let Some(cell) = buf.cell((x, y)) {
+                output.push_str(cell.symbol());
+            }
+        }
+        if y < buf.area.height - 1 {
+            output.push('\n');
+        }
+    }
+
+    output
+}
+
 /// Format boxscore with period score box at the top
 fn format_boxscore_with_period_box(
     boxscore: &nhl_api::Boxscore,
@@ -595,9 +631,19 @@ fn format_boxscore_with_period_box(
         output.push_str(&game_stats_table);
     }
 
-    // Display player stats using the existing helper functions from boxscore module
-    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.away_team.abbrev, &boxscore.player_by_game_stats.away_team, display);
-    crate::commands::boxscore::format_team_stats(&mut output, &boxscore.home_team.abbrev, &boxscore.player_by_game_stats.home_team, display);
+    // Display player stats using TeamStatsPanel widget
+    output.push('\n');
+    output.push_str(&render_team_stats_panel_to_string(
+        &boxscore.away_team.abbrev,
+        &boxscore.player_by_game_stats.away_team,
+        display
+    ));
+    output.push('\n');
+    output.push_str(&render_team_stats_panel_to_string(
+        &boxscore.home_team.abbrev,
+        &boxscore.player_by_game_stats.home_team,
+        display
+    ));
 
     output
 }

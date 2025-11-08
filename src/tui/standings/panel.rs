@@ -66,6 +66,7 @@ pub struct GoalieStat {
 }
 
 /// Generate fake team data for testing
+#[cfg(test)]
 pub fn fake_team_data(team_name: &str) -> TeamDetailData {
     TeamDetailData {
         team_name: team_name.to_string(),
