@@ -509,14 +509,34 @@ fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &s
     // Render goalie table below player table
     goalie_table.render(Rect::new(0, player_height, buf_width, goalie_height), &mut buf, display);
 
-    // Convert buffer to lines
+    // Convert buffer to lines (preserving styles)
     for y in 0..buf.area.height {
-        let mut line_content = String::new();
+        let mut spans = Vec::new();
+        let mut current_text = String::new();
+        let mut current_style = Style::default();
+
         for x in 0..buf.area.width {
             let cell = buf.cell((x, y)).unwrap();
-            line_content.push_str(cell.symbol());
+            let cell_style = cell.style();
+
+            // If style changed, push current span and start new one
+            if cell_style != current_style && !current_text.is_empty() {
+                spans.push(Span::styled(current_text.clone(), current_style));
+                current_text.clear();
+                current_style = cell_style;
+            } else if current_text.is_empty() {
+                current_style = cell_style;
+            }
+
+            current_text.push_str(cell.symbol());
         }
-        lines.push(Line::raw(line_content));
+
+        // Push final span
+        if !current_text.is_empty() {
+            spans.push(Span::styled(current_text, current_style));
+        }
+
+        lines.push(Line::from(spans));
     }
 
     state.panel_scrollable.update_viewport_height(area.height);
@@ -631,14 +651,34 @@ fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: 
         table.render(Rect::new(0, bio_height, buf_width, career_height), &mut buf, display);
     }
 
-    // Convert buffer to lines
+    // Convert buffer to lines (preserving styles)
     for y in 0..buf.area.height {
-        let mut line_content = String::new();
+        let mut spans = Vec::new();
+        let mut current_text = String::new();
+        let mut current_style = Style::default();
+
         for x in 0..buf.area.width {
             let cell = buf.cell((x, y)).unwrap();
-            line_content.push_str(cell.symbol());
+            let cell_style = cell.style();
+
+            // If style changed, push current span and start new one
+            if cell_style != current_style && !current_text.is_empty() {
+                spans.push(Span::styled(current_text.clone(), current_style));
+                current_text.clear();
+                current_style = cell_style;
+            } else if current_text.is_empty() {
+                current_style = cell_style;
+            }
+
+            current_text.push_str(cell.symbol());
         }
-        lines.push(Line::raw(line_content));
+
+        // Push final span
+        if !current_text.is_empty() {
+            spans.push(Span::styled(current_text, current_style));
+        }
+
+        lines.push(Line::from(spans));
     }
 
     state.panel_scrollable.update_viewport_height(area.height);
