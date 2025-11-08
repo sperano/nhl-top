@@ -8,6 +8,7 @@ mod app;
 mod error;
 pub mod traits;
 pub mod navigation;
+pub mod widgets;
 
 use std::io;
 use std::sync::Arc;
