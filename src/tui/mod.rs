@@ -147,6 +147,11 @@ async fn handle_arrow_and_enter_keys(
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
 ) -> bool {
+    // Special case: if boxscore view is active in Scores tab, pass ALL keys to it
+    if matches!(app_state.current_tab, CurrentTab::Scores) && app_state.scores.boxscore_view_active {
+        return scores::handle_key(key, &mut app_state.scores, shared_data, refresh_tx).await;
+    }
+
     match key.code {
         KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right | KeyCode::Enter | KeyCode::Esc => {
             if app_state.is_subtab_focused() {

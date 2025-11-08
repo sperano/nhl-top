@@ -1,9 +1,11 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::fs;
 use tokio::sync::mpsc;
 use super::State;
 use super::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX};
+use super::format_boxscore_text;
 use crate::{SharedData, SharedDataHandle};
 
 /// Clears schedule-related data to show "Loading..." state while fetching new data
@@ -178,8 +180,54 @@ async fn handle_box_navigation(
     }
 }
 
+/// Save the current boxscore to a text file
+async fn save_boxscore_to_file(shared_data: &SharedDataHandle) -> Result<String, String> {
+    let data = shared_data.read().await;
+
+    if let Some(ref boxscore) = *data.boxscore {
+        let period_scores = data.period_scores.get(&boxscore.id);
+        let game_info = data.game_info.get(&boxscore.id);
+
+        let content = format_boxscore_text(
+            boxscore,
+            period_scores,
+            game_info,
+            &data.config.display,
+        );
+
+        // Generate filename from game info
+        let filename = if let Some(info) = game_info {
+            format!("boxscore_{}_{}.txt",
+                info.away_team.abbrev.replace(' ', "_"),
+                info.home_team.abbrev.replace(' ', "_"))
+        } else {
+            format!("boxscore_{}.txt", boxscore.id)
+        };
+
+        // Write to file
+        fs::write(&filename, content)
+            .map_err(|e| format!("Failed to save file: {}", e))?;
+
+        Ok(filename)
+    } else {
+        Err("No boxscore available to save".to_string())
+    }
+}
+
 async fn handle_boxscore_view(key: KeyEvent, state: &mut State, shared_data: &SharedDataHandle) -> bool {
     match key.code {
+        KeyCode::Char('s') | KeyCode::Char('S') => {
+            // Save boxscore to file
+            match save_boxscore_to_file(shared_data).await {
+                Ok(filename) => {
+                    shared_data.write().await.set_status(format!("Saved to {}", filename));
+                }
+                Err(err) => {
+                    shared_data.write().await.set_error(err);
+                }
+            }
+            true
+        }
         KeyCode::Esc => {
             // Close the boxscore view and return to game list
             state.boxscore_view_active = false;

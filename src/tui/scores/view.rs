@@ -368,83 +368,205 @@ fn combine_tables_with_headers(
     output
 }
 
+/// Column widths structure for scoring summary table
+struct ScoringColumnWidths {
+    team: usize,      // Column 1: always 5 (space + 3-letter abbrev + space)
+    description: usize, // Column 2: dynamic based on longest name/assists
+    score: usize,     // Column 3: dynamic based on max score digits
+    time: usize,      // Column 4: always 7 (space + MM:SS + space)
+    shot_type: usize, // Column 5: dynamic based on longest shot type
+}
+
+impl ScoringColumnWidths {
+    fn new(scoring: &[nhl_api::PeriodScoring]) -> Self {
+        let mut max_desc_width = 0;
+        let mut max_score_width = 0;
+        let mut max_shot_type_width = 0;
+
+        for period in scoring {
+            for goal in &period.goals {
+                let scorer = format!("{} ({})", goal.name.default, goal.goals_to_date.unwrap_or(0));
+                max_desc_width = max_desc_width.max(scorer.len());
+
+                let assists_str = if goal.assists.is_empty() {
+                    "Unassisted".to_string()
+                } else {
+                    goal.assists.iter()
+                        .map(|a| format!("{} ({})", a.name.default, a.assists_to_date))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                max_desc_width = max_desc_width.max(assists_str.len());
+
+                // Track the actual formatted score string length
+                let score_str = format!("{}-{}", goal.away_score, goal.home_score);
+                max_score_width = max_score_width.max(score_str.len());
+
+                max_shot_type_width = max_shot_type_width.max(goal.shot_type.len());
+            }
+        }
+
+        Self {
+            team: 5,
+            description: max_desc_width + 6,
+            score: max_score_width + 2,
+            time: 7,
+            shot_type: max_shot_type_width + 2,
+        }
+    }
+}
+
+/// Build a horizontal border for the scoring table
+fn build_scoring_border(
+    widths: &ScoringColumnWidths,
+    left: &str,
+    mid: &str,
+    right: &str,
+    horiz: &str,
+) -> String {
+    let mut line = String::new();
+    line.push_str(left);
+    line.push_str(&horiz.repeat(widths.team));
+    line.push_str(mid);
+    line.push_str(&horiz.repeat(widths.description));
+    line.push_str(mid);
+    line.push_str(&horiz.repeat(widths.score));
+    line.push_str(mid);
+    line.push_str(&horiz.repeat(widths.time));
+    line.push_str(mid);
+    line.push_str(&horiz.repeat(widths.shot_type));
+    line.push_str(right);
+    line.push('\n');
+    line
+}
+
+/// Format the goal scorer row
+fn format_goal_row(
+    goal: &nhl_api::GoalSummary,
+    widths: &ScoringColumnWidths,
+    vert: &str,
+) -> String {
+    let scorer = format!("{} ({})", goal.name.default, goal.goals_to_date.unwrap_or(0));
+    let score_str = format!("{}-{}", goal.away_score, goal.home_score);
+
+    // Capitalize the first letter of the shot type
+    let shot_type_capitalized = {
+        let mut chars = goal.shot_type.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    };
+
+    format!(
+        "{} {:3} {} {:<desc_w$} {} {:<score_w$} {} {:5} {} {:<shot_w$} {}\n",
+        vert,
+        goal.team_abbrev.default,
+        vert,
+        scorer,
+        vert,
+        score_str,
+        vert,
+        goal.time_in_period,
+        vert,
+        shot_type_capitalized,
+        vert,
+        desc_w = widths.description - 2,
+        score_w = widths.score - 2,
+        shot_w = widths.shot_type - 2,
+    )
+}
+
+/// Format the assists row
+fn format_assists_row(
+    goal: &nhl_api::GoalSummary,
+    widths: &ScoringColumnWidths,
+    vert: &str,
+) -> String {
+    let assists_str = if goal.assists.is_empty() {
+        "Unassisted".to_string()
+    } else {
+        goal.assists.iter()
+            .map(|a| format!("{} ({})", a.name.default, a.assists_to_date))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    format!(
+        "{} {:3} {} {:<desc_w$} {} {:<score_w$} {} {:5} {} {:shot_w$} {}\n",
+        vert,
+        "",
+        vert,
+        assists_str,
+        vert,
+        goal.team_abbrev.default,
+        vert,
+        "",
+        vert,
+        "",
+        vert,
+        desc_w = widths.description - 2,
+        score_w = widths.score - 2,
+        shot_w = widths.shot_type - 2,
+    )
+}
+
+/// Format a single goal's data rows (without any borders)
+fn format_goal_rows(
+    goal: &nhl_api::GoalSummary,
+    widths: &ScoringColumnWidths,
+    bc: &crate::formatting::BoxChars,
+) -> String {
+    let mut output = String::new();
+    output.push_str(&format_goal_row(goal, widths, &bc.vertical));
+    output.push_str(&format_assists_row(goal, widths, &bc.vertical));
+    output
+}
+
 /// Format the scoring summary by period
 fn format_scoring_summary(scoring: &[nhl_api::PeriodScoring], display: &DisplayConfig) -> String {
     if scoring.is_empty() {
         return String::new();
     }
 
+    let widths = ScoringColumnWidths::new(scoring);
     let mut output = String::new();
 
-    for period_scoring in scoring {
-        if period_scoring.goals.is_empty() {
-            continue;
-        }
-
-        let period_name = match period_scoring.period_descriptor.period_type.as_str() {
-            "REG" => format!("{}st Period", period_scoring.period_descriptor.number)
+    for period in scoring {
+        let period_name = match period.period_descriptor.period_type.as_str() {
+            "REG" => format!("{}st Period", period.period_descriptor.number)
                 .replace("1st", "1st")
                 .replace("2st", "2nd")
                 .replace("3st", "3rd"),
             "OT" => "Overtime".to_string(),
             "SO" => "Shootout".to_string(),
-            _ => format!("Period {}", period_scoring.period_descriptor.number),
+            _ => format!("Period {}", period.period_descriptor.number),
         };
 
-        output.push_str(&format_header(&period_name, false, display));
-        output.push('\n');
+        output.push_str(&period_name);
+        output.push_str("\n\n");
 
-        for goal in &period_scoring.goals {
-            let scorer = format!("{} ({})",
-                goal.name.default,
-                goal.goals_to_date.unwrap_or(0)
-            );
+        if period.goals.is_empty() {
+            output.push_str("No Goals\n\n");
+        } else {
+            // Add top border once before all goals in this period
+            output.push_str(&build_scoring_border(&widths, &display.box_chars.top_left, &display.box_chars.top_junction, &display.box_chars.top_right, &display.box_chars.horizontal));
 
-            let assists = if goal.assists.is_empty() {
-                String::new()
-            } else {
-                let assist_names: Vec<String> = goal.assists.iter()
-                    .map(|a| format!("{} ({})", a.name.default, a.assists_to_date))
-                    .collect();
-                format!("\n    {}", assist_names.join(", "))
-            };
+            for (i, goal) in period.goals.iter().enumerate() {
+                output.push_str(&format_goal_rows(goal, &widths, &display.box_chars));
 
-            let score_line = format!("{}-{} {}",
-                goal.away_score,
-                goal.home_score,
-                goal.team_abbrev.default
-            );
-
-            let strength_modifier = match (goal.strength.as_str(), goal.goal_modifier.as_str()) {
-                (s, m) if s != "EV" || m != "NONE" => {
-                    let mut parts = Vec::new();
-                    if s == "PP" { parts.push("PPG"); }
-                    else if s == "SH" { parts.push("SHG"); }
-                    if m == "empty-net" { parts.push("EN"); }
-                    if !parts.is_empty() {
-                        format!(" {}", parts.join(", "))
-                    } else {
-                        String::new()
-                    }
+                // Add separator after each goal
+                if i < period.goals.len() - 1 {
+                    // Middle separator between goals
+                    output.push_str(&build_scoring_border(&widths, &display.box_chars.left_junction, &display.box_chars.cross, &display.box_chars.right_junction, &display.box_chars.horizontal));
+                } else {
+                    // Bottom border after last goal
+                    output.push_str(&build_scoring_border(&widths, &display.box_chars.bottom_left, &display.box_chars.bottom_junction, &display.box_chars.bottom_right, &display.box_chars.horizontal));
                 }
-                _ => String::new()
-            };
-
-            output.push_str(&format!("{:<15} {} {:<10} {:<15} {}\n",
-                score_line,
-                scorer,
-                strength_modifier,
-                goal.time_in_period,
-                goal.shot_type
-            ));
-
-            if !assists.is_empty() {
-                output.push_str(&assists);
-                output.push('\n');
             }
-        }
 
-        output.push('\n');
+            output.push('\n');
+        }
     }
 
     output
@@ -583,4 +705,511 @@ fn render_boxscore_content(
     };
 
     state.boxscore_scrollable.render_paragraph(f, area, content_text, None);
+}
+
+/// Public function to format boxscore as text for exporting
+pub fn format_boxscore_text(
+    boxscore: &nhl_api::Boxscore,
+    period_scores: Option<&crate::commands::scores_format::PeriodScores>,
+    game_info: Option<&nhl_api::GameMatchup>,
+    display: &DisplayConfig,
+) -> String {
+    format_boxscore_with_period_box(boxscore, period_scores, game_info, display)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nhl_api::{GoalSummary, AssistSummary, LocalizedString, PeriodDescriptor, PeriodScoring};
+
+    fn create_localized_string(s: &str) -> LocalizedString {
+        LocalizedString { default: s.to_string() }
+    }
+
+    fn create_test_goal(
+        team: &str,
+        scorer_name: &str,
+        goals_to_date: i32,
+        assists: Vec<(&str, i32)>,
+        away_score: i32,
+        home_score: i32,
+        time: &str,
+        shot_type: &str,
+    ) -> GoalSummary {
+        let assist_summaries = assists.into_iter().map(|(name, total)| {
+            AssistSummary {
+                player_id: 0,
+                first_name: create_localized_string(""),
+                last_name: create_localized_string(name),
+                name: create_localized_string(name),
+                assists_to_date: total,
+                sweater_number: 0,
+            }
+        }).collect();
+
+        GoalSummary {
+            situation_code: "".to_string(),
+            event_id: 0,
+            strength: "EV".to_string(),
+            player_id: 0,
+            first_name: create_localized_string(""),
+            last_name: create_localized_string(scorer_name),
+            name: create_localized_string(scorer_name),
+            team_abbrev: create_localized_string(team),
+            headshot: "".to_string(),
+            highlight_clip_sharing_url: None,
+            highlight_clip: None,
+            discrete_clip: None,
+            goals_to_date: Some(goals_to_date),
+            away_score,
+            home_score,
+            leading_team_abbrev: None,
+            time_in_period: time.to_string(),
+            shot_type: shot_type.to_string(),
+            goal_modifier: "NONE".to_string(),
+            assists: assist_summaries,
+            home_team_defending_side: "".to_string(),
+            is_home: false,
+        }
+    }
+
+    // ===== ScoringColumnWidths Tests =====
+
+    #[test]
+    fn test_widths_scorer_longer_than_assists() {
+        // Scorer name is longer than assists line
+        let goal = create_test_goal(
+            "TOR",
+            "Alexander Ovechkin-Malkin III",
+            50,
+            vec![("A. B", 1)],
+            1,
+            0,
+            "5:42",
+            "Snap",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "Alexander Ovechkin-Malkin III (50)" = 34 chars + 6 padding = 40
+        assert_eq!(widths.description, 40);
+        assert_eq!(widths.team, 5);
+        assert_eq!(widths.time, 7);
+    }
+
+    #[test]
+    fn test_widths_assists_longer_than_scorer() {
+        // Assists line is longer than scorer name
+        let goal = create_test_goal(
+            "OTT",
+            "M. Amadio",
+            4,
+            vec![("S. Pinto", 5), ("C. Giroux", 7), ("T. Stutzle", 12)],
+            1,
+            0,
+            "5:42",
+            "Snap",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "S. Pinto (5), C. Giroux (7), T. Stutzle (12)" = 44 chars + 6 padding = 50
+        assert_eq!(widths.description, 50);
+    }
+
+    #[test]
+    fn test_widths_unassisted_longer_than_scorer() {
+        // "Unassisted" is longer than short scorer name
+        let goal = create_test_goal(
+            "TOR",
+            "A. B",
+            1,
+            vec![], // Unassisted
+            1,
+            0,
+            "12:34",
+            "Wrist",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "Unassisted" (10) is longer than "A. B (1)" (7), so 10 + 6 = 16
+        assert_eq!(widths.description, 16);
+    }
+
+    #[test]
+    fn test_widths_scorer_longer_than_unassisted() {
+        // Scorer name is longer than "Unassisted"
+        let goal = create_test_goal(
+            "TOR",
+            "A. Matthews",
+            50,
+            vec![], // Unassisted
+            1,
+            0,
+            "12:34",
+            "Wrist",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "A. Matthews (50)" (16) is longer than "Unassisted" (10), so 16 + 6 = 22
+        assert_eq!(widths.description, 22);
+    }
+
+    #[test]
+    fn test_widths_score_single_digits() {
+        // Both scores are single digits: 1-1
+        let goal = create_test_goal(
+            "TOR",
+            "Player",
+            1,
+            vec![],
+            1,
+            1,
+            "01:00",
+            "Snap",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "1-1" format: 1 space + 1 digit + 1 dash + 1 digit + 1 space = 5
+        assert_eq!(widths.score, 5);
+    }
+
+    #[test]
+    fn test_widths_score_mixed_digits() {
+        // One score is double digit: 10-1
+        let goal = create_test_goal(
+            "TOR",
+            "Player",
+            1,
+            vec![],
+            10,
+            1,
+            "01:00",
+            "Snap",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "10-1" format: 1 space + 2 digits + 1 dash + 1 digit + 1 space = 6
+        assert_eq!(widths.score, 6);
+    }
+
+    #[test]
+    fn test_widths_score_both_double_digits() {
+        // Both scores are double digits: 10-10
+        let goal = create_test_goal(
+            "TOR",
+            "Player",
+            1,
+            vec![],
+            10,
+            10,
+            "01:00",
+            "Snap",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "10-10" format: 1 space + 2 digits + 1 dash + 2 digits + 1 space = 7
+        assert_eq!(widths.score, 7);
+    }
+
+    #[test]
+    fn test_widths_shot_type_variations() {
+        // Test different shot type lengths
+        let goal1 = create_test_goal("TOR", "P1", 1, vec![], 1, 0, "01:00", "Snap");
+        let goal2 = create_test_goal("TOR", "P2", 1, vec![], 2, 0, "02:00", "Wrist");
+        let goal3 = create_test_goal("TOR", "P3", 1, vec![], 3, 0, "03:00", "Backhand");
+        let goal4 = create_test_goal("TOR", "P4", 1, vec![], 4, 0, "04:00", "Slap");
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal1, goal2, goal3, goal4],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // "Backhand" (8) is the longest, + 2 padding = 10
+        assert_eq!(widths.shot_type, 10);
+    }
+
+    #[test]
+    fn test_widths_multiple_goals_max_of_all() {
+        // Test that widths are the maximum across all goals
+        let goal1 = create_test_goal(
+            "OTT",
+            "Short Name",
+            1,
+            vec![("Long Assist Name", 99)],
+            1,
+            0,
+            "5:42",
+            "Snap",
+        );
+
+        let goal2 = create_test_goal(
+            "BOS",
+            "Very Long Scorer Name Here",
+            100,
+            vec![("A", 1)],
+            10,
+            10,
+            "01:22",
+            "Deflected",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal1, goal2],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // Description: max of "Very Long Scorer Name Here (100)" (32)
+        assert_eq!(widths.description, 38); // 32 + 6 padding
+
+        // Score: "10-10" needs 7
+        assert_eq!(widths.score, 7);
+
+        // Shot type: "Deflected" (9) + 2 padding = 11
+        assert_eq!(widths.shot_type, 11);
+    }
+
+    #[test]
+    fn test_widths_fixed_columns() {
+        // Verify that team and time are always fixed
+        let goal = create_test_goal(
+            "TOR",
+            "Player",
+            1,
+            vec![],
+            1,
+            1,
+            "01:00",
+            "Snap",
+        );
+
+        let period = PeriodScoring {
+            period_descriptor: PeriodDescriptor {
+                number: 1,
+                period_type: "REG".to_string(),
+                max_regulation_periods: 3,
+            },
+            goals: vec![goal],
+        };
+
+        let widths = ScoringColumnWidths::new(&[period]);
+
+        // Team is always 5 (space + 3 chars + space)
+        assert_eq!(widths.team, 5);
+
+        // Time is always 7 (space + MM:SS + space)
+        assert_eq!(widths.time, 7);
+    }
+
+    #[test]
+    fn test_scoring_summary_single_goal() {
+        let goal = create_test_goal(
+            "OTT",
+            "M. Amadio",
+            4,
+            vec![("S. Pinto", 5), ("C. Giroux", 7)],
+            1,
+            0,
+            "5:42",
+            "Snap",
+        );
+
+        let bc = crate::formatting::BoxChars::unicode();
+        let widths = ScoringColumnWidths {
+            team: 5,
+            description: 33,
+            score: 5,
+            time: 7,
+            shot_type: 6,
+        };
+
+        let mut result = String::new();
+        // Add top border before the goal
+        result.push_str(&build_scoring_border(&widths, &bc.top_left, &bc.top_junction, &bc.top_right, &bc.horizontal));
+        result.push_str(&format_goal_rows(&goal, &widths, &bc));
+        result.push_str(&build_scoring_border(&widths, &bc.bottom_left, &bc.bottom_junction, &bc.bottom_right, &bc.horizontal));
+
+        let expected = "\
+╭─────┬─────────────────────────────────┬─────┬───────┬──────╮
+│ OTT │ M. Amadio (4)                   │ 1-0 │ 5:42  │ Snap │
+│     │ S. Pinto (5), C. Giroux (7)     │ OTT │       │      │
+╰─────┴─────────────────────────────────┴─────┴───────┴──────╯
+";
+
+        assert_eq!(result, expected, "\n\nExpected:\n{}\n\nGot:\n{}\n", expected, result);
+    }
+
+    #[test]
+    fn test_scoring_summary_two_goals() {
+        let goal1 = create_test_goal(
+            "BOS",
+            "M.Geekie",
+            10,
+            vec![("A. Peeke", 3)],
+            9,
+            1,
+            "01:22",
+            "Poke",
+        );
+
+        let goal2 = create_test_goal(
+            "BOS",
+            "S. Kuraly",
+            2,
+            vec![("T. Jeannot", 4), ("A. Peeke", 4)],
+            10,
+            1,
+            "16:03",
+            "Wrist",
+        );
+
+        let bc = crate::formatting::BoxChars::unicode();
+        let widths = ScoringColumnWidths {
+            team: 5,
+            description: 33,
+            score: 6, // "10-1" is 4 chars + 2 padding
+            time: 7,
+            shot_type: 7,
+        };
+
+        let mut result = String::new();
+        // Add top border once before all goals
+        result.push_str(&build_scoring_border(&widths, &bc.top_left, &bc.top_junction, &bc.top_right, &bc.horizontal));
+        result.push_str(&format_goal_rows(&goal1, &widths, &bc));
+        // Middle separator between goals
+        result.push_str(&build_scoring_border(&widths, &bc.left_junction, &bc.cross, &bc.right_junction, &bc.horizontal));
+        result.push_str(&format_goal_rows(&goal2, &widths, &bc));
+        // Bottom border after last goal
+        result.push_str(&build_scoring_border(&widths, &bc.bottom_left, &bc.bottom_junction, &bc.bottom_right, &bc.horizontal));
+
+        let expected = "\
+╭─────┬─────────────────────────────────┬──────┬───────┬───────╮
+│ BOS │ M.Geekie (10)                   │ 9-1  │ 01:22 │ Poke  │
+│     │ A. Peeke (3)                    │ BOS  │       │       │
+├─────┼─────────────────────────────────┼──────┼───────┼───────┤
+│ BOS │ S. Kuraly (2)                   │ 10-1 │ 16:03 │ Wrist │
+│     │ T. Jeannot (4), A. Peeke (4)    │ BOS  │       │       │
+╰─────┴─────────────────────────────────┴──────┴───────┴───────╯
+";
+
+        assert_eq!(result, expected, "\n\nExpected:\n{}\n\nGot:\n{}\n", expected, result);
+    }
+
+    #[test]
+    fn test_scoring_summary_unassisted_goal() {
+        let goal = create_test_goal(
+            "MTL",
+            "N. Suzuki",
+            15,
+            vec![], // Unassisted
+            2,
+            1,
+            "10:15",
+            "Wrist",
+        );
+
+        let bc = crate::formatting::BoxChars::unicode();
+        let widths = ScoringColumnWidths {
+            team: 5,
+            description: 16,
+            score: 5,
+            time: 7,
+            shot_type: 7,
+        };
+
+        let mut result = String::new();
+        // Add top border before the goal
+        result.push_str(&build_scoring_border(&widths, &bc.top_left, &bc.top_junction, &bc.top_right, &bc.horizontal));
+        result.push_str(&format_goal_rows(&goal, &widths, &bc));
+        result.push_str(&build_scoring_border(&widths, &bc.bottom_left, &bc.bottom_junction, &bc.bottom_right, &bc.horizontal));
+
+        let expected = "\
+╭─────┬────────────────┬─────┬───────┬───────╮
+│ MTL │ N. Suzuki (15) │ 2-1 │ 10:15 │ Wrist │
+│     │ Unassisted     │ MTL │       │       │
+╰─────┴────────────────┴─────┴───────┴───────╯
+";
+
+        assert_eq!(result, expected, "\n\nExpected:\n{}\n\nGot:\n{}\n", expected, result);
+    }
 }
