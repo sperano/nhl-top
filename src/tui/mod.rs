@@ -8,6 +8,13 @@ mod app;
 mod error;
 pub mod navigation;
 pub mod widgets;
+mod layout;
+mod context;
+pub mod command_palette;
+pub use context::{NavigationContextProvider, NavigationCommand, SearchableItem};
+
+use widgets::RenderableWidget;
+use layout::{Layout as LayoutManager, LayoutAreas};
 
 use std::io;
 use std::sync::Arc;
@@ -20,6 +27,7 @@ use crossterm::{
 };
 use ratatui::{
     backend::CrosstermBackend,
+    buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     Terminal,
     Frame,
@@ -204,6 +212,24 @@ async fn handle_key_event(
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
 ) -> bool {
+    // Handle command palette if active
+    if app_state.command_palette_active {
+        if let Some(ref palette) = app_state.command_palette {
+            if palette.is_visible {
+                if let Err(e) = command_palette::handler::handle_key(app_state, key, shared_data, refresh_tx).await {
+                    tracing::error!("Error handling command palette key: {}", e);
+                }
+                return false; // Skip normal key handling when palette is active
+            }
+        }
+    }
+
+    // Handle '/' key to open command palette
+    if key.code == KeyCode::Char('/') && !app_state.command_palette_active {
+        app_state.open_command_palette();
+        return false;
+    }
+
     // Special case: if Settings tab is in editing mode or showing modal, route ALL keys to it
     if matches!(app_state.current_tab, CurrentTab::Settings)
         && (app_state.settings.editing.is_some()
@@ -239,34 +265,6 @@ async fn handle_key_event(
     false // Continue running - unhandled key
 }
 
-/// Calculates layout constraints based on whether the current tab has subtabs
-/// Returns a Vec of Constraints for: tab bar, optional subtab bar, content, and status bar
-fn calculate_layout_constraints(has_subtabs: bool) -> Vec<Constraint> {
-    if has_subtabs {
-        vec![
-            Constraint::Length(TAB_BAR_HEIGHT),    // Main tab bar
-            Constraint::Length(SUBTAB_BAR_HEIGHT), // Sub-tab bar
-            Constraint::Min(0),                    // Content
-            Constraint::Length(STATUS_BAR_HEIGHT), // Status bar
-        ]
-    } else {
-        vec![
-            Constraint::Length(TAB_BAR_HEIGHT),    // Main tab bar
-            Constraint::Min(0),                    // Content
-            Constraint::Length(STATUS_BAR_HEIGHT), // Status bar
-        ]
-    }
-}
-
-/// Calculates the index of the content chunk based on the current tab
-/// Tabs with subtabs use chunk index 2, others use index 1
-fn calculate_content_chunk_index(current_tab: &CurrentTab) -> usize {
-    match current_tab {
-        CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings => 2,
-        CurrentTab::Stats | CurrentTab::Players => 1,
-    }
-}
-
 /// Data structure holding all cloned data needed for rendering
 /// This avoids holding the RwLock during rendering operations
 struct RenderData {
@@ -290,35 +288,156 @@ struct RenderData {
     selected_team_abbrev: Option<String>,
 }
 
-/// Renders a single frame with the current application state and data
-/// Delegates rendering to tab-specific modules
-fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: &RenderData) {
-    // Render main tab bar
-    let tab_names = CurrentTab::all_names();
-    common::tab_bar::render(f, chunks[0], &tab_names, app_state.current_tab.index(), !app_state.is_subtab_focused(), &data.display);
+/// Create breadcrumb widget if navigation depth > 0
+fn create_breadcrumb(app_state: &AppState, data: &RenderData) -> Option<widgets::EnhancedBreadcrumb> {
+    use context::BreadcrumbProvider;
 
-    // Render sub-tabs for tabs that have them
-    match app_state.current_tab {
+    if !app_state.is_subtab_focused() {
+        return None;
+    }
+
+    let items = match app_state.current_tab {
         CurrentTab::Scores => {
-            scores::render_subtabs(f, chunks[1], &app_state.scores, &data.game_date, &data.display);
+            let provider = context::ScoresBreadcrumbProvider {
+                state: &app_state.scores,
+                game_date: &data.game_date,
+            };
+            provider.get_breadcrumb_items()
         }
-        CurrentTab::Standings => {
-            standings::render_subtabs(f, chunks[1], &app_state.standings, &data.display);
-        }
-        CurrentTab::Stats | CurrentTab::Players | CurrentTab::Settings => {
-            // No subtabs for these tabs
+        CurrentTab::Standings => app_state.standings.get_breadcrumb_items(),
+        CurrentTab::Stats => app_state.stats.get_breadcrumb_items(),
+        CurrentTab::Players => app_state.players.get_breadcrumb_items(),
+        CurrentTab::Settings => app_state.settings.get_breadcrumb_items(),
+    };
+
+    if items.is_empty() {
+        return None;
+    }
+
+    Some(widgets::EnhancedBreadcrumb {
+        items,
+        separator: " ▸ ".to_string(),
+        icon: None,
+    })
+}
+
+/// Create action bar widget based on current context
+fn create_action_bar(app_state: &AppState, data: &RenderData) -> Option<widgets::ActionBar> {
+    use context::NavigationContextProvider;
+
+    if !data.display.show_action_bar {
+        return None;
+    }
+
+    let actions = match app_state.current_tab {
+        CurrentTab::Scores => app_state.scores.get_available_actions(),
+        CurrentTab::Standings => app_state.standings.get_available_actions(),
+        CurrentTab::Stats => app_state.stats.get_available_actions(),
+        CurrentTab::Players => app_state.players.get_available_actions(),
+        CurrentTab::Settings => app_state.settings.get_available_actions(),
+    };
+
+    if actions.is_empty() {
+        return None;
+    }
+
+    Some(widgets::ActionBar { actions })
+}
+
+/// Create status bar with refresh info and error messages
+fn create_status_bar(data: &RenderData, app_state: &AppState) -> widgets::StatusBar {
+    use context::NavigationContextProvider;
+
+    let mut status_bar = widgets::StatusBar::new();
+
+    let hints = match app_state.current_tab {
+        CurrentTab::Scores => app_state.scores.get_keyboard_hints(),
+        CurrentTab::Standings => app_state.standings.get_keyboard_hints(),
+        CurrentTab::Stats => app_state.stats.get_keyboard_hints(),
+        CurrentTab::Players => app_state.players.get_keyboard_hints(),
+        CurrentTab::Settings => app_state.settings.get_keyboard_hints(),
+    };
+
+    if !hints.is_empty() {
+        status_bar = status_bar.with_hints(hints);
+    }
+
+    if let Some(ref error) = data.status_message {
+        if data.status_is_error {
+            status_bar = status_bar.with_error(error.clone());
+        } else {
+            status_bar = status_bar.with_status(error.clone());
         }
     }
 
-    // Calculate content chunk index
-    let content_chunk_idx = calculate_content_chunk_index(&app_state.current_tab);
+    if let Some(last_refresh) = data.last_refresh {
+        status_bar = status_bar.with_last_refresh(Some(last_refresh));
+    }
+
+    status_bar
+}
+
+/// Renders a single frame with the current application state and data
+/// Delegates rendering to tab-specific modules
+fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
+    // Create layout manager with all chrome components
+    let layout = LayoutManager {
+        tab_bar: widgets::TabBar::new(app_state.current_tab, !app_state.is_subtab_focused()),
+        breadcrumb: create_breadcrumb(app_state, data),
+        action_bar: create_action_bar(app_state, data),
+        status_bar: create_status_bar(data, app_state),
+        command_palette: app_state.command_palette.clone(),
+    };
+
+    // Calculate areas for all components
+    let areas = layout.calculate_areas(f.area(), &data.display);
+
+    // Render chrome (tab bar, breadcrumb, action bar, status bar)
+    // Note: Command palette is NOT rendered here - it's rendered last to appear on top
+    layout.render_chrome(f, &areas, &data.display);
+
+    // Render sub-tabs for tabs that have them (within content area)
+    // Note: subtabs are rendered within the content area allocated by the layout manager
+    let has_subtabs = app_state.has_subtabs();
+    let (subtab_area, main_content_area) = if has_subtabs {
+        // Split content area into subtab bar and actual content
+        let constraints = vec![
+            Constraint::Length(SUBTAB_BAR_HEIGHT),
+            Constraint::Min(0),
+        ];
+        let sub_chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(constraints)
+            .split(areas.content);
+        (Some(sub_chunks[0]), sub_chunks[1])
+    } else {
+        (None, areas.content)
+    };
+
+    // Render subtabs if present
+    if let Some(subtab_area) = subtab_area {
+        match app_state.current_tab {
+            CurrentTab::Scores => {
+                scores::render_subtabs(f, subtab_area, &app_state.scores, &data.game_date, &data.display);
+            }
+            CurrentTab::Standings => {
+                standings::render_subtabs(f, subtab_area, &app_state.standings, &data.display);
+            }
+            CurrentTab::Settings => {
+                // Settings has subtabs according to has_subtabs(), but doesn't render them yet
+            }
+            CurrentTab::Stats | CurrentTab::Players => {
+                // No subtabs for these tabs
+            }
+        }
+    }
 
     // Render content for current tab
     match app_state.current_tab {
         CurrentTab::Scores => {
             scores::render_content(
                 f,
-                chunks[content_chunk_idx],
+                main_content_area,
                 &mut app_state.scores,
                 &data.schedule,
                 &data.period_scores,
@@ -336,7 +455,7 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
 
             standings::render_content(
                 f,
-                chunks[content_chunk_idx],
+                main_content_area,
                 &mut app_state.standings,
                 &data.display,
                 &data.club_stats,
@@ -345,19 +464,36 @@ fn render_frame(f: &mut Frame, chunks: &[Rect], app_state: &mut AppState, data: 
             );
         }
         CurrentTab::Stats => {
-            stats::render_content(f, chunks[content_chunk_idx]);
+            stats::render_content(f, main_content_area);
         }
         CurrentTab::Players => {
-            players::render_content(f, chunks[content_chunk_idx]);
+            players::render_content(f, main_content_area);
         }
         CurrentTab::Settings => {
-            settings::render_content(f, chunks[content_chunk_idx], &mut app_state.settings, &data.config);
+            settings::render_content(f, main_content_area, &mut app_state.settings, &data.config);
         }
     }
 
-    // Render status bar at the bottom
-    let status_chunk_idx = chunks.len() - 1;
-    common::status_bar::render(f, chunks[status_chunk_idx], data.last_refresh, data.config.refresh_interval, data.status_message.as_deref(), data.status_is_error, data.config.display.error_fg, &data.display.box_chars);
+    // Render command palette LAST so it appears on top of all content
+    if let Some(ref palette) = app_state.command_palette {
+        if palette.is_visible {
+            if let Some(palette_area) = areas.command_palette {
+                let render_area = Rect::new(0, 0, palette_area.width, palette_area.height);
+                let mut palette_buf = Buffer::empty(render_area);
+                palette.render(render_area, &mut palette_buf, &data.display);
+
+                let frame_buf = f.buffer_mut();
+                for y in 0..palette_area.height {
+                    for x in 0..palette_area.width {
+                        let cell = &palette_buf[(x, y)];
+                        frame_buf[(palette_area.x + x, palette_area.y + y)]
+                            .set_symbol(cell.symbol())
+                            .set_style(cell.style());
+                    }
+                }
+            }
+        }
+    }
 }
 
 pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) -> Result<(), io::Error> {
@@ -397,19 +533,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
         };
 
         terminal.draw(|f| {
-            let size = f.area();
-
-            // Create main layout - add space for sub-tabs if on Scores or Standings, and status bar at bottom
-            let has_subtabs = app_state.has_subtabs();
-            let constraints = calculate_layout_constraints(has_subtabs);
-
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(constraints)
-                .split(size);
-
-            // Render the frame using extracted function
-            render_frame(f, &chunks, &mut app_state, &render_data);
+            render_frame(f, &mut app_state, &render_data);
         })?;
 
         // Handle events

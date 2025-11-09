@@ -49,6 +49,26 @@ pub use game_goalie_stats_table::GameGoalieStatsTable;
 pub mod team_stats_panel;
 pub use team_stats_panel::TeamStatsPanel;
 
+pub mod tabbed_container;
+pub use tabbed_container::TabbedContainer;
+// Note: Tab from tabbed_container is not exported to avoid conflict with tab_bar::Tab
+
+pub mod action_bar;
+pub use action_bar::{ActionBar, Action};
+
+pub mod enhanced_breadcrumb;
+pub use enhanced_breadcrumb::EnhancedBreadcrumb;
+
+pub mod command_palette;
+pub use command_palette::{CommandPalette, SearchResult};
+
+pub mod tab_bar;
+pub use tab_bar::TabBar;
+// Note: Tab from tab_bar is not exported at the module level to keep it scoped
+
+pub mod status_bar;
+pub use status_bar::{StatusBar, KeyHint, KeyHintStyle};
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,

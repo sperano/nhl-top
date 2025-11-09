@@ -37,3 +37,51 @@ impl Default for State {
         Self::new()
     }
 }
+
+impl crate::tui::context::NavigationContextProvider for State {
+    fn get_available_actions(&self) -> Vec<crate::tui::widgets::Action> {
+        let mut actions = vec![];
+
+        if self.subtab_focused {
+            actions.push(crate::tui::widgets::Action {
+                key: "←→".to_string(),
+                label: "Change Date".to_string(),
+                enabled: true,
+            });
+        }
+
+        actions
+    }
+
+    fn get_keyboard_hints(&self) -> Vec<crate::tui::widgets::KeyHint> {
+        use crate::tui::widgets::{KeyHint, KeyHintStyle};
+        let mut hints = vec![];
+
+        if self.subtab_focused {
+            hints.push(KeyHint {
+                key: "←→".to_string(),
+                action: "Change Date".to_string(),
+                style: KeyHintStyle::Important,
+            });
+            hints.push(KeyHint {
+                key: "↑".to_string(),
+                action: "Back".to_string(),
+                style: KeyHintStyle::Normal,
+            });
+        } else {
+            hints.push(KeyHint {
+                key: "↓".to_string(),
+                action: "Select Date".to_string(),
+                style: KeyHintStyle::Important,
+            });
+        }
+
+        hints.push(KeyHint {
+            key: "ESC".to_string(),
+            action: "Exit".to_string(),
+            style: KeyHintStyle::Subtle,
+        });
+
+        hints
+    }
+}

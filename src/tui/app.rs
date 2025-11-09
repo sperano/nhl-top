@@ -1,4 +1,10 @@
 use super::{scores, standings, stats, players, settings};
+use super::widgets::CommandPalette;
+use super::context::NavigationCommand;
+use super::SharedDataHandle;
+use crate::commands::standings::GroupBy;
+use tokio::sync::mpsc;
+use anyhow::Result;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CurrentTab {
@@ -45,6 +51,8 @@ pub struct AppState {
     pub stats: stats::State,
     pub players: players::State,
     pub settings: settings::State,
+    pub command_palette: Option<CommandPalette>,
+    pub command_palette_active: bool,
 }
 
 impl AppState {
@@ -56,7 +64,73 @@ impl AppState {
             stats: stats::State::new(),
             players: players::State::new(),
             settings: settings::State::new(),
+            command_palette: Some(CommandPalette::new()),
+            command_palette_active: false,
         }
+    }
+
+    /// Open the command palette
+    pub fn open_command_palette(&mut self) {
+        if let Some(ref mut palette) = self.command_palette {
+            palette.show();
+            self.command_palette_active = true;
+        }
+    }
+
+    /// Close the command palette
+    pub fn close_command_palette(&mut self) {
+        if let Some(ref mut palette) = self.command_palette {
+            palette.hide();
+        }
+        self.command_palette_active = false;
+    }
+
+    /// Execute a navigation command
+    pub async fn execute_navigation_command(
+        &mut self,
+        command: NavigationCommand,
+        shared_data: &SharedDataHandle,
+        refresh_tx: &mpsc::Sender<()>,
+    ) -> Result<()> {
+        match command {
+            NavigationCommand::GoToTab(tab) => {
+                self.current_tab = tab;
+            }
+            NavigationCommand::GoToTeam(abbrev) => {
+                self.current_tab = CurrentTab::Standings;
+                let mut data = shared_data.write().await;
+                data.selected_team_abbrev = Some(abbrev);
+                let _ = refresh_tx.send(()).await;
+            }
+            NavigationCommand::GoToPlayer(player_id) => {
+                let mut data = shared_data.write().await;
+                data.selected_player_id = Some(player_id);
+                let _ = refresh_tx.send(()).await;
+            }
+            NavigationCommand::GoToGame(game_id) => {
+                self.current_tab = CurrentTab::Scores;
+                let mut data = shared_data.write().await;
+                data.selected_game_id = Some(game_id);
+                let _ = refresh_tx.send(()).await;
+            }
+            NavigationCommand::GoToDate(date) => {
+                self.current_tab = CurrentTab::Scores;
+                let mut data = shared_data.write().await;
+                data.game_date = date;
+                self.enter_subtab_mode();
+            }
+            NavigationCommand::GoToStandingsView(view) => {
+                self.current_tab = CurrentTab::Standings;
+                self.standings.view = view;
+                self.enter_subtab_mode();
+            }
+            NavigationCommand::GoToSettings(_category) => {
+                self.current_tab = CurrentTab::Settings;
+            }
+        }
+
+        self.close_command_palette();
+        Ok(())
     }
 
     pub fn navigate_tab_left(&mut self) {
@@ -123,5 +197,185 @@ impl AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    use crate::SharedData;
+
+    #[test]
+    fn test_app_state_new() {
+        let app_state = AppState::new();
+        assert_eq!(app_state.current_tab, CurrentTab::Scores);
+        assert!(app_state.command_palette.is_some());
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[test]
+    fn test_open_command_palette() {
+        let mut app_state = AppState::new();
+        assert!(!app_state.command_palette_active);
+
+        app_state.open_command_palette();
+
+        assert!(app_state.command_palette_active);
+        assert!(app_state.command_palette.as_ref().unwrap().is_visible);
+    }
+
+    #[test]
+    fn test_close_command_palette() {
+        let mut app_state = AppState::new();
+        app_state.open_command_palette();
+
+        assert!(app_state.command_palette_active);
+
+        app_state.close_command_palette();
+
+        assert!(!app_state.command_palette_active);
+        assert!(!app_state.command_palette.as_ref().unwrap().is_visible);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_tab() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.current_tab = CurrentTab::Scores;
+        app_state.open_command_palette();
+
+        let command = NavigationCommand::GoToTab(CurrentTab::Standings);
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(app_state.current_tab, CurrentTab::Standings);
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_team() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.current_tab = CurrentTab::Scores;
+        app_state.open_command_palette();
+
+        let command = NavigationCommand::GoToTeam("TOR".to_string());
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(app_state.current_tab, CurrentTab::Standings);
+        assert_eq!(shared_data.read().await.selected_team_abbrev, Some("TOR".to_string()));
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_player() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.open_command_palette();
+
+        let command = NavigationCommand::GoToPlayer(8479318);
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(shared_data.read().await.selected_player_id, Some(8479318));
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_game() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.current_tab = CurrentTab::Standings;
+        app_state.open_command_palette();
+
+        let command = NavigationCommand::GoToGame(2024020001);
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(app_state.current_tab, CurrentTab::Scores);
+        assert_eq!(shared_data.read().await.selected_game_id, Some(2024020001));
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_date() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.current_tab = CurrentTab::Standings;
+        app_state.open_command_palette();
+
+        let date = nhl_api::GameDate::from_str("2024-11-08").unwrap();
+        let command = NavigationCommand::GoToDate(date.clone());
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(app_state.current_tab, CurrentTab::Scores);
+        assert!(app_state.scores.subtab_focused);
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_standings_view() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.current_tab = CurrentTab::Scores;
+        app_state.open_command_palette();
+
+        let command = NavigationCommand::GoToStandingsView(GroupBy::Conference);
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(app_state.current_tab, CurrentTab::Standings);
+        assert_eq!(app_state.standings.view, GroupBy::Conference);
+        assert!(app_state.standings.subtab_focused);
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_command_go_to_settings() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        app_state.current_tab = CurrentTab::Scores;
+        app_state.open_command_palette();
+
+        let command = NavigationCommand::GoToSettings("display".to_string());
+        app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+        assert_eq!(app_state.current_tab, CurrentTab::Settings);
+        assert!(!app_state.command_palette_active);
+    }
+
+    #[tokio::test]
+    async fn test_execute_navigation_always_closes_palette() {
+        let mut app_state = AppState::new();
+        let shared_data = Arc::new(RwLock::new(SharedData::default()));
+        let (tx, _rx) = mpsc::channel(10);
+
+        let commands = vec![
+            NavigationCommand::GoToTab(CurrentTab::Scores),
+            NavigationCommand::GoToTeam("MTL".to_string()),
+            NavigationCommand::GoToPlayer(12345),
+            NavigationCommand::GoToSettings("theme".to_string()),
+        ];
+
+        for command in commands {
+            app_state.open_command_palette();
+            assert!(app_state.command_palette_active);
+
+            app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
+
+            assert!(!app_state.command_palette_active);
+        }
     }
 }

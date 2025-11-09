@@ -40,36 +40,21 @@ impl<'a> PlayerBioCard<'a> {
     /// Calculate the total height needed for this card
     fn calculate_height(&self) -> u16 {
         let mut height = 0;
-
-        // Header (if present): single-line header is 2 lines
         if self.header.is_some() {
             height += 2;
         }
-
-        // Position line
-        height += 1;
-
-        // Number line (if present)
+        height += 1; // position
         if self.player.sweater_number.is_some() {
             height += 1;
         }
-
-        // Height line
-        height += 1;
-
-        // Weight line
-        height += 1;
-
-        // Birthplace line (if any birthplace data exists)
+        height += 1; // height
+        height += 1; // weight
         if self.player.birth_city.is_some()
             || self.player.birth_state_province.is_some()
             || self.player.birth_country.is_some() {
             height += 1;
         }
-
-        // Two blank lines after
         height += 2;
-
         height
     }
 
