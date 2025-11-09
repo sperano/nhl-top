@@ -144,6 +144,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_standings_cache_works() {
         clear_all_caches().await;
         let client = Client::new().expect("Failed to create client");
@@ -191,6 +192,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_schedule_cache_size_limit() {
         clear_all_caches().await;
         let client = Client::new().expect("Failed to create client");
@@ -207,6 +209,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_game_cache_different_keys() {
         clear_all_caches().await;
         let client = Client::new().expect("Failed to create client");
@@ -219,6 +222,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_club_stats_cache_composite_key() {
         clear_all_caches().await;
         let client = Client::new().expect("Failed to create client");
@@ -232,6 +236,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_clear_all_caches() {
         let client = Client::new().expect("Failed to create client");
 
@@ -249,6 +254,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_refresh_standings_clears_cache() {
         clear_all_caches().await;
         let client = Client::new().expect("Failed to create client");
@@ -265,6 +271,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore] // Integration test - requires network access
     async fn test_refresh_schedule_removes_specific_entry() {
         clear_all_caches().await;
         let client = Client::new().expect("Failed to create client");

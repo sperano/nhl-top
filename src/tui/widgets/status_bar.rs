@@ -62,6 +62,8 @@ pub struct StatusBar {
     pub next_refresh_in: Option<Duration>,
     /// Optional error message to display
     pub error_message: Option<String>,
+    /// Optional status message to display (non-error)
+    pub status_message: Option<String>,
     /// List of keyboard hints to display
     pub hints: Vec<KeyHint>,
     /// Refresh interval in seconds
@@ -77,6 +79,7 @@ impl StatusBar {
             last_refresh: None,
             next_refresh_in: None,
             error_message: None,
+            status_message: None,
             hints: vec![
                 KeyHint::new("?", "Help"),
                 KeyHint::new("ESC", "Back"),
@@ -111,8 +114,8 @@ impl StatusBar {
     }
 
     /// Set a status message (non-error)
-    pub fn with_status(self, _status: impl Into<String>) -> Self {
-        // Reserved for future context integration
+    pub fn with_status(mut self, status: impl Into<String>) -> Self {
+        self.status_message = Some(status.into());
         self
     }
 
@@ -131,6 +134,8 @@ impl StatusBar {
     fn build_left_text(&self) -> String {
         if let Some(msg) = &self.error_message {
             format!("ERROR: {}", msg)
+        } else if let Some(msg) = &self.status_message {
+            msg.clone()
         } else {
             String::new()
         }
@@ -532,6 +537,38 @@ mod tests {
         assert_buffer(&buf, &[
             "──────────────────────────────────────────────────────────────────────────┬─────",
             "                                                                          │   5 ",
+        ]);
+    }
+
+    #[test]
+    fn test_status_bar_render_with_status_message() {
+        let last_refresh = SystemTime::now() - Duration::from_secs(5);
+        let widget = StatusBar::new()
+            .with_last_refresh(Some(last_refresh))
+            .with_refresh_interval(60)
+            .with_status("Game has not started yet");
+        let buf = render_widget(&widget, 80, 2);
+
+        assert_buffer(&buf, &[
+            "──────────────────────────────────────────────────────────────────────────┬─────",
+            " Game has not started yet                                                 │  55 ",
+        ]);
+    }
+
+    #[test]
+    fn test_status_bar_error_takes_precedence_over_status() {
+        let last_refresh = SystemTime::now() - Duration::from_secs(5);
+        let widget = StatusBar::new()
+            .with_last_refresh(Some(last_refresh))
+            .with_refresh_interval(60)
+            .with_status("Game has not started yet")
+            .with_error("Connection failed");
+        let buf = render_widget(&widget, 80, 2);
+
+        // Error message should be displayed instead of status message
+        assert_buffer(&buf, &[
+            "──────────────────────────────────────────────────────────────────────────┬─────",
+            " ERROR: Connection failed                                                 │  55 ",
         ]);
     }
 }
