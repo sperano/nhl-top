@@ -186,11 +186,15 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        // Should show start time in header
-        assert!(buffer_line(&buf, 0).contains("07:00 PM"));
-
-        // Should show dashes in score table (game not started)
-        assert!(buffer_line(&buf, 4).contains('-'));
+        assert_buffer(&buf, &[
+            " 07:00 PM                            ",
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ -  │ -  │ -  │ -  │          ",
+            "│ MTL │ -  │ -  │ -  │ -  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -216,14 +220,15 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        // Should show period and time in header
-        let header = buffer_line(&buf, 0);
-        assert!(header.contains("2nd Period"));
-        assert!(header.contains("12:34"));
-
-        // Should show scores
-        assert!(buffer_line(&buf, 4).contains("BOS"));
-        assert!(buffer_line(&buf, 5).contains("NYR"));
+        assert_buffer(&buf, &[
+            " 2nd Period - 12:34                  ",
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ BOS │ 1  │ 1  │ -  │ 2  │          ",
+            "│ NYR │ 0  │ 1  │ -  │ 1  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -249,10 +254,15 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        // Should show intermission in header
-        let header = buffer_line(&buf, 0);
-        assert!(header.contains("1st Period"));
-        assert!(header.contains("Intermission"));
+        assert_buffer(&buf, &[
+            " 1st Period - Intermission           ",
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ 1  │ -  │ -  │ 1  │          ",
+            "│ MTL │ 0  │ -  │ -  │ 0  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -274,15 +284,15 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        // Should show "Final Score" in header
-        assert!(buffer_line(&buf, 0).contains("Final Score"));
-
-        // Should show OT column
-        assert!(buffer_line(&buf, 2).contains("OT"));
-
-        // Should show final scores
-        assert!(buffer_line(&buf, 4).contains('4'));
-        assert!(buffer_line(&buf, 5).contains('3'));
+        assert_buffer(&buf, &[
+            " Final Score                         ",
+            "╭─────┬────┬────┬────┬────┬────╮     ",
+            "│     │ 1  │ 2  │ 3  │ OT │ T  │     ",
+            "├─────┼────┼────┼────┼────┼────┤     ",
+            "│ EDM │ 1  │ 1  │ 1  │ 1  │ 4  │     ",
+            "│ VAN │ 1  │ 1  │ 1  │ 0  │ 3  │     ",
+            "╰─────┴────┴────┴────┴────┴────╯     ",
+        ]);
     }
 
     #[test]
@@ -304,11 +314,15 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        // Should show Final Score
-        assert!(buffer_line(&buf, 0).contains("Final Score"));
-
-        // Should show SO column
-        assert!(buffer_line(&buf, 2).contains("SO"));
+        assert_buffer(&buf, &[
+            " Final Score                         ",
+            "╭─────┬────┬────┬────┬────┬────┬────╮",
+            "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
+            "├─────┼────┼────┼────┼────┼────┼────┤",
+            "│ CAR │ 1  │ 1  │ 1  │ 0  │ 1  │ 4  │",
+            "│ NJD │ 1  │ 1  │ 1  │ 0  │ 0  │ 3  │",
+            "╰─────┴────┴────┴────┴────┴────┴────╯",
+        ]);
     }
 
     #[test]
@@ -336,7 +350,6 @@ mod tests {
 
     #[test]
     fn test_game_box_header_formatting() {
-        // Test left-aligned header with padding
         let widget = GameBox::new(
             "A".to_string(),
             "B".to_string(),
@@ -356,16 +369,19 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        let header = buffer_line(&buf, 0);
-        // Should have 1 space padding on the left
-        assert!(header.starts_with(' '));
-        // Content should be left-aligned after padding
-        assert!(header.contains("Short"));
+        assert_buffer(&buf, &[
+            " Short                               ",
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│  A  │ -  │ -  │ -  │ -  │          ",
+            "│  B  │ -  │ -  │ -  │ -  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
     fn test_game_box_composition() {
-        // Verify that GameBox properly composes ScoreTable
         let widget = GameBox::new(
             "TOR".to_string(),
             "MTL".to_string(),
@@ -383,27 +399,14 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        // Row 0: Header
-        assert!(buffer_line(&buf, 0).contains("Final Score"));
-
-        // Row 1: Top border of score table
-        assert!(buffer_line(&buf, 1).contains('╭'));
-
-        // Row 2: Header row of score table
-        assert!(buffer_line(&buf, 2).contains('1'));
-        assert!(buffer_line(&buf, 2).contains('2'));
-        assert!(buffer_line(&buf, 2).contains('3'));
-
-        // Row 3: Middle border
-        assert!(buffer_line(&buf, 3).contains('├'));
-
-        // Row 4: Away team
-        assert!(buffer_line(&buf, 4).contains("TOR"));
-
-        // Row 5: Home team
-        assert!(buffer_line(&buf, 5).contains("MTL"));
-
-        // Row 6: Bottom border
-        assert!(buffer_line(&buf, 6).contains('╰'));
+        assert_buffer(&buf, &[
+            " Final Score                         ",
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │          ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 }

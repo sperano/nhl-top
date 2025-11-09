@@ -34,14 +34,7 @@ pub struct DisplayConfig {
     pub error_fg: Color,
     #[serde(skip)]
     pub box_chars: crate::formatting::BoxChars,
-    #[serde(default = "default_true")]
     pub show_action_bar: bool,
-    #[serde(default = "default_palette_width")]
-    pub command_palette_width: u16,
-    #[serde(default = "default_palette_height")]
-    pub command_palette_height: u16,
-    #[serde(default = "default_false")]
-    pub enable_animations: bool,
 }
 
 impl Default for Config {
@@ -66,44 +59,15 @@ impl Default for DisplayConfig {
             division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
             error_fg: Color::Rgb(255, 0, 0), // Red
             box_chars: crate::formatting::BoxChars::unicode(),
-            show_action_bar: default_true(),
-            command_palette_width: default_palette_width(),
-            command_palette_height: default_palette_height(),
-            enable_animations: default_false(),
+            show_action_bar: false,
         }
     }
-}
-
-fn default_true() -> bool {
-    true
-}
-
-fn default_false() -> bool {
-    false
-}
-
-fn default_palette_width() -> u16 {
-    50
-}
-
-fn default_palette_height() -> u16 {
-    40
 }
 
 impl DisplayConfig {
     /// Get the unfocused selection color, calculating 50% darker if not explicitly set
     pub fn unfocused_selection_fg(&self) -> Color {
         self.unfocused_selection_fg.unwrap_or_else(|| darken_color(self.selection_fg, 0.5))
-    }
-
-    /// Get the command palette width percentage, clamped to valid range (1-100)
-    pub fn palette_width(&self) -> u16 {
-        self.command_palette_width.clamp(1, 100)
-    }
-
-    /// Get the command palette height percentage, clamped to valid range (1-100)
-    pub fn palette_height(&self) -> u16 {
-        self.command_palette_height.clamp(1, 100)
     }
 }
 
@@ -485,54 +449,17 @@ selection_fg = "128,0,128"
     #[test]
     fn test_default_new_config_fields() {
         let config = DisplayConfig::default();
-        assert_eq!(config.show_action_bar, true);
-        assert_eq!(config.command_palette_width, 50);
-        assert_eq!(config.command_palette_height, 40);
-        assert_eq!(config.enable_animations, false);
-    }
-
-    #[test]
-    fn test_config_palette_width_clamping() {
-        let mut config = DisplayConfig::default();
-
-        config.command_palette_width = 0;
-        assert_eq!(config.palette_width(), 1);
-
-        config.command_palette_width = 150;
-        assert_eq!(config.palette_width(), 100);
-
-        config.command_palette_width = 50;
-        assert_eq!(config.palette_width(), 50);
-    }
-
-    #[test]
-    fn test_config_palette_height_clamping() {
-        let mut config = DisplayConfig::default();
-
-        config.command_palette_height = 0;
-        assert_eq!(config.palette_height(), 1);
-
-        config.command_palette_height = 200;
-        assert_eq!(config.palette_height(), 100);
-
-        config.command_palette_height = 40;
-        assert_eq!(config.palette_height(), 40);
+        assert_eq!(config.show_action_bar, false);
     }
 
     #[test]
     fn test_config_serialization_with_new_fields() {
         let mut config = Config::default();
         config.display.show_action_bar = false;
-        config.display.command_palette_width = 60;
-        config.display.command_palette_height = 50;
-        config.display.enable_animations = true;
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
 
         assert!(toml_str.contains("show_action_bar = false"));
-        assert!(toml_str.contains("command_palette_width = 60"));
-        assert!(toml_str.contains("command_palette_height = 50"));
-        assert!(toml_str.contains("enable_animations = true"));
     }
 
     #[test]
@@ -554,9 +481,6 @@ enable_animations = true
 
         let config: Config = toml::from_str(toml_str).unwrap();
         assert_eq!(config.display.show_action_bar, false);
-        assert_eq!(config.display.command_palette_width, 70);
-        assert_eq!(config.display.command_palette_height, 60);
-        assert_eq!(config.display.enable_animations, true);
     }
 
     #[test]
@@ -575,26 +499,17 @@ selection_fg = "orange"
 
         let config: Config = toml::from_str(toml_str).unwrap();
         // Should use defaults
-        assert_eq!(config.display.show_action_bar, true);
-        assert_eq!(config.display.command_palette_width, 50);
-        assert_eq!(config.display.command_palette_height, 40);
-        assert_eq!(config.display.enable_animations, false);
+        assert_eq!(config.display.show_action_bar, false);
     }
 
     #[test]
     fn test_roundtrip_with_all_new_fields() {
         let mut config = Config::default();
         config.display.show_action_bar = true;
-        config.display.command_palette_width = 75;
-        config.display.command_palette_height = 55;
-        config.display.enable_animations = true;
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
         let deserialized: Config = toml::from_str(&toml_str).unwrap();
 
         assert_eq!(deserialized.display.show_action_bar, true);
-        assert_eq!(deserialized.display.command_palette_width, 75);
-        assert_eq!(deserialized.display.command_palette_height, 55);
-        assert_eq!(deserialized.display.enable_animations, true);
     }
 }

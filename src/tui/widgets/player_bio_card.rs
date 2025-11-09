@@ -210,25 +210,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 80, height, &config);
 
-        // Check for position
-        assert!(buffer_line(&buf, 0).contains("Position:"));
-        assert!(buffer_line(&buf, 0).contains("C"));
-
-        // Check for number
-        assert!(buffer_line(&buf, 1).contains("Number:"));
-        assert!(buffer_line(&buf, 1).contains("#34"));
-
-        // Check for height (75 inches = 6'3")
-        assert!(buffer_line(&buf, 2).contains("Height:"));
-        assert!(buffer_line(&buf, 2).contains("6'3\""));
-
-        // Check for weight
-        assert!(buffer_line(&buf, 3).contains("Weight:"));
-        assert!(buffer_line(&buf, 3).contains("200 lbs"));
-
-        // Check for birthplace
-        assert!(buffer_line(&buf, 4).contains("Birthplace:"));
-        assert!(buffer_line(&buf, 4).contains("Toronto, ON, CAN"));
+        assert_buffer(&buf, &[
+            "  Position:      C                                                              ",
+            "  Number:        #34                                                            ",
+            "  Height:        6'3\"                                                           ",
+            "  Weight:        200 lbs                                                        ",
+            "  Birthplace:    Toronto, ON, CAN                                               ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -239,17 +229,17 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 80, height, &config);
 
-        // Should have header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Player Information")
-        });
-        assert!(header_found, "Header should be present");
-
-        // Should have player data
-        let position_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Position:")
-        });
-        assert!(position_found, "Position should be present");
+        assert_buffer(&buf, &[
+            "  Player Information                                                            ",
+            "  ──────────────────                                                            ",
+            "    Position:      D                                                            ",
+            "    Number:        #2                                                           ",
+            "    Height:        6'0\"                                                         ",
+            "    Weight:        190 lbs                                                      ",
+            "    Birthplace:    Boston, MA, USA                                              ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -260,18 +250,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 80, height, &config);
 
-        // Should have position
-        assert!(buffer_line(&buf, 0).contains("Position:"));
-        assert!(buffer_line(&buf, 0).contains("G"));
-
-        // Should NOT have number line
-        let has_number = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Number:")
-        });
-        assert!(!has_number, "Number line should not be present");
-
-        // Height should be on line 1 (skipping number)
-        assert!(buffer_line(&buf, 1).contains("Height:"));
+        assert_buffer(&buf, &[
+            "    Position:      G                                                            ",
+            "    Height:        6'1\"                                                         ",
+            "    Weight:        185 lbs                                                      ",
+            "    Birthplace:    Montreal, QC, CAN                                            ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -283,12 +269,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 80, height, &config);
 
-        // Should show birthplace without state/province
-        let birthplace_found = (0..height).any(|y| {
-            let line = buffer_line(&buf, y);
-            line.contains("Birthplace:") && line.contains("Stockholm, SWE")
-        });
-        assert!(birthplace_found, "Birthplace should be Stockholm, SWE");
+        assert_buffer(&buf, &[
+            "    Position:      LW                                                           ",
+            "    Number:        #12                                                          ",
+            "    Height:        5'10\"                                                        ",
+            "    Weight:        175 lbs                                                      ",
+            "    Birthplace:    Stockholm, SWE                                               ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -299,11 +288,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 80, height, &config);
 
-        // Should NOT have birthplace line
-        let has_birthplace = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Birthplace:")
-        });
-        assert!(!has_birthplace, "Birthplace line should not be present");
+        assert_buffer(&buf, &[
+            "    Position:      RW                                                           ",
+            "    Number:        #9                                                           ",
+            "    Height:        6'2\"                                                         ",
+            "    Weight:        210 lbs                                                      ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -336,9 +328,12 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 80, height, &config);
 
-        let height_line_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("6'3\"")
-        });
-        assert!(height_line_found, "Height should be formatted as 6'3\"");
+        assert_buffer(&buf, &[
+            "    Position:      C                                                            ",
+            "    Height:        6'3\"                                                         ",
+            "    Weight:        200 lbs                                                      ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 }

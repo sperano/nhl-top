@@ -364,9 +364,18 @@ mod tests {
         let buf = render_widget(&widget, 80, 10);
 
         // Empty scoring should render nothing
-        for y in 0..10 {
-            assert_eq!(buffer_line(&buf, y), " ".repeat(80));
-        }
+        assert_buffer(&buf, &[
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -401,13 +410,15 @@ mod tests {
         let buf = render_widget_with_config(&widget, width, height, &config);
 
         // Verify output matches expected format
-        assert_eq!(buffer_line(&buf, 0).trim(), "1st Period");
-        assert_eq!(buffer_line(&buf, 1).trim(), "");
-        assert!(buffer_line(&buf, 2).starts_with("╭─────┬"));
-        assert!(buffer_line(&buf, 3).contains("│ OTT │"));
-        assert!(buffer_line(&buf, 3).contains("M. Amadio"));
-        assert!(buffer_line(&buf, 4).contains("S. Pinto"));
-        assert!(buffer_line(&buf, 5).starts_with("╰─────┴"));
+        assert_buffer(&buf, &[
+            "1st Period                                                    ",
+            "                                                              ",
+            "╭─────┬─────────────────────────────────┬─────┬───────┬──────╮",
+            "│ OTT │ M. Amadio (4)                   │ 1-0 │ 5:42  │ Snap │",
+            "│     │ S. Pinto (5), C. Giroux (7)     │ OTT │       │      │",
+            "╰─────┴─────────────────────────────────┴─────┴───────┴──────╯",
+            "                                                              ",
+        ]);
     }
 
     #[test]
@@ -424,8 +435,18 @@ mod tests {
         let widget = ScoringTable::new(vec![period]);
         let buf = render_widget(&widget, 80, 10);
 
-        assert_eq!(buffer_line(&buf, 0).trim(), "1st Period");
-        assert_eq!(buffer_line(&buf, 2).trim(), "No Goals");
+        assert_buffer(&buf, &[
+            "1st Period                                                                      ",
+            "                                                                                ",
+            "No Goals                                                                        ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -454,12 +475,28 @@ mod tests {
         let widget = ScoringTable::new(vec![period1, period2]);
         let buf = render_widget(&widget, 80, 20);
 
-        // Check first period header
-        assert_eq!(buffer_line(&buf, 0).trim(), "1st Period");
-
-        // Find second period header
-        let lines: Vec<String> = (0..20).map(|y| buffer_line(&buf, y).trim().to_string()).collect();
-        assert!(lines.iter().any(|line| line == "2nd Period"));
+        assert_buffer(&buf, &[
+            "1st Period                                                                      ",
+            "                                                                                ",
+            "╭─────┬────────────────────┬─────┬───────┬───────╮                              ",
+            "│ BOS │ M. Geekie (10)     │ 9-1 │ 01:22 │ Poke  │                              ",
+            "│     │ A. Peeke (3)       │ BOS │       │       │                              ",
+            "╰─────┴────────────────────┴─────┴───────┴───────╯                              ",
+            "                                                                                ",
+            "2nd Period                                                                      ",
+            "                                                                                ",
+            "╭─────┬────────────────────┬─────┬───────┬───────╮                              ",
+            "│ MTL │ N. Suzuki (15)     │ 9-2 │ 12:34 │ Wrist │                              ",
+            "│     │ Unassisted         │ MTL │       │       │                              ",
+            "╰─────┴────────────────────┴─────┴───────┴───────╯                              ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -478,7 +515,18 @@ mod tests {
         let widget = ScoringTable::new(vec![period]);
         let buf = render_widget(&widget, 80, 10);
 
-        assert_eq!(buffer_line(&buf, 0).trim(), "Overtime");
+        assert_buffer(&buf, &[
+            "Overtime                                                                        ",
+            "                                                                                ",
+            "╭─────┬──────────────────────┬─────┬───────┬──────╮                             ",
+            "│ TOR │ A. Matthews (30)     │ 3-2 │ 2:15  │ Snap │                             ",
+            "│     │ W. Nylander (25)     │ TOR │       │      │                             ",
+            "╰─────┴──────────────────────┴─────┴───────┴──────╯                             ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]
@@ -497,8 +545,18 @@ mod tests {
         let widget = ScoringTable::new(vec![period]);
         let buf = render_widget(&widget, 80, 10);
 
-        // Check that assists row shows "Unassisted"
-        assert!(buffer_line(&buf, 4).contains("Unassisted"));
+        assert_buffer(&buf, &[
+            "1st Period                                                                      ",
+            "                                                                                ",
+            "╭─────┬────────────────────┬─────┬───────┬───────╮                              ",
+            "│ MTL │ N. Suzuki (15)     │ 1-0 │ 10:00 │ Wrist │                              ",
+            "│     │ Unassisted         │ MTL │       │       │                              ",
+            "╰─────┴────────────────────┴─────┴───────┴───────╯                              ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+            "                                                                                ",
+        ]);
     }
 
     #[test]

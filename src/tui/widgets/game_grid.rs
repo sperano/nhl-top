@@ -129,10 +129,28 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 115, 20, &config);
 
-        // Empty grid should render nothing
-        for y in 0..20 {
-            assert_eq!(buffer_line(&buf, y).trim(), "");
-        }
+        assert_buffer(&buf, &[
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+        ]);
     }
 
     #[test]
@@ -140,12 +158,17 @@ mod tests {
         let game = create_test_game("TOR", "MTL");
         let widget = GameGrid::new(vec![game]);
         let config = test_config();
-        let buf = render_widget_with_config(&widget, 115, 20, &config);
+        let buf = render_widget_with_config(&widget, 115, 7, &config);
 
-        // Should render one game in the top-left
-        assert!(buffer_line(&buf, 0).contains("Final Score"));
-        assert!(buffer_line(&buf, 4).contains("TOR"));
-        assert!(buffer_line(&buf, 5).contains("MTL"));
+        assert_buffer(&buf, &[
+            " Final Score                                                                                                       ",
+            "╭─────┬────┬────┬────┬────╮                                                                                        ",
+            "│     │ 1  │ 2  │ 3  │ T  │                                                                                        ",
+            "├─────┼────┼────┼────┼────┤                                                                                        ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │                                                                                        ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │                                                                                        ",
+            "╰─────┴────┴────┴────┴────╯                                                                                        ",
+        ]);
     }
 
     #[test]
@@ -155,15 +178,17 @@ mod tests {
         let widget = GameGrid::new(vec![game1, game2]);
         let config = test_config();
 
-        // Wide screen: both games should be side-by-side
-        let buf = render_widget_with_config(&widget, 115, 20, &config);
+        let buf = render_widget_with_config(&widget, 115, 7, &config);
 
-        // First game (column 0)
-        let row4 = buffer_line(&buf, 4);
-        assert!(row4.contains("TOR"));
-
-        // Second game (column 1, starts at x=37+2=39)
-        assert!(row4.contains("BOS"));
+        assert_buffer(&buf, &[
+            " Final Score                            Final Score                                                                ",
+            "╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮                                                 ",
+            "│     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │                                                 ",
+            "├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤                                                 ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │            │ BOS │ 1  │ 1  │ 1  │ 3  │                                                 ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │            │ NYR │ 1  │ 1  │ 0  │ 2  │                                                 ",
+            "╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯                                                 ",
+        ]);
     }
 
     #[test]
@@ -174,13 +199,17 @@ mod tests {
         let widget = GameGrid::new(vec![game1, game2, game3]);
         let config = test_config();
 
-        // Wide screen: all three games in one row
-        let buf = render_widget_with_config(&widget, 115, 20, &config);
+        let buf = render_widget_with_config(&widget, 115, 7, &config);
 
-        let row4 = buffer_line(&buf, 4);
-        assert!(row4.contains("TOR"));
-        assert!(row4.contains("BOS"));
-        assert!(row4.contains("EDM"));
+        assert_buffer(&buf, &[
+            " Final Score                            Final Score                            Final Score                         ",
+            "╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │            │ BOS │ 1  │ 1  │ 1  │ 3  │            │ EDM │ 1  │ 1  │ 1  │ 3  │          ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │            │ NYR │ 1  │ 1  │ 0  │ 2  │            │ VAN │ 1  │ 1  │ 0  │ 2  │          ",
+            "╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -194,18 +223,24 @@ mod tests {
         let widget = GameGrid::new(games);
         let config = test_config();
 
-        // Wide screen: 3 games in first row, 1 in second row
-        let buf = render_widget_with_config(&widget, 115, 20, &config);
+        let buf = render_widget_with_config(&widget, 115, 14, &config);
 
-        // First row (y=0-6)
-        let row4 = buffer_line(&buf, 4);
-        assert!(row4.contains("TOR"));
-        assert!(row4.contains("BOS"));
-        assert!(row4.contains("EDM"));
-
-        // Second row (y=7-13)
-        let row11 = buffer_line(&buf, 11); // 7 + 4
-        assert!(row11.contains("CAR"));
+        assert_buffer(&buf, &[
+            " Final Score                            Final Score                            Final Score                         ",
+            "╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │            │ BOS │ 1  │ 1  │ 1  │ 3  │            │ EDM │ 1  │ 1  │ 1  │ 3  │          ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │            │ NYR │ 1  │ 1  │ 0  │ 2  │            │ VAN │ 1  │ 1  │ 0  │ 2  │          ",
+            "╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯          ",
+            " Final Score                                                                                                       ",
+            "╭─────┬────┬────┬────┬────╮                                                                                        ",
+            "│     │ 1  │ 2  │ 3  │ T  │                                                                                        ",
+            "├─────┼────┼────┼────┼────┤                                                                                        ",
+            "│ CAR │ 1  │ 1  │ 1  │ 3  │                                                                                        ",
+            "│ NJD │ 1  │ 1  │ 0  │ 2  │                                                                                        ",
+            "╰─────┴────┴────┴────┴────╯                                                                                        ",
+        ]);
     }
 
     #[test]
@@ -215,15 +250,24 @@ mod tests {
         let widget = GameGrid::new(vec![game1, game2]);
         let config = test_config();
 
-        // Narrow screen: single column layout
-        let buf = render_widget_with_config(&widget, 50, 20, &config);
+        let buf = render_widget_with_config(&widget, 50, 14, &config);
 
-        // First game (row 0)
-        assert!(buffer_line(&buf, 4).contains("TOR"));
-        assert!(!buffer_line(&buf, 4).contains("BOS"));
-
-        // Second game (row 1, starts at y=7)
-        assert!(buffer_line(&buf, 11).contains("BOS")); // 7 + 4
+        assert_buffer(&buf, &[
+            " Final Score                                      ",
+            "╭─────┬────┬────┬────┬────╮                       ",
+            "│     │ 1  │ 2  │ 3  │ T  │                       ",
+            "├─────┼────┼────┼────┼────┤                       ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │                       ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │                       ",
+            "╰─────┴────┴────┴────┴────╯                       ",
+            " Final Score                                      ",
+            "╭─────┬────┬────┬────┬────╮                       ",
+            "│     │ 1  │ 2  │ 3  │ T  │                       ",
+            "├─────┼────┼────┼────┼────┤                       ",
+            "│ BOS │ 1  │ 1  │ 1  │ 3  │                       ",
+            "│ NYR │ 1  │ 1  │ 0  │ 2  │                       ",
+            "╰─────┴────┴────┴────┴────╯                       ",
+        ]);
     }
 
     #[test]
@@ -236,18 +280,24 @@ mod tests {
         let widget = GameGrid::new(games);
         let config = test_config();
 
-        // Medium screen: 2 columns
-        let buf = render_widget_with_config(&widget, 80, 20, &config);
+        let buf = render_widget_with_config(&widget, 80, 14, &config);
 
-        // First row: 2 games
-        let row4 = buffer_line(&buf, 4);
-        assert!(row4.contains("TOR"));
-        assert!(row4.contains("BOS"));
-        assert!(!row4.contains("EDM"));
-
-        // Second row: 1 game
-        let row11 = buffer_line(&buf, 11);
-        assert!(row11.contains("EDM"));
+        assert_buffer(&buf, &[
+            " Final Score                            Final Score                             ",
+            "╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮              ",
+            "│     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │              ",
+            "├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤              ",
+            "│ TOR │ 1  │ 1  │ 1  │ 3  │            │ BOS │ 1  │ 1  │ 1  │ 3  │              ",
+            "│ MTL │ 1  │ 1  │ 0  │ 2  │            │ NYR │ 1  │ 1  │ 0  │ 2  │              ",
+            "╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯              ",
+            " Final Score                                                                    ",
+            "╭─────┬────┬────┬────┬────╮                                                     ",
+            "│     │ 1  │ 2  │ 3  │ T  │                                                     ",
+            "├─────┼────┼────┼────┼────┤                                                     ",
+            "│ EDM │ 1  │ 1  │ 1  │ 3  │                                                     ",
+            "│ VAN │ 1  │ 1  │ 0  │ 2  │                                                     ",
+            "╰─────┴────┴────┴────┴────╯                                                     ",
+        ]);
     }
 
     #[test]
@@ -290,7 +340,6 @@ mod tests {
 
     #[test]
     fn test_game_grid_vertical_overflow() {
-        // Create more games than can fit vertically
         let games = vec![
             create_test_game("A", "B"),
             create_test_game("C", "D"),
@@ -300,14 +349,19 @@ mod tests {
         let widget = GameGrid::new(games);
         let config = test_config();
 
-        // Only 10 rows of height (can fit 1 game + part of another)
         let buf = render_widget_with_config(&widget, 115, 10, &config);
 
-        // First row should be visible
-        assert!(buffer_line(&buf, 4).contains('A'));
-
-        // Second row (y=7) should be partially cut off at y=10
-        // We'll just check it doesn't panic
-        let _ = buffer_line(&buf, 7);
+        assert_buffer(&buf, &[
+            " Final Score                            Final Score                            Final Score                         ",
+            "╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮            ╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │            │     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤            ├─────┼────┼────┼────┼────┤          ",
+            "│  A  │ 1  │ 1  │ 1  │ 3  │            │  C  │ 1  │ 1  │ 1  │ 3  │            │  E  │ 1  │ 1  │ 1  │ 3  │          ",
+            "│  B  │ 1  │ 1  │ 0  │ 2  │            │  D  │ 1  │ 1  │ 0  │ 2  │            │  F  │ 1  │ 1  │ 0  │ 2  │          ",
+            "╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯            ╰─────┴────┴────┴────┴────╯          ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+            "                                                                                                                   ",
+        ]);
     }
 }

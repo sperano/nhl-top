@@ -98,6 +98,7 @@ pub async fn fetch_schedule_with_games(client: &Client, shared_data: &SharedData
             shared.schedule = Arc::new(Some(schedule));
             shared.period_scores = Arc::new(period_scores);
             shared.game_info = Arc::new(game_info);
+            shared.last_refresh = Some(SystemTime::now());
             // Clear only error messages on successful refresh
             if shared.status_is_error {
                 shared.clear_status();

@@ -195,18 +195,12 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("TOR - Forwards")
-        });
-        assert!(header_found, "Header should be present");
-
-        // Should show table header
-        let table_header_found = (0..height).any(|y| {
-            let line = buffer_line(&buf, y);
-            line.contains("#") && line.contains("Name") && line.contains("Pos")
-        });
-        assert!(table_header_found, "Table header should be present");
+        assert_buffer(&buf, &[
+            "TOR - Forwards                                              ",
+            "──────────────                                              ",
+            "#   Name                 Pos    G   A   P  +/-    TOI       ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -222,24 +216,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header
-        assert!(buffer_line(&buf, 0).contains("TOR - Forwards"));
-
-        // Should show players
-        let matthews_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Auston Matthews")
-        });
-        assert!(matthews_found, "Matthews should be present");
-
-        let marner_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Mitch Marner")
-        });
-        assert!(marner_found, "Marner should be present");
-
-        let nylander_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("William Nylander")
-        });
-        assert!(nylander_found, "Nylander should be present");
+        assert_buffer(&buf, &[
+            "TOR - Forwards                                              ",
+            "──────────────                                              ",
+            "#   Name                 Pos    G   A   P  +/-    TOI       ",
+            "34  Auston Matthews      C      2   1   3    1  20:15       ",
+            "16  Mitch Marner         RW     0   3   3    2  19:42       ",
+            "88  William Nylander     RW     1   1   2    0  18:30       ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -254,14 +239,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show defense header
-        assert!(buffer_line(&buf, 0).contains("TOR - Defense"));
-
-        // Should show defense players
-        let rielly_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Morgan Rielly")
-        });
-        assert!(rielly_found, "Rielly should be present");
+        assert_buffer(&buf, &[
+            "TOR - Defense                                               ",
+            "─────────────                                               ",
+            "#   Name                 Pos    G   A   P  +/-    TOI       ",
+            "44  Morgan Rielly        D      0   2   2   -1  22:45       ",
+            "22  Jake McCabe          D      0   0   0    0  19:15       ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -304,15 +289,12 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Find the player row and check stats
-        let player_line_found = (0..height).any(|y| {
-            let line = buffer_line(&buf, y);
-            line.contains("Test Player")
-                && line.contains("2") // goals
-                && line.contains("3") // assists
-                && line.contains("5") // points
-                && line.contains("20:15") // toi
-        });
-        assert!(player_line_found, "Player stats should be displayed correctly");
+        assert_buffer(&buf, &[
+            "TOR - Forwards                                              ",
+            "──────────────                                              ",
+            "#   Name                 Pos    G   A   P  +/-    TOI       ",
+            "34  Test Player          C      2   3   5   -2  20:15       ",
+            "                                                            ",
+        ]);
     }
 }

@@ -53,48 +53,51 @@ mod tests {
     #[test]
     fn test_section_header_single_line() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
+        let area = Rect::new(0, 0, 80, 2);
 
         let lines = render_section_header("Test Header", false, 0, area, 0, &mut buf, &config);
 
         // Single-line header should render 2 lines
         assert_eq!(lines, 2);
 
-        // Check that header text appears
-        let line0 = buffer_line(&buf, 0);
-        assert!(line0.contains("Test Header"));
+        assert_buffer(&buf, &[
+            "Test Header                                                                     ",
+            "───────────                                                                     ",
+        ]);
     }
 
     #[test]
     fn test_section_header_double_line() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
+        let area = Rect::new(0, 0, 80, 2);
 
         let lines = render_section_header("Test Header", true, 0, area, 0, &mut buf, &config);
 
         // Double-line header should render 2 lines (text + separator)
         assert_eq!(lines, 2);
 
-        // Check that header text appears on first line
-        let line0 = buffer_line(&buf, 0);
-        assert!(line0.contains("Test Header"));
+        assert_buffer(&buf, &[
+            "Test Header                                                                     ",
+            "═══════════                                                                     ",
+        ]);
     }
 
     #[test]
     fn test_section_header_with_margin() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
+        let area = Rect::new(0, 0, 80, 2);
 
         let lines = render_section_header("Test Header", false, 4, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 2);
 
-        // Check that lines are indented with margin
-        let line0 = buffer_line(&buf, 0);
-        assert!(line0.starts_with("    ")); // 4 spaces
+        assert_buffer(&buf, &[
+            "    Test Header                                                                 ",
+            "    ───────────                                                                 ",
+        ]);
     }
 
     #[test]

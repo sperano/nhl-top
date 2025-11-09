@@ -237,9 +237,10 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should show header and separator only
-        assert!(buffer_line(&buf, 0).contains("Team"));
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "  Team                       GP   W   L  OT  PTS",
+            "  ──────────────────────────────────────────────",
+        ]);
     }
 
     #[test]
@@ -255,19 +256,13 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should show header
-        assert!(buffer_line(&buf, 0).contains("Team"));
-        assert!(buffer_line(&buf, 0).contains("GP"));
-        assert!(buffer_line(&buf, 0).contains("PTS"));
-
-        // Should show separator
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
-
-        // Should show teams
-        assert!(buffer_line(&buf, 2).contains("Toronto Maple Leafs"));
-        assert!(buffer_line(&buf, 2).contains("13")); // Points
-        assert!(buffer_line(&buf, 3).contains("Montreal Canadiens"));
-        assert!(buffer_line(&buf, 4).contains("Boston Bruins"));
+        assert_buffer(&buf, &[
+            "  Team                       GP   W   L  OT  PTS",
+            "  ──────────────────────────────────────────────",
+            "  Toronto Maple Leafs        10   6   3   1   13",
+            "  Montreal Canadiens         10   5   4   1   11",
+            "  Boston Bruins              10   4   5   1    9",
+        ]);
     }
 
     #[test]
@@ -288,17 +283,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should show division header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Atlantic Division")
-        });
-        assert!(header_found, "Division header should be present");
-
-        // Should show team
-        let team_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Toronto Maple Leafs")
-        });
-        assert!(team_found, "Team should be present");
+        assert_buffer(&buf, &[
+            "  Atlantic Division                             ",
+            "  ═════════════════                             ",
+            "  Team                       GP   W   L  OT  PTS",
+            "  ──────────────────────────────────────────────",
+            "  Toronto Maple Leafs        10   6   3   1   13",
+            "                                                ",
+        ]);
     }
 
     #[test]
@@ -314,11 +306,13 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Second team (Montreal) should be on line 3 (0=header, 1=separator, 2=first team, 3=second team)
-        let line = buffer_line(&buf, 3);
-        assert!(line.contains("Montreal Canadiens"));
-
-        // Note: We can't easily test the actual color in buffer_line, but we verify the team is there
+        assert_buffer(&buf, &[
+            "  Team                       GP   W   L  OT  PTS",
+            "  ──────────────────────────────────────────────",
+            "  Toronto Maple Leafs        10   6   3   1   13",
+            "  Montreal Canadiens         10   5   4   1   11",
+            "  Boston Bruins              10   4   5   1    9",
+        ]);
     }
 
     #[test]
@@ -334,10 +328,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should have cutoff line after second team
-        // Line 4 should be the cutoff line (after Montreal at line 3)
-        let cutoff_line = buffer_line(&buf, 4);
-        assert!(cutoff_line.contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "  Team                       GP   W   L  OT  PTS",
+            "  ──────────────────────────────────────────────",
+            "  Toronto Maple Leafs        10   6   3   1   13",
+            "  Montreal Canadiens         10   5   4   1   11",
+            "  ──────────────────────────────────────────────",
+            "  Boston Bruins              10   4   5   1    9",
+        ]);
     }
 
     #[test]

@@ -374,6 +374,8 @@ fn create_status_bar(data: &RenderData, app_state: &AppState) -> widgets::Status
         status_bar = status_bar.with_last_refresh(Some(last_refresh));
     }
 
+    status_bar = status_bar.with_refresh_interval(data.config.refresh_interval);
+
     status_bar
 }
 

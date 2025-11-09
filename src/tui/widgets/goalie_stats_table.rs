@@ -177,9 +177,11 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 52, height, &config);
 
-        // Should show header and separator only
-        assert!(buffer_line(&buf, 0).contains("Goaltender"));
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "  Goaltender                  GP    GAA    SV%     S",
+            "  ──────────────────────────────────────────────────",
+            "                                                    ",
+        ]);
     }
 
     #[test]
@@ -195,22 +197,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header
-        assert!(buffer_line(&buf, 0).contains("Goaltender"));
-        assert!(buffer_line(&buf, 0).contains("GP"));
-        assert!(buffer_line(&buf, 0).contains("GAA"));
-        assert!(buffer_line(&buf, 0).contains("SV%"));
-        assert!(buffer_line(&buf, 0).contains("SO"));
-
-        // Should show separator
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
-
-        // Should show goalies
-        assert!(buffer_line(&buf, 2).contains("Ilya Samsonov"));
-        assert!(buffer_line(&buf, 2).contains("2.89")); // GAA
-        assert!(buffer_line(&buf, 2).contains(".903")); // SV%
-        assert!(buffer_line(&buf, 3).contains("Joseph Woll"));
-        assert!(buffer_line(&buf, 4).contains("Martin Jones"));
+        assert_buffer(&buf, &[
+            "  Goaltender                  GP    GAA    SV%     SO       ",
+            "  ──────────────────────────────────────────────────        ",
+            "  Ilya Samsonov               35   2.89   .903      2       ",
+            "  Joseph Woll                 23   2.52   .915      1       ",
+            "  Martin Jones                10   3.45   .881      0       ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -230,17 +224,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show section header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Goaltender Statistics")
-        });
-        assert!(header_found, "Section header should be present");
-
-        // Should show goalie
-        let goalie_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Ilya Samsonov")
-        });
-        assert!(goalie_found, "Goalie should be present");
+        assert_buffer(&buf, &[
+            "  Goaltender Statistics                                     ",
+            "  ═════════════════════                                     ",
+            "  Goaltender                  GP    GAA    SV%     SO       ",
+            "  ──────────────────────────────────────────────────        ",
+            "  Ilya Samsonov               35   2.89   .903      2       ",
+            "                                                            ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -256,11 +248,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Second goalie (Woll) should be on line 3 (0=header, 1=separator, 2=first, 3=second)
-        let line = buffer_line(&buf, 3);
-        assert!(line.contains("Joseph Woll"));
-
-        // Note: We can't easily test the actual color in buffer_line, but we verify the goalie is there
+        assert_buffer(&buf, &[
+            "  Goaltender                  GP    GAA    SV%     SO       ",
+            "  ──────────────────────────────────────────────────        ",
+            "  Ilya Samsonov               35   2.89   .903      2       ",
+            "  Joseph Woll                 23   2.52   .915      1       ",
+            "  Martin Jones                10   3.45   .881      0       ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -309,16 +304,11 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Check the goalie row (line 2)
-        let line = buffer_line(&buf, 2);
-
-        // Name should be left-aligned with padding
-        assert!(line.starts_with("  A"));
-
-        // Stats should be right-aligned
-        assert!(line.contains(" 1"));
-        assert!(line.contains("2.00"));
-        assert!(line.contains(".900"));
-        assert!(line.contains("5")); // Changed from " 0" to "5" for visibility
+        assert_buffer(&buf, &[
+            "  Goaltender                  GP    GAA    SV%     SO       ",
+            "  ──────────────────────────────────────────────────        ",
+            "  A                            1   2.00   .900      5       ",
+            "                                                            ",
+        ]);
     }
 }

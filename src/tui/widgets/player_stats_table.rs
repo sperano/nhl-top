@@ -177,9 +177,11 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should show header and separator only
-        assert!(buffer_line(&buf, 0).contains("Player"));
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "  Player                      GP    G    A   PTS",
+            "  ──────────────────────────────────────────────",
+            "                                                ",
+        ]);
     }
 
     #[test]
@@ -195,19 +197,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should show header
-        assert!(buffer_line(&buf, 0).contains("Player"));
-        assert!(buffer_line(&buf, 0).contains("GP"));
-        assert!(buffer_line(&buf, 0).contains("PTS"));
-
-        // Should show separator
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
-
-        // Should show players
-        assert!(buffer_line(&buf, 2).contains("Auston Matthews"));
-        assert!(buffer_line(&buf, 2).contains("73")); // Points
-        assert!(buffer_line(&buf, 3).contains("Mitchell Marner"));
-        assert!(buffer_line(&buf, 4).contains("William Nylander"));
+        assert_buffer(&buf, &[
+            "  Player                      GP    G    A   PTS",
+            "  ──────────────────────────────────────────────",
+            "  Auston Matthews             58   42   31    73",
+            "  Mitchell Marner             58   18   48    66",
+            "  William Nylander            56   28   35    63",
+            "                                                ",
+        ]);
     }
 
     #[test]
@@ -227,17 +224,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Should show section header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Player Statistics")
-        });
-        assert!(header_found, "Section header should be present");
-
-        // Should show player
-        let player_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Auston Matthews")
-        });
-        assert!(player_found, "Player should be present");
+        assert_buffer(&buf, &[
+            "  Player Statistics                             ",
+            "  ═════════════════                             ",
+            "  Player                      GP    G    A   PTS",
+            "  ──────────────────────────────────────────────",
+            "  Auston Matthews             58   42   31    73",
+            "                                                ",
+            "                                                ",
+        ]);
     }
 
     #[test]
@@ -253,11 +248,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Second player (Marner) should be on line 3 (0=header, 1=separator, 2=first, 3=second)
-        let line = buffer_line(&buf, 3);
-        assert!(line.contains("Mitchell Marner"));
-
-        // Note: We can't easily test the actual color in buffer_line, but we verify the player is there
+        assert_buffer(&buf, &[
+            "  Player                      GP    G    A   PTS",
+            "  ──────────────────────────────────────────────",
+            "  Auston Matthews             58   42   31    73",
+            "  Mitchell Marner             58   18   48    66",
+            "  William Nylander            56   28   35    63",
+            "                                                ",
+        ]);
     }
 
     #[test]
@@ -306,16 +304,11 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
-        // Check the player row (line 2)
-        let line = buffer_line(&buf, 2);
-
-        // Name should be left-aligned with padding
-        assert!(line.starts_with("  A"));
-
-        // Stats should be right-aligned (numbers visible)
-        assert!(line.contains(" 1"));
-        assert!(line.contains(" 2"));
-        assert!(line.contains(" 3"));
-        assert!(line.contains(" 5"));
+        assert_buffer(&buf, &[
+            "  Player                      GP    G    A   PTS",
+            "  ──────────────────────────────────────────────",
+            "  A                            1    2    3     5",
+            "                                                ",
+        ]);
     }
 }

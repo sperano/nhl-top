@@ -39,31 +39,31 @@ mod tests {
     #[test]
     fn test_horizontal_separator_basic() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let area = Rect::new(0, 0, 80, 1);
 
-        let lines = render_horizontal_separator(50, 0, area, 2, &mut buf, &config);
+        let lines = render_horizontal_separator(50, 0, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
-        // Check that separator appears
-        let line = buffer_line(&buf, 2);
-        assert!(line.contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "──────────────────────────────────────────────────                              ",
+        ]);
     }
 
     #[test]
     fn test_horizontal_separator_with_margin() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let area = Rect::new(0, 0, 80, 1);
 
-        let lines = render_horizontal_separator(50, 4, area, 2, &mut buf, &config);
+        let lines = render_horizontal_separator(50, 4, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
-        // Check that line is indented
-        let line = buffer_line(&buf, 2);
-        assert!(line.starts_with("    ")); // 4 spaces
+        assert_buffer(&buf, &[
+            "    ──────────────────────────────────────────────                              ",
+        ]);
     }
 
     #[test]
@@ -82,33 +82,31 @@ mod tests {
     #[test]
     fn test_horizontal_separator_width() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let area = Rect::new(0, 0, 80, 1);
 
-        let lines = render_horizontal_separator(20, 0, area, 2, &mut buf, &config);
+        let lines = render_horizontal_separator(20, 0, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
-        // The separator should use box chars and be visible
-        let line = buffer_line(&buf, 2);
-        assert!(line.contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "────────────────────                                                            ",
+        ]);
     }
 
     #[test]
     fn test_horizontal_separator_width_with_margin() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 10));
-        let area = Rect::new(0, 0, 80, 10);
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let area = Rect::new(0, 0, 80, 1);
 
         // Total width 30, margin 5 means 25 separator chars
-        let lines = render_horizontal_separator(30, 5, area, 2, &mut buf, &config);
+        let lines = render_horizontal_separator(30, 5, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
-        let line = buffer_line(&buf, 2);
-        // Should start with 5 spaces
-        assert!(line.starts_with("     "));
-        // Should contain separator chars
-        assert!(line.contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "     ─────────────────────────                                                  ",
+        ]);
     }
 }

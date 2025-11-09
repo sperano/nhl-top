@@ -184,18 +184,12 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("TOR - Goalies")
-        });
-        assert!(header_found, "Header should be present");
-
-        // Should show table header
-        let table_header_found = (0..height).any(|y| {
-            let line = buffer_line(&buf, y);
-            line.contains("#") && line.contains("Name") && line.contains("SA")
-        });
-        assert!(table_header_found, "Table header should be present");
+        assert_buffer(&buf, &[
+            "TOR - Goalies                                               ",
+            "─────────────                                               ",
+            "#   Name                   SA  Saves     GA    SV%          ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -210,19 +204,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header
-        assert!(buffer_line(&buf, 0).contains("TOR - Goalies"));
-
-        // Should show goalies
-        let woll_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Joseph Woll")
-        });
-        assert!(woll_found, "Woll should be present");
-
-        let murray_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("Matt Murray")
-        });
-        assert!(murray_found, "Murray should be present");
+        assert_buffer(&buf, &[
+            "TOR - Goalies                                               ",
+            "─────────────                                               ",
+            "#   Name                   SA  Saves     GA    SV%          ",
+            "35  Joseph Woll            30     28      2  0.933          ",
+            "60  Matt Murray            15     13      2  0.867          ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -264,16 +253,13 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Find the goalie row and check stats
-        let goalie_line_found = (0..height).any(|y| {
-            let line = buffer_line(&buf, y);
-            line.contains("Test Goalie")
-                && line.contains("32") // SA
-                && line.contains("29") // Saves
-                && line.contains("3")  // GA
-                && line.contains("0.906") // SV%
-        });
-        assert!(goalie_line_found, "Goalie stats should be displayed correctly");
+        assert_buffer(&buf, &[
+            "TOR - Goalies                                               ",
+            "─────────────                                               ",
+            "#   Name                   SA  Saves     GA    SV%          ",
+            "35  Test Goalie            32     29      3  0.906          ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -287,11 +273,12 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Find the goalie row and check for "-" when SV% is None
-        let goalie_line_found = (0..height).any(|y| {
-            let line = buffer_line(&buf, y);
-            line.contains("Test Goalie") && line.contains("-")
-        });
-        assert!(goalie_line_found, "Missing SV% should show as '-'");
+        assert_buffer(&buf, &[
+            "TOR - Goalies                                               ",
+            "─────────────                                               ",
+            "#   Name                   SA  Saves     GA    SV%          ",
+            "35  Test Goalie             0      0      0      -          ",
+            "                                                            ",
+        ]);
     }
 }

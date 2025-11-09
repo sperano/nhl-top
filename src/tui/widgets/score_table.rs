@@ -392,7 +392,6 @@ mod tests {
 
     #[test]
     fn test_score_table_scheduled_game() {
-        // Scheduled game - no scores yet
         let widget = ScoreTable::new(
             "TOR".to_string(),
             "MTL".to_string(),
@@ -409,22 +408,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        // Should show team names
-        assert!(buffer_line(&buf, 3).contains("TOR"));
-        assert!(buffer_line(&buf, 4).contains("MTL"));
-
-        // Should show dashes for scores
-        assert!(buffer_line(&buf, 3).contains('-'));
-        assert!(buffer_line(&buf, 4).contains('-'));
-
-        // Should have proper borders
-        assert!(buffer_line(&buf, 0).starts_with('╭'));
-        assert!(buffer_line(&buf, 5).starts_with('╰'));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ -  │ -  │ -  │ -  │          ",
+            "│ MTL │ -  │ -  │ -  │ -  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
     fn test_score_table_final_game_regular_periods() {
-        // Final game with regular periods only (no OT/SO)
         let away_periods = vec![1, 2, 0];
         let home_periods = vec![0, 1, 2];
 
@@ -444,23 +439,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        // Should show team names
-        assert!(buffer_line(&buf, 3).contains("BOS"));
-        assert!(buffer_line(&buf, 4).contains("NYR"));
-
-        // Should show total scores
-        assert!(buffer_line(&buf, 3).contains('3'));
-        assert!(buffer_line(&buf, 4).contains('3'));
-
-        // Should show period scores
-        assert!(buffer_line(&buf, 3).contains('1'));
-        assert!(buffer_line(&buf, 3).contains('2'));
-        assert!(buffer_line(&buf, 3).contains('0'));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ BOS │ 1  │ 2  │ 0  │ 3  │          ",
+            "│ NYR │ 0  │ 1  │ 2  │ 3  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
     fn test_score_table_with_overtime() {
-        // Game with overtime
         let away_periods = vec![1, 1, 1, 1];
         let home_periods = vec![1, 1, 1, 0];
 
@@ -480,26 +470,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        // Should show OT header
-        assert!(buffer_line(&buf, 1).contains("OT"));
-
-        // Should show OT scores
-        let away_line = buffer_line(&buf, 3);
-        let home_line = buffer_line(&buf, 4);
-
-        // Away team should have 1 in OT column
-        assert!(away_line.contains("EDM"));
-        // Home team should have 0 in OT column
-        assert!(home_line.contains("VAN"));
-
-        // Should show final scores
-        assert!(away_line.contains('4'));
-        assert!(home_line.contains('3'));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────┬────╮     ",
+            "│     │ 1  │ 2  │ 3  │ OT │ T  │     ",
+            "├─────┼────┼────┼────┼────┼────┤     ",
+            "│ EDM │ 1  │ 1  │ 1  │ 1  │ 4  │     ",
+            "│ VAN │ 1  │ 1  │ 1  │ 0  │ 3  │     ",
+            "╰─────┴────┴────┴────┴────┴────╯     ",
+        ]);
     }
 
     #[test]
     fn test_score_table_with_shootout() {
-        // Game with shootout
         let away_periods = vec![1, 1, 1, 0, 1];
         let home_periods = vec![1, 1, 1, 0, 0];
 
@@ -519,17 +501,45 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        // Should show OT and SO headers
-        assert!(buffer_line(&buf, 1).contains("OT"));
-        assert!(buffer_line(&buf, 1).contains("SO"));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────┬────┬────╮",
+            "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
+            "├─────┼────┼────┼────┼────┼────┼────┤",
+            "│ CAR │ 1  │ 1  │ 1  │ 0  │ 1  │ 4  │",
+            "│ NJD │ 1  │ 1  │ 1  │ 0  │ 0  │ 3  │",
+            "╰─────┴────┴────┴────┴────┴────┴────╯",
+        ]);
+    }
 
-        // Should show team names
-        assert!(buffer_line(&buf, 3).contains("CAR"));
-        assert!(buffer_line(&buf, 4).contains("NJD"));
+    #[test]
+    fn test_score_table_live_game_with_current_period() {
+        let away_periods = vec![1, 1, 0];
+        let home_periods = vec![0, 1, 0];
 
-        // Should show final scores
-        assert!(buffer_line(&buf, 3).contains('4'));
-        assert!(buffer_line(&buf, 4).contains('3'));
+        let widget = ScoreTable::new(
+            "BOS".to_string(),
+            "NYR".to_string(),
+            Some(2),
+            Some(1),
+            Some(away_periods),
+            Some(home_periods),
+            false,
+            false,
+            Some(2),
+            false,
+        );
+
+        let config = test_config();
+        let buf = render_widget_with_config(&widget, 37, 6, &config);
+
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ BOS │ 1  │ 1  │ -  │ 2  │          ",
+            "│ NYR │ 0  │ 1  │ -  │ 1  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -554,12 +564,14 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        // Should show period 1 score
-        let away_line = buffer_line(&buf, 3);
-        assert!(away_line.contains('1'));
-
-        // Periods 2 and 3 should show dashes (not yet played)
-        assert!(away_line.contains('-'));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ TOR │ 1  │ -  │ -  │ 1  │          ",
+            "│ MTL │ 0  │ -  │ -  │ 0  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -584,12 +596,14 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        // Should show periods 1 and 2
-        let away_line = buffer_line(&buf, 3);
-        assert!(away_line.contains('1'));
-
-        // Period 3 should show dash
-        assert!(away_line.contains('-'));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│ BOS │ 1  │ 1  │ -  │ 2  │          ",
+            "│ NYR │ 0  │ 1  │ -  │ 1  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
 
     #[test]
@@ -658,25 +672,42 @@ mod tests {
 
         // Regular game: 5 columns (empty, 1, 2, 3, T)
         let buf1 = render_widget_with_config(&widget_no_ot_so, 37, 6, &config);
-        let header1 = buffer_line(&buf1, 1);
-        assert!(header1.contains('1'));
-        assert!(header1.contains('2'));
-        assert!(header1.contains('3'));
-        assert!(header1.contains('T'));
-        assert!(!header1.contains("OT"));
-        assert!(!header1.contains("SO"));
+        let actual1 = buffer_lines(&buf1);
+        let expected1 = vec![
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│  A  │ -  │ -  │ -  │ -  │          ",
+            "│  B  │ -  │ -  │ -  │ -  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ];
+        assert_eq!(actual1, expected1);
 
         // With OT: 6 columns
         let buf2 = render_widget_with_config(&widget_with_ot, 37, 6, &config);
-        let header2 = buffer_line(&buf2, 1);
-        assert!(header2.contains("OT"));
-        assert!(!header2.contains("SO"));
+        let actual2 = buffer_lines(&buf2);
+        let expected2 = vec![
+            "╭─────┬────┬────┬────┬────┬────╮     ",
+            "│     │ 1  │ 2  │ 3  │ OT │ T  │     ",
+            "├─────┼────┼────┼────┼────┼────┤     ",
+            "│  A  │ -  │ -  │ -  │ -  │ -  │     ",
+            "│  B  │ -  │ -  │ -  │ -  │ -  │     ",
+            "╰─────┴────┴────┴────┴────┴────╯     ",
+        ];
+        assert_eq!(actual2, expected2);
 
         // With both: 7 columns
         let buf3 = render_widget_with_config(&widget_with_both, 37, 6, &config);
-        let header3 = buffer_line(&buf3, 1);
-        assert!(header3.contains("OT"));
-        assert!(header3.contains("SO"));
+        let actual3 = buffer_lines(&buf3);
+        let expected3 = vec![
+            "╭─────┬────┬────┬────┬────┬────┬────╮",
+            "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
+            "├─────┼────┼────┼────┼────┼────┼────┤",
+            "│  A  │ -  │ -  │ -  │ -  │ -  │ -  │",
+            "│  B  │ -  │ -  │ -  │ -  │ -  │ -  │",
+            "╰─────┴────┴────┴────┴────┴────┴────╯",
+        ];
+        assert_eq!(actual3, expected3);
     }
 
     #[test]
@@ -702,17 +733,15 @@ mod tests {
         assert_eq!(buf.area.width, 37);
         assert_eq!(buf.area.height, 6);
 
-        // Verify all lines have content (not just empty spaces)
-        for y in 0..6 {
-            let line = buffer_line(&buf, y);
-            assert!(!line.trim().is_empty(), "Line {} should not be empty", y);
-        }
-
-        // Verify borders are present
-        assert!(buffer_line(&buf, 0).contains('╭'));
-        assert!(buffer_line(&buf, 0).contains('╮'));
-        assert!(buffer_line(&buf, 5).contains('╰'));
-        assert!(buffer_line(&buf, 5).contains('╯'));
+        assert_buffer(&buf, &[
+            "╭─────┬────┬────┬────┬────╮          ",
+            "│     │ 1  │ 2  │ 3  │ T  │          ",
+            "├─────┼────┼────┼────┼────┤          ",
+            "│  A  │ 1  │ 0  │ 0  │ 1  │          ",
+            "│  B  │ 0  │ 1  │ 1  │ 2  │          ",
+            "╰─────┴────┴────┴────┴────╯          ",
+        ]);
     }
+
 }
 

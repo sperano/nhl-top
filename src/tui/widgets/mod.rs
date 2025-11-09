@@ -49,10 +49,6 @@ pub use game_goalie_stats_table::GameGoalieStatsTable;
 pub mod team_stats_panel;
 pub use team_stats_panel::TeamStatsPanel;
 
-pub mod tabbed_container;
-pub use tabbed_container::TabbedContainer;
-// Note: Tab from tabbed_container is not exported to avoid conflict with tab_bar::Tab
-
 pub mod action_bar;
 pub use action_bar::{ActionBar, Action};
 

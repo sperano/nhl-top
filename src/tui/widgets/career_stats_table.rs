@@ -204,9 +204,11 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header and separator only
-        assert!(buffer_line(&buf, 0).contains("Season"));
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
+        assert_buffer(&buf, &[
+            "  Season     Team                   GP    G    A   PTS      ",
+            "  ────────────────────────────────────────────────────      ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -221,19 +223,13 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show header
-        assert!(buffer_line(&buf, 0).contains("Season"));
-        assert!(buffer_line(&buf, 0).contains("Team"));
-        assert!(buffer_line(&buf, 0).contains("PTS"));
-
-        // Should show separator
-        assert!(buffer_line(&buf, 1).contains(&config.box_chars.horizontal));
-
-        // Seasons should be in reverse order (most recent first)
-        assert!(buffer_line(&buf, 2).contains("2023-2024")); // Most recent
-        assert!(buffer_line(&buf, 2).contains("107")); // Points
-        assert!(buffer_line(&buf, 3).contains("2022-2023")); // Earlier season
-        assert!(buffer_line(&buf, 3).contains("86")); // Points
+        assert_buffer(&buf, &[
+            "  Season     Team                   GP    G    A   PTS      ",
+            "  ────────────────────────────────────────────────────      ",
+            "  2023-2024  Toronto Maple Leafs    81   69   38   107      ",
+            "  2022-2023  Toronto Maple Leafs    78   40   46    86      ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -253,17 +249,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should show section header
-        let header_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("NHL Career Statistics")
-        });
-        assert!(header_found, "Section header should be present");
-
-        // Should show season
-        let season_found = (0..height).any(|y| {
-            buffer_line(&buf, y).contains("2023-2024")
-        });
-        assert!(season_found, "Season should be present");
+        assert_buffer(&buf, &[
+            "  NHL Career Statistics                                     ",
+            "  ═════════════════════                                     ",
+            "  Season     Team                   GP    G    A   PTS      ",
+            "  ────────────────────────────────────────────────────      ",
+            "  2023-2024  Toronto Maple Leafs    81   69   38   107      ",
+            "                                                            ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -279,11 +273,14 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Second season in reverse order (2023-2024) should be on line 3
-        let line = buffer_line(&buf, 3);
-        assert!(line.contains("2023-2024"));
-
-        // Note: We can't easily test the actual color in buffer_line, but we verify the season is there
+        assert_buffer(&buf, &[
+            "  Season     Team                   GP    G    A   PTS      ",
+            "  ────────────────────────────────────────────────────      ",
+            "  2024-2025  Toronto Maple Leafs    30   25   20    45      ",
+            "  2023-2024  Toronto Maple Leafs    81   69   38   107      ",
+            "  2022-2023  Toronto Maple Leafs    78   40   46    86      ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -332,9 +329,12 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Check that season is formatted correctly
-        let line = buffer_line(&buf, 2);
-        assert!(line.contains("2023-2024"));
+        assert_buffer(&buf, &[
+            "  Season     Team                   GP    G    A   PTS      ",
+            "  ────────────────────────────────────────────────────      ",
+            "  2023-2024  Team A                 82   50   50   100      ",
+            "                                                            ",
+        ]);
     }
 
     #[test]
@@ -350,10 +350,11 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
-        // Should display 0 for None values
-        let line = buffer_line(&buf, 2);
-        assert!(line.contains("2023-2024"));
-        // The line should contain the zeros rendered from None values
-        assert!(line.contains("0")); // At least one zero should be present
+        assert_buffer(&buf, &[
+            "  Season     Team                   GP    G    A   PTS      ",
+            "  ────────────────────────────────────────────────────      ",
+            "  2023-2024  Team A                 10    0    0     0      ",
+            "                                                            ",
+        ]);
     }
 }

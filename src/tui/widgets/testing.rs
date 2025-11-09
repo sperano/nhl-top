@@ -5,7 +5,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style},
+    style::Color,
 };
 use crate::config::DisplayConfig;
 use crate::formatting::BoxChars;
@@ -23,9 +23,6 @@ pub fn test_config() -> DisplayConfig {
         error_fg: Color::Red,
         box_chars: BoxChars::unicode(),
         show_action_bar: true,
-        command_palette_width: 50,
-        command_palette_height: 40,
-        enable_animations: false,
     }
 }
 
@@ -41,9 +38,6 @@ pub fn test_config_ascii() -> DisplayConfig {
         error_fg: Color::Red,
         box_chars: BoxChars::ascii(),
         show_action_bar: true,
-        command_palette_width: 50,
-        command_palette_height: 40,
-        enable_animations: false,
     }
 }
 
@@ -120,6 +114,54 @@ pub fn buffer_line(buf: &Buffer, line: u16) -> String {
     output
 }
 
+/// Get all lines from the buffer as a vector of strings
+///
+/// Each string is exactly the width of the buffer area.
+///
+/// # Example
+///
+/// ```rust
+/// let buf = render_widget(&widget, 80, 3);
+/// let lines = buffer_lines(&buf);
+/// assert_eq!(lines, vec![
+///     "Line 1 content...                                                               ",
+///     "Line 2 content...                                                               ",
+///     "Line 3 content...                                                               ",
+/// ]);
+/// ```
+pub fn buffer_lines(buf: &Buffer) -> Vec<String> {
+    let area = buf.area();
+    let mut lines = Vec::new();
+
+    for y in 0..area.height {
+        lines.push(buffer_line(buf, y));
+    }
+
+    lines
+}
+
+/// Assert that a buffer matches the expected lines
+///
+/// This is a convenience function for the common pattern of comparing
+/// all buffer lines against expected output. Each string in the expected
+/// slice should be exactly the width of the buffer.
+///
+/// # Example
+///
+/// ```rust
+/// let buf = render_widget(&widget, 40, 3);
+/// assert_buffer(&buf, &[
+///     "Line 1 content...                       ",
+///     "Line 2 content...                       ",
+///     "Line 3 content...                       ",
+/// ]);
+/// ```
+pub fn assert_buffer(buf: &Buffer, expected: &[&str]) {
+    let actual = buffer_lines(buf);
+    let expected: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
+    assert_eq!(actual, expected);
+}
+
 /// Get a single cell from the buffer
 ///
 /// This is a convenience wrapper around Buffer indexing that's easier to use in tests.
@@ -146,29 +188,6 @@ pub fn assert_buffer_line(buf: &Buffer, line: u16, expected: &str) {
         actual, expected,
         "\nLine {} mismatch:\nExpected: {}\nActual:   {}",
         line, expected, actual
-    );
-}
-
-/// Assert that a buffer matches expected multi-line string
-///
-/// Useful for snapshot-style testing.
-///
-/// # Example
-///
-/// ```rust
-/// let buf = render_widget(&widget, 10, 3);
-/// assert_buffer_eq(&buf, "\
-/// ╭────────╮
-/// │ Hello  │
-/// ╰────────╯");
-/// ```
-#[allow(dead_code)]
-pub fn assert_buffer_eq(buf: &Buffer, expected: &str) {
-    let actual = buffer_to_string(buf);
-    assert_eq!(
-        actual, expected,
-        "\nBuffer mismatch:\n\nExpected:\n{}\n\nActual:\n{}",
-        expected, actual
     );
 }
 
