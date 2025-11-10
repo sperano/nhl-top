@@ -23,7 +23,6 @@ pub use int_value::render_int_value;
 pub use string_value::render_string_value;
 pub use list_value::render_list_value;
 pub use color_value::render_color_value;
-pub use setting_row::render_setting_row;
 pub use settings_list::render_settings_list;
 pub use list_modal::render_list_modal;
 pub use color_modal::{render_color_modal, COLORS};

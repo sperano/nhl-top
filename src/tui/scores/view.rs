@@ -277,7 +277,7 @@ pub fn render_content(
 
         // Render the widget directly to the frame
         use crate::tui::widgets::RenderableWidget;
-        let mut buf = f.buffer_mut();
+        let buf = f.buffer_mut();
         game_grid.render(area, buf, display);
 
         // Update scrollable state (for future scroll support)

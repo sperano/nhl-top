@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::config::DisplayConfig;
-use crate::tui::scores::game_details::state::{GameDetailsState, PlayerSection};
+use crate::tui::scores::game_details::state::{GameDetailsState};
 use crate::tui::scores::game_details::players;
 
 /// Render the game details view with player selection support

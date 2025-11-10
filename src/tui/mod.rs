@@ -6,16 +6,15 @@ mod players;
 mod settings;
 mod browser;
 mod app;
-mod error;
 pub mod navigation;
 pub mod widgets;
 mod layout;
 mod context;
 pub mod command_palette;
-pub use context::{NavigationContextProvider, NavigationCommand, SearchableItem};
+pub use context::{NavigationContextProvider};
 
 use widgets::RenderableWidget;
-use layout::{Layout as LayoutManager, LayoutAreas};
+use layout::{Layout as LayoutManager};
 
 use std::io;
 use std::sync::Arc;
@@ -42,7 +41,7 @@ use nhl_api::{Standing, DailySchedule, GameMatchup, GameDate};
 
 // UI Layout Constants
 /// Height of main tab bar
-const TAB_BAR_HEIGHT: u16 = 2;
+//const TAB_BAR_HEIGHT: u16 = 2;
 
 /// Height of subtab bar (for tabs with subtabs)
 const SUBTAB_BAR_HEIGHT: u16 = 2;

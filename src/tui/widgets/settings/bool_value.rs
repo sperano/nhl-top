@@ -2,7 +2,7 @@
 ///
 /// Displays checked ([✔]) or unchecked ([ ]) based on value.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+use ratatui::{buffer::Buffer, style::Style};
 
 /// Renders a boolean value as a checkbox
 ///

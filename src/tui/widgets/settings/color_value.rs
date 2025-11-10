@@ -2,7 +2,7 @@
 ///
 /// Displays "██████" (6 block characters) in the specified color.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::{Color, Style}};
+use ratatui::{buffer::Buffer, style::{Color, Style}};
 
 /// Renders a color value as a colored block
 ///

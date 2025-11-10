@@ -1,4 +1,4 @@
-use crate::tui::widgets::{Action, KeyHint, KeyHintStyle};
+use crate::tui::widgets::{Action, KeyHint};
 use crate::tui::app::CurrentTab;
 use crate::commands::standings::GroupBy;
 use nhl_api::GameDate;

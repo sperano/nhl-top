@@ -2,7 +2,7 @@
 ///
 /// Displays "▼ current_option" format.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+use ratatui::{buffer::Buffer, style::Style};
 use unicode_width::UnicodeWidthStr;
 
 /// Renders a list value showing the current selection

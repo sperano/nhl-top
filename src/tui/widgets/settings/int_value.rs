@@ -2,7 +2,7 @@
 ///
 /// Displays the number normally, or shows edit buffer with cursor when editing.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::Style};
+use ratatui::{buffer::Buffer, style::Style};
 use unicode_width::UnicodeWidthStr;
 
 /// Renders an integer value, optionally showing edit buffer with cursor

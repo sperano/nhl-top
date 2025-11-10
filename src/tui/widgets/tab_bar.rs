@@ -4,7 +4,7 @@
 /// characters. Tabs are displayed with separators and include keyboard shortcuts.
 /// Selected tabs are highlighted based on focus state.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::Style, text::{Line, Span}};
+use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use unicode_width::UnicodeWidthStr;
 use crate::config::DisplayConfig;
 use crate::tui::app::CurrentTab;
