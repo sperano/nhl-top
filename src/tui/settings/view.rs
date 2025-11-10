@@ -5,7 +5,7 @@ use ratatui::{
 use super::{State, build_settings_list};
 use std::sync::Arc;
 use crate::config::Config;
-use crate::tui::widgets::settings::{SettingsPanelWidget, COLORS};
+use crate::tui::widgets::settings::{SettingsPanelWidget};
 
 pub fn render_content(f: &mut Frame, area: Rect, state: &State, config: &Arc<Config>) {
     // Build settings list from config

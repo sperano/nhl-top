@@ -1,4 +1,4 @@
-use nhl_api::{Client, GameId, Boxscore, GameClock};
+use nhl_api::{Client, Boxscore, GameClock};
 use crate::commands::parse_game_date;
 use anyhow::{Context, Result};
 
@@ -48,8 +48,7 @@ pub async fn run(client: &Client, date: Option<String>) -> Result<()> {
 
         if game_started {
             // Fetch detailed boxscore for period information
-            let game_id = GameId::new(game.id);
-            match client.boxscore(&game_id).await {
+            match client.boxscore(game.id).await {
                 Ok(boxscore) => {
                     display_detailed_score(&boxscore);
                 }

@@ -191,6 +191,7 @@ pub fn assert_buffer_line(buf: &Buffer, line: u16, expected: &str) {
     );
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;

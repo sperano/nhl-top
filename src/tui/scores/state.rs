@@ -1,4 +1,7 @@
 use crate::tui::common::scrollable::Scrollable;
+use crate::tui::scores::game_details::GameDetailsState;
+use crate::tui::scores::panel::ScoresPanel;
+use crate::tui::navigation::NavigationContext;
 
 /// Date window configuration
 pub const DATE_WINDOW_SIZE: usize = 5;
@@ -15,6 +18,9 @@ pub struct State {
     pub boxscore_view_active: bool,
     pub boxscore_scrollable: Scrollable,
     pub grid_scrollable: Scrollable,
+    pub game_details: GameDetailsState,
+    pub navigation: Option<NavigationContext<ScoresPanel, String, ()>>,
+    pub panel_scrollable: Scrollable,
 }
 
 impl State {
@@ -28,6 +34,9 @@ impl State {
             boxscore_view_active: false,
             boxscore_scrollable: Scrollable::new(),
             grid_scrollable: Scrollable::new(),
+            game_details: GameDetailsState::new(),
+            navigation: None,
+            panel_scrollable: Scrollable::new(),
         }
     }
 }

@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use crate::tui::widgets::{CommandPalette, SearchResult};
 use crate::tui::SharedDataHandle;
 use crate::tui::context::NavigationCommand;

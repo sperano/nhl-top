@@ -215,6 +215,56 @@ async fn save_boxscore_to_file(shared_data: &SharedDataHandle) -> Result<String,
 }
 
 async fn handle_boxscore_view(key: KeyEvent, state: &mut State, shared_data: &SharedDataHandle) -> bool {
+    // Check if we're viewing a navigation panel (player details)
+    let has_navigation = state.navigation.as_ref()
+        .map(|nav| !nav.is_at_root())
+        .unwrap_or(false);
+
+    if has_navigation {
+        return handle_panel_navigation(key, state, shared_data).await;
+    }
+
+    // Get the current boxscore
+    let boxscore = {
+        let data = shared_data.read().await;
+        data.boxscore.as_ref().clone()
+    };
+
+    // First try to delegate to game_details handler
+    let (handled, nav_panel) = crate::tui::scores::game_details::handle_key(
+        key,
+        &mut state.game_details,
+        boxscore.as_ref(),
+        shared_data,
+    )
+    .await;
+
+    // Handle navigation to player details
+    if let Some(panel) = nav_panel {
+        use crate::tui::navigation::NavigationContext;
+        if state.navigation.is_none() {
+            state.navigation = Some(NavigationContext::new());
+        }
+        if let Some(ref mut nav_ctx) = state.navigation {
+            nav_ctx.navigate_to(panel);
+        }
+        return true;
+    }
+
+    if handled {
+        // Check if we should exit game details
+        if matches!(key.code, KeyCode::Esc) && !state.game_details.player_selection_active {
+            // Close the boxscore view and return to game list
+            state.boxscore_view_active = false;
+            state.boxscore_scrollable.reset();
+            state.game_details.reset();
+            let mut data = shared_data.write().await;
+            data.clear_boxscore();
+        }
+        return true;
+    }
+
+    // Handle additional boxscore-specific keys
     match key.code {
         KeyCode::Char('s') | KeyCode::Char('S') => {
             // Save boxscore to file
@@ -228,19 +278,32 @@ async fn handle_boxscore_view(key: KeyEvent, state: &mut State, shared_data: &Sh
             }
             true
         }
+        _ => true, // Consume all keys while boxscore view is active
+    }
+}
+
+/// Handle key events when viewing a navigation panel (player details)
+async fn handle_panel_navigation(key: KeyEvent, state: &mut State, shared_data: &SharedDataHandle) -> bool {
+    match key.code {
         KeyCode::Esc => {
-            // Close the boxscore view and return to game list
-            state.boxscore_view_active = false;
-            state.boxscore_scrollable.reset();
-            let mut data = shared_data.write().await;
-            data.clear_boxscore();
+            // Go back in navigation stack
+            if let Some(ref mut nav_ctx) = state.navigation {
+                nav_ctx.go_back();
+
+                // If we're back at root, clear player selection
+                if nav_ctx.is_at_root() {
+                    let mut data = shared_data.write().await;
+                    data.selected_player_id = None;
+                }
+            }
             true
         }
-        KeyCode::Up | KeyCode::Down | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
-            // Handle scrolling
-            state.boxscore_scrollable.handle_key(key)
+        KeyCode::PageDown | KeyCode::PageUp | KeyCode::Home | KeyCode::End => {
+            // Handle scrolling in panel
+            state.panel_scrollable.handle_key(key);
+            true
         }
-        _ => true, // Consume all keys while boxscore view is active
+        _ => true, // Consume all keys while panel is active
     }
 }
 

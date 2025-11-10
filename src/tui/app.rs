@@ -1,8 +1,7 @@
-use super::{scores, standings, stats, players, settings};
+use super::{scores, standings, stats, players, settings, browser};
 use super::widgets::CommandPalette;
 use super::context::NavigationCommand;
 use super::SharedDataHandle;
-use crate::commands::standings::GroupBy;
 use tokio::sync::mpsc;
 use anyhow::Result;
 
@@ -13,6 +12,7 @@ pub enum CurrentTab {
     Stats,
     Players,
     Settings,
+    Browser,
 }
 
 impl CurrentTab {
@@ -29,9 +29,9 @@ impl CurrentTab {
     //     [CurrentTab::Scores, CurrentTab::Standings, CurrentTab::Stats, CurrentTab::Settings]
     // }
 
-    pub fn all_names() -> [&'static str; 5] {
-        ["Scores", "Standings", "Stats", "Players", "Settings"]
-    }
+    // pub fn all_names() -> [&'static str; 5] {
+    //     ["Scores", "Standings", "Stats", "Players", "Settings"]
+    // }
 
     pub fn index(&self) -> usize {
         match self {
@@ -40,6 +40,7 @@ impl CurrentTab {
             CurrentTab::Stats => 2,
             CurrentTab::Players => 3,
             CurrentTab::Settings => 4,
+            CurrentTab::Browser => 5,
         }
     }
 }
@@ -51,6 +52,7 @@ pub struct AppState {
     pub stats: stats::State,
     pub players: players::State,
     pub settings: settings::State,
+    pub browser: browser::State,
     pub command_palette: Option<CommandPalette>,
     pub command_palette_active: bool,
 }
@@ -64,6 +66,7 @@ impl AppState {
             stats: stats::State::new(),
             players: players::State::new(),
             settings: settings::State::new(),
+            browser: browser::State::new(),
             command_palette: Some(CommandPalette::new()),
             command_palette_active: false,
         }
@@ -135,11 +138,12 @@ impl AppState {
 
     pub fn navigate_tab_left(&mut self) {
         self.current_tab = match self.current_tab {
-            CurrentTab::Scores => CurrentTab::Settings,
+            CurrentTab::Scores => CurrentTab::Browser,
             CurrentTab::Standings => CurrentTab::Scores,
             CurrentTab::Stats => CurrentTab::Standings,
             CurrentTab::Players => CurrentTab::Stats,
             CurrentTab::Settings => CurrentTab::Players,
+            CurrentTab::Browser => CurrentTab::Settings,
         };
         // Reset subtab focus when changing tabs
         self.exit_subtab_mode();
@@ -151,7 +155,8 @@ impl AppState {
             CurrentTab::Standings => CurrentTab::Stats,
             CurrentTab::Stats => CurrentTab::Players,
             CurrentTab::Players => CurrentTab::Settings,
-            CurrentTab::Settings => CurrentTab::Scores,
+            CurrentTab::Settings => CurrentTab::Browser,
+            CurrentTab::Browser => CurrentTab::Scores,
         };
         // Reset subtab focus when changing tabs
         self.exit_subtab_mode();
@@ -166,6 +171,7 @@ impl AppState {
             CurrentTab::Settings => {
                 self.settings.subtab_focused = true;
             }
+            CurrentTab::Browser => self.browser.subtab_focused = true,
         }
     }
 
@@ -177,6 +183,7 @@ impl AppState {
         self.standings.selected_team_index = 0;
         self.standings.selected_column = 0;
         self.settings.subtab_focused = false;
+        self.browser.subtab_focused = false;
     }
 
     pub fn is_subtab_focused(&self) -> bool {
@@ -186,11 +193,12 @@ impl AppState {
             CurrentTab::Stats => false,
             CurrentTab::Players => false,
             CurrentTab::Settings => self.settings.subtab_focused,
+            CurrentTab::Browser => self.browser.subtab_focused,
         }
     }
 
     pub fn has_subtabs(&self) -> bool {
-        matches!(self.current_tab, CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings)
+        matches!(self.current_tab, CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings | CurrentTab::Browser)
     }
 }
 
@@ -206,6 +214,8 @@ mod tests {
     use std::sync::Arc;
     use tokio::sync::RwLock;
     use crate::SharedData;
+    use crate::commands::standings::GroupBy;
+    use std::str::FromStr;
 
     #[test]
     fn test_app_state_new() {
@@ -313,7 +323,7 @@ mod tests {
         app_state.current_tab = CurrentTab::Standings;
         app_state.open_command_palette();
 
-        let date = nhl_api::GameDate::from_str("2024-11-08").unwrap();
+        let date = nhl_api::GameDate::from_ymd(2024, 11, 8).unwrap();
         let command = NavigationCommand::GoToDate(date.clone());
         app_state.execute_navigation_command(command, &shared_data, &tx).await.unwrap();
 

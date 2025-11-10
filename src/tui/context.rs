@@ -85,92 +85,10 @@ pub enum NavigationCommand {
     GoToSettings(String),       // Settings category
 }
 
-/// Helper to build navigation contexts fluently
-///
-/// This builder simplifies creating navigation contexts for testing.
-pub struct ContextBuilder {
-    breadcrumb: Vec<String>,
-    actions: Vec<Action>,
-    hints: Vec<KeyHint>,
-}
-
-impl ContextBuilder {
-    pub fn new() -> Self {
-        Self {
-            breadcrumb: vec![],
-            actions: vec![],
-            hints: vec![],
-        }
-    }
-
-    pub fn with_breadcrumb(mut self, items: Vec<String>) -> Self {
-        self.breadcrumb = items;
-        self
-    }
-
-    pub fn add_action(mut self, key: &str, label: &str, enabled: bool) -> Self {
-        self.actions.push(Action {
-            key: key.to_string(),
-            label: label.to_string(),
-            enabled,
-        });
-        self
-    }
-
-    pub fn add_hint(mut self, key: &str, action: &str, style: KeyHintStyle) -> Self {
-        self.hints.push(KeyHint {
-            key: key.to_string(),
-            action: action.to_string(),
-            style,
-        });
-        self
-    }
-}
-
-impl Default for ContextBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_context_builder() {
-        let builder = ContextBuilder::new()
-            .with_breadcrumb(vec!["Scores".to_string(), "Nov 8".to_string()])
-            .add_action("Enter", "View Game", true)
-            .add_hint("←→", "Change Date", KeyHintStyle::Important);
-
-        assert_eq!(builder.breadcrumb.len(), 2);
-        assert_eq!(builder.actions.len(), 1);
-        assert_eq!(builder.hints.len(), 1);
-    }
-
-    #[test]
-    fn test_context_builder_default() {
-        let builder = ContextBuilder::default();
-        assert_eq!(builder.breadcrumb.len(), 0);
-        assert_eq!(builder.actions.len(), 0);
-        assert_eq!(builder.hints.len(), 0);
-    }
-
-    #[test]
-    fn test_context_builder_multiple_items() {
-        let builder = ContextBuilder::new()
-            .add_action("Enter", "View", true)
-            .add_action("Space", "Select", false)
-            .add_hint("Tab", "Switch", KeyHintStyle::Normal)
-            .add_hint("ESC", "Exit", KeyHintStyle::Subtle);
-
-        assert_eq!(builder.actions.len(), 2);
-        assert_eq!(builder.hints.len(), 2);
-        assert_eq!(builder.actions[0].label, "View");
-        assert!(builder.actions[0].enabled);
-        assert!(!builder.actions[1].enabled);
-    }
+    use std::str::FromStr;
 
     #[test]
     fn test_navigation_command_variants() {
@@ -196,7 +114,7 @@ mod tests {
 
     #[test]
     fn test_navigation_command_all_variants() {
-        let date = GameDate::from_str("2024-01-15").unwrap();
+        let date = GameDate::from_ymd(2024, 1, 15).unwrap();
         let commands = vec![
             NavigationCommand::GoToTab(CurrentTab::Standings),
             NavigationCommand::GoToTeam("MTL".to_string()),
@@ -247,7 +165,7 @@ mod tests {
         use crate::tui::scores::State as ScoresState;
 
         let state = ScoresState::new();
-        let date = GameDate::from_str("2024-11-08").unwrap();
+        let date = GameDate::from_ymd(2024, 11, 8).unwrap();
         let provider = ScoresBreadcrumbProvider {
             state: &state,
             game_date: &date,
@@ -264,7 +182,7 @@ mod tests {
 
         let mut state = ScoresState::new();
         state.subtab_focused = true;
-        let date = GameDate::from_str("2024-11-08").unwrap();
+        let date = GameDate::from_ymd(2024, 11, 8).unwrap();
         let provider = ScoresBreadcrumbProvider {
             state: &state,
             game_date: &date,

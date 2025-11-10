@@ -238,7 +238,7 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
 
 pub async fn run(client: &Client, game_id: i64, config: &Config) -> Result<()> {
     let game_id = GameId::new(game_id);
-    let boxscore = client.boxscore(&game_id).await
+    let boxscore = client.boxscore(game_id).await
         .context("Failed to fetch boxscore")?;
     print!("{}", format_boxscore(&boxscore, &config.display));
 

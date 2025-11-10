@@ -4,6 +4,7 @@ mod standings;
 mod stats;
 mod players;
 mod settings;
+mod browser;
 mod app;
 mod error;
 pub mod navigation;
@@ -85,7 +86,7 @@ fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
     }
 }
 
-/// Handles number keys (1-5) for direct tab switching
+/// Handles number keys (1-6) for direct tab switching
 /// Only works when not in subtab mode
 /// Returns true if key was handled
 async fn handle_number_keys(key: KeyEvent, app_state: &mut AppState, shared_data: &SharedDataHandle) -> bool {
@@ -113,6 +114,10 @@ async fn handle_number_keys(key: KeyEvent, app_state: &mut AppState, shared_data
         }
         KeyCode::Char('5') => {
             app_state.current_tab = CurrentTab::Settings;
+            true
+        }
+        KeyCode::Char('6') => {
+            app_state.current_tab = CurrentTab::Browser;
             true
         }
         _ => false,
@@ -175,6 +180,9 @@ async fn handle_arrow_and_enter_keys(
                     CurrentTab::Players => false,
                     CurrentTab::Settings => {
                         settings::handle_key(key, &mut app_state.settings, shared_data).await
+                    }
+                    CurrentTab::Browser => {
+                        browser::handle_key(key, &mut app_state.browser, shared_data).await
                     }
                 };
 
@@ -308,6 +316,7 @@ fn create_breadcrumb(app_state: &AppState, data: &RenderData) -> Option<widgets:
         CurrentTab::Stats => app_state.stats.get_breadcrumb_items(),
         CurrentTab::Players => app_state.players.get_breadcrumb_items(),
         CurrentTab::Settings => app_state.settings.get_breadcrumb_items(),
+        CurrentTab::Browser => vec![],
     };
 
     if items.is_empty() {
@@ -335,6 +344,7 @@ fn create_action_bar(app_state: &AppState, data: &RenderData) -> Option<widgets:
         CurrentTab::Stats => app_state.stats.get_available_actions(),
         CurrentTab::Players => app_state.players.get_available_actions(),
         CurrentTab::Settings => app_state.settings.get_available_actions(),
+        CurrentTab::Browser => vec![],
     };
 
     if actions.is_empty() {
@@ -356,6 +366,7 @@ fn create_status_bar(data: &RenderData, app_state: &AppState) -> widgets::Status
         CurrentTab::Stats => app_state.stats.get_keyboard_hints(),
         CurrentTab::Players => app_state.players.get_keyboard_hints(),
         CurrentTab::Settings => app_state.settings.get_keyboard_hints(),
+        CurrentTab::Browser => vec![],
     };
 
     if !hints.is_empty() {
@@ -428,7 +439,7 @@ fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
             CurrentTab::Settings => {
                 // Settings has subtabs according to has_subtabs(), but doesn't render them yet
             }
-            CurrentTab::Stats | CurrentTab::Players => {
+            CurrentTab::Stats | CurrentTab::Players | CurrentTab::Browser => {
                 // No subtabs for these tabs
             }
         }
@@ -447,6 +458,7 @@ fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
                 &data.display,
                 &data.boxscore,
                 data.boxscore_loading,
+                &data.player_info,
             );
         }
         CurrentTab::Standings => {
@@ -473,6 +485,9 @@ fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
         }
         CurrentTab::Settings => {
             settings::render_content(f, main_content_area, &mut app_state.settings, &data.config);
+        }
+        CurrentTab::Browser => {
+            browser::render_content(f, main_content_area, &app_state.browser, &data.display);
         }
     }
 

@@ -53,7 +53,7 @@ pub struct TabBar {
 impl TabBar {
     /// Create a new TabBar from the current tab state
     ///
-    /// This creates tabs for: Scores(1), Standings(2), Stats(3), Players(4), Settings(5)
+    /// This creates tabs for: Scores(1), Standings(2), Stats(3), Players(4), Settings(5), Browser(6)
     pub fn new(current_tab: CurrentTab, focused: bool) -> Self {
         let tabs = vec![
             Tab::new("Scores", Some('1')),
@@ -61,6 +61,7 @@ impl TabBar {
             Tab::new("Stats", Some('3')),
             Tab::new("Players", Some('4')),
             Tab::new("Settings", Some('5')),
+            Tab::new("Browser", Some('6')),
         ];
 
         Self {
@@ -195,8 +196,8 @@ mod tests {
         let buf = render_widget(&widget, 80, 2);
 
         assert_buffer(&buf, &[
-            "Scores │ Standings │ Stats │ Players │ Settings                                 ",
-            "───────┴───────────┴───────┴─────────┴──────────────────────────────────────────",
+            "Scores │ Standings │ Stats │ Players │ Settings │ Browser                       ",
+            "───────┴───────────┴───────┴─────────┴──────────┴───────────────────────────────",
         ]);
     }
 
@@ -292,7 +293,7 @@ mod tests {
         let buf = render_widget_with_config(&widget, 80, 2, &config);
 
         assert_buffer(&buf, &[
-            "Scores | Standings | Stats | Players | Settings                                 ",
+            "Scores | Standings | Stats | Players | Settings | Browser                       ",
             "--------------------------------------------------------------------------------",
         ]);
     }
@@ -407,6 +408,7 @@ mod tests {
             CurrentTab::Stats,
             CurrentTab::Players,
             CurrentTab::Settings,
+            CurrentTab::Browser,
         ] {
             let widget = TabBar::new(tab, true);
             let config = test_config();  // test_config() returns unicode config

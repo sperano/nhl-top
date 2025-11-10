@@ -80,6 +80,17 @@ pub fn render_subtabs(
     let focused = state.subtab_focused && !state.box_selection_active;
     let base_style = base_tab_style(focused);
 
+    // Check if we should show breadcrumbs instead of date tabs
+    if let Some(nav_ctx) = &state.navigation {
+        if !nav_ctx.is_at_root() {
+            let trail = nav_ctx.stack.breadcrumb_trail();
+            use crate::tui::common::breadcrumb::render_breadcrumb_simple;
+            render_breadcrumb_simple(f, area, &trail, theme, base_style);
+            return;
+        }
+    }
+
+    // Otherwise show date tabs
     let dates = calculate_date_window(game_date, state.selected_index);
     let date_strings: Vec<String> = dates.iter().map(format_date_mmdd).collect();
 
@@ -212,7 +223,18 @@ pub fn render_content(
     display: &Arc<DisplayConfig>,
     boxscore: &Option<nhl_api::Boxscore>,
     boxscore_loading: bool,
+    player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
 ) {
+    // Check if we should render a navigation panel (player details)
+    let panel_to_render = state.navigation.as_ref()
+        .and_then(|nav_ctx| nav_ctx.stack.current())
+        .cloned();
+
+    if let Some(panel) = panel_to_render {
+        render_panel(f, area, state, &panel, display, player_info);
+        return;
+    }
+
     // If boxscore view is active, render boxscore instead of game list
     if state.boxscore_view_active {
         render_boxscore_content(f, area, state, boxscore, boxscore_loading, period_scores, game_info, display);
@@ -668,7 +690,15 @@ fn render_boxscore_content(
         "No boxscore available".to_string()
     };
 
-    state.boxscore_scrollable.render_paragraph(f, area, content_text, None);
+    // Use game_details rendering for enhanced navigation support
+    crate::tui::scores::game_details::view::render(
+        f,
+        area,
+        &mut state.game_details,
+        &content_text,
+        boxscore.as_ref(),
+        display,
+    );
 }
 
 /// Public function to format boxscore as text for exporting
@@ -679,6 +709,140 @@ pub fn format_boxscore_text(
     display: &DisplayConfig,
 ) -> String {
     format_boxscore_with_period_box(boxscore, period_scores, game_info, display)
+}
+
+/// Render header lines with formatting
+fn render_header_lines(header_text: &str, margin: usize, display: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
+    let mut lines = Vec::new();
+    let header = format_header(header_text, true, display);
+    for line in header.lines() {
+        if !line.is_empty() {
+            lines.push(Line::from(vec![
+                Span::raw(" ".repeat(margin)),
+                Span::styled(line.to_string(), Style::default().fg(display.division_header_fg))
+            ]));
+        } else {
+            lines.push(Line::raw(""));
+        }
+    }
+    lines
+}
+
+/// Render a navigation panel (currently only player details)
+fn render_panel(
+    f: &mut Frame,
+    area: Rect,
+    state: &mut State,
+    panel: &crate::tui::scores::panel::ScoresPanel,
+    display: &Arc<DisplayConfig>,
+    player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
+) {
+    match panel {
+        crate::tui::scores::panel::ScoresPanel::PlayerDetail { player_id, player_name, .. } => {
+            render_player_panel(f, area, state, *player_id, player_name, display, player_info);
+        }
+    }
+}
+
+/// Render player details panel (adapted from standings)
+fn render_player_panel(
+    f: &mut Frame,
+    area: Rect,
+    state: &mut State,
+    player_id: i64,
+    player_name: &str,
+    display: &Arc<DisplayConfig>,
+    player_info_map: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
+) {
+    use crate::tui::widgets::{RenderableWidget, PlayerBioCard, CareerStatsTable};
+    use crate::NHL_LEAGUE_ABBREV;
+
+    let mut lines = Vec::new();
+
+    lines.push(Line::raw(""));
+    lines.extend(render_header_lines(player_name, 2, display));
+
+    // Get real player data
+    let player_data = player_info_map.get(&player_id);
+
+    if player_data.is_none() {
+        lines.push(Line::raw("  Loading player information..."));
+        lines.push(Line::raw(""));
+
+        state.panel_scrollable.update_viewport_height(area.height);
+        state.panel_scrollable.update_content_height(lines.len());
+
+        let paragraph = Paragraph::new(lines)
+            .scroll((state.panel_scrollable.scroll_offset, 0));
+        f.render_widget(paragraph, area);
+        return;
+    }
+
+    let player = player_data.unwrap();
+
+    // Filter to only NHL seasons
+    let nhl_seasons: Vec<nhl_api::SeasonTotal> = if let Some(season_totals) = &player.season_totals {
+        season_totals.iter()
+            .filter(|s| s.league_abbrev == NHL_LEAGUE_ABBREV)
+            .cloned()
+            .collect()
+    } else {
+        vec![]
+    };
+
+    // Create bio card widget
+    let bio_card = PlayerBioCard::new(player, Some("Player Information"), 0);
+
+    // Create career stats table
+    let career_table = CareerStatsTable::new(&nhl_seasons, Some("NHL Career Statistics"), None, 0);
+
+    // Render widgets to buffer and convert to lines
+    let buf_width = area.width.max(80);
+    let bio_height = bio_card.preferred_height().unwrap_or(12);
+    let career_height = career_table.preferred_height().unwrap_or(10);
+
+    let mut buf = ratatui::buffer::Buffer::empty(Rect::new(0, 0, buf_width, bio_height + career_height + 2));
+
+    // Render bio card
+    bio_card.render(Rect::new(0, 0, buf_width, bio_height), &mut buf, display);
+
+    // Add blank line
+    lines.push(Line::raw(""));
+
+    // Render career stats below bio
+    career_table.render(Rect::new(0, bio_height + 1, buf_width, career_height), &mut buf, display);
+
+    // Convert buffer to lines
+    for y in 0..buf.area.height {
+        let mut current_style = Style::default();
+        let mut current_text = String::new();
+        let mut spans = Vec::new();
+
+        for x in 0..buf.area.width {
+            let cell = buf.get(x, y);
+            if cell.style() != current_style {
+                if !current_text.is_empty() {
+                    spans.push(Span::styled(current_text.clone(), current_style));
+                    current_text.clear();
+                }
+                current_style = cell.style();
+            }
+            current_text.push_str(cell.symbol());
+        }
+
+        if !current_text.is_empty() {
+            spans.push(Span::styled(current_text, current_style));
+        }
+
+        lines.push(Line::from(spans));
+    }
+
+    state.panel_scrollable.update_viewport_height(area.height);
+    state.panel_scrollable.update_content_height(lines.len());
+
+    let paragraph = Paragraph::new(lines)
+        .scroll((state.panel_scrollable.scroll_offset, 0));
+    f.render_widget(paragraph, area);
 }
 
 #[cfg(test)]

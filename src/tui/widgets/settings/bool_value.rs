@@ -2,8 +2,7 @@
 ///
 /// Displays checked ([✔]) or unchecked ([ ]) based on value.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::Style, text::Span};
-use crate::config::DisplayConfig;
+use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 
 /// Renders a boolean value as a checkbox
 ///

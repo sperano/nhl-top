@@ -6,7 +6,7 @@
 ///
 /// Error messages are displayed with the error color when present.
 
-use ratatui::{buffer::Buffer, layout::Rect, style::{Color, Style}, text::{Line, Span}};
+use ratatui::{buffer::Buffer, layout::Rect, style::{Color, Style}};
 use std::time::{Duration, SystemTime};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::RenderableWidget;

@@ -66,7 +66,7 @@ pub async fn fetch_schedule_cached(client: &Client, date: GameDate) -> Result<Da
 )]
 pub async fn fetch_game_cached(client: &Client, game_id: i64) -> Result<GameMatchup, NHLApiError> {
     use nhl_api::GameId;
-    client.landing(&GameId::new(game_id)).await
+    client.landing(game_id).await
 }
 
 #[cached(
@@ -78,7 +78,7 @@ pub async fn fetch_game_cached(client: &Client, game_id: i64) -> Result<GameMatc
 )]
 pub async fn fetch_boxscore_cached(client: &Client, game_id: i64) -> Result<nhl_api::Boxscore, NHLApiError> {
     use nhl_api::GameId;
-    client.boxscore(&GameId::new(game_id)).await
+    client.boxscore(game_id).await
 }
 
 #[cached(
