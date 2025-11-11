@@ -21,6 +21,7 @@ pub fn render_color_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::layout::Rect;
 
     fn buffer_to_string(buf: &Buffer, y: u16) -> String {
         let mut result = String::new();

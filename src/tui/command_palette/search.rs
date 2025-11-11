@@ -137,7 +137,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use crate::SharedData;
+    use crate::types::SharedData;
     use nhl_api::Standing;
 
     #[tokio::test]

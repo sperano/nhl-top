@@ -31,7 +31,7 @@ pub fn render_bool_value(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::style::Color;
+    use ratatui::{layout::Rect, style::Color};
 
     fn buffer_to_string(buf: &Buffer, y: u16) -> String {
         let mut result = String::new();

@@ -55,7 +55,7 @@ mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use crate::SharedData;
+    use crate::types::SharedData;
 
     fn create_key_event(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::empty())

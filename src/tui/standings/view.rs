@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::config::DisplayConfig;
 use crate::commands::standings::GroupBy;
 use crate::formatting::format_header;
-use crate::NHL_LEAGUE_ABBREV;
+use crate::types::NHL_LEAGUE_ABBREV;
 use super::{State, layout::StandingsLayout};
 use super::panel::{StandingsPanel, PlayerStat, GoalieStat};
 use crate::tui::common::separator::build_tab_separator_line;

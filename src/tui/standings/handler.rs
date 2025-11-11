@@ -2,8 +2,8 @@ use crossterm::event::{KeyCode, KeyEvent};
 use super::State;
 use super::panel::StandingsPanel;
 use crate::tui::navigation::NavigationContext;
-use crate::SharedDataHandle;
-use crate::NHL_LEAGUE_ABBREV;
+use crate::types::SharedDataHandle;
+use crate::types::NHL_LEAGUE_ABBREV;
 use tokio::sync::mpsc;
 
 fn navigate_to_column(state: &mut State, new_column: usize, new_column_team_count: usize) {

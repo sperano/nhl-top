@@ -1,6 +1,6 @@
 use super::state::State;
 use super::target::Target;
-use crate::SharedDataHandle;
+use crate::types::SharedDataHandle;
 use crossterm::event::{KeyCode, KeyEvent};
 
 /// Handle keyboard events for the browser tab
@@ -53,7 +53,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use crate::SharedData;
+    use crate::types::SharedData;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn create_key_event(code: KeyCode) -> KeyEvent {

@@ -5,6 +5,9 @@ pub mod scores;
 pub mod scores_format;
 pub mod franchises;
 
+#[cfg(debug_assertions)]
+pub mod demo;
+
 use nhl_api::GameDate;
 use chrono::NaiveDate;
 use anyhow::{Context, Result};

@@ -6,7 +6,7 @@ use tokio::sync::mpsc;
 use super::State;
 use super::state::{DATE_WINDOW_MIN_INDEX, DATE_WINDOW_MAX_INDEX};
 use super::format_boxscore_text;
-use crate::{SharedData, SharedDataHandle};
+use crate::types::{SharedData, SharedDataHandle};
 
 /// Clears schedule-related data to show "Loading..." state while fetching new data
 fn clear_schedule_data(data: &mut SharedData) {

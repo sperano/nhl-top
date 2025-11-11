@@ -1,14 +1,14 @@
-mod tui;
-mod commands;
+// Local modules
 mod background;
-pub mod config;
-mod cache;
-mod formatting;
 
-use nhl_api::{Client, Standing, DailySchedule};
+// Import from library
+use nhl::types::{SharedData, SharedDataHandle, NHL_LEAGUE_ABBREV};
+use nhl::tui;
+use nhl::commands;
+use nhl::config;
+use nhl::cache;
 
-// Global Constants
-pub const NHL_LEAGUE_ABBREV: &str = "NHL";
+use nhl_api::Client;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -27,82 +27,6 @@ const DEFAULT_LOG_LEVEL: &str = "info";
 
 /// Default log file path (no logging to file)
 const DEFAULT_LOG_FILE: &str = "/dev/null";
-
-#[derive(Clone)]
-pub struct SharedData {
-    pub standings: Arc<Vec<Standing>>,
-    pub schedule: Arc<Option<DailySchedule>>,
-    pub period_scores: Arc<HashMap<i64, commands::scores_format::PeriodScores>>,
-    pub game_info: Arc<HashMap<i64, nhl_api::GameMatchup>>,
-    pub boxscore: Arc<Option<nhl_api::Boxscore>>,
-    pub club_stats: Arc<HashMap<String, nhl_api::ClubStats>>,
-    pub player_info: Arc<HashMap<i64, nhl_api::PlayerLanding>>,
-    pub config: config::Config,
-    pub last_refresh: Option<SystemTime>,
-    pub game_date: nhl_api::GameDate,
-    pub status_message: Option<String>,
-    pub status_is_error: bool,
-    pub selected_game_id: Option<i64>,
-    pub boxscore_loading: bool,
-    pub selected_team_abbrev: Option<String>,
-    pub club_stats_loading: bool,
-    pub selected_player_id: Option<i64>,
-    pub player_info_loading: bool,
-}
-
-impl Default for SharedData {
-    fn default() -> Self {
-        SharedData {
-            standings: Arc::new(Vec::new()),
-            schedule: Arc::new(None),
-            period_scores: Arc::new(HashMap::new()),
-            game_info: Arc::new(HashMap::new()),
-            boxscore: Arc::new(None),
-            club_stats: Arc::new(HashMap::new()),
-            player_info: Arc::new(HashMap::new()),
-            config: config::Config::default(),
-            last_refresh: None,
-            game_date: nhl_api::GameDate::today(),
-            status_message: None,
-            status_is_error: false,
-            selected_game_id: None,
-            boxscore_loading: false,
-            selected_team_abbrev: None,
-            club_stats_loading: false,
-            selected_player_id: None,
-            player_info_loading: false,
-        }
-    }
-}
-
-impl SharedData {
-    /// Clear boxscore state (used when exiting boxscore view or switching tabs)
-    pub fn clear_boxscore(&mut self) {
-        self.selected_game_id = None;
-        self.boxscore = Arc::new(None);
-        self.boxscore_loading = false;
-    }
-
-    /// Set an error status message
-    pub fn set_error(&mut self, msg: String) {
-        self.status_message = Some(msg);
-        self.status_is_error = true;
-    }
-
-    /// Set a non-error status message
-    pub fn set_status(&mut self, msg: String) {
-        self.status_message = Some(msg);
-        self.status_is_error = false;
-    }
-
-    /// Clear the status message
-    pub fn clear_status(&mut self) {
-        self.status_message = None;
-        self.status_is_error = false;
-    }
-}
-
-pub type SharedDataHandle = Arc<RwLock<SharedData>>;
 
 #[derive(Parser)]
 #[command(name = "nhl")]
@@ -181,6 +105,9 @@ enum Commands {
     Franchises,
     /// Display current configuration
     Config,
+    /// Interactive widget system demo (debug builds only)
+    #[cfg(debug_assertions)]
+    Demo,
 }
 
 fn create_client() -> Client {
@@ -298,6 +225,8 @@ async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
 async fn execute_command(client: &Client, command: Commands, config: &config::Config) -> anyhow::Result<()> {
     match command {
         Commands::Config => unreachable!("Config command should be handled before execute_command"),
+        #[cfg(debug_assertions)]
+        Commands::Demo => unreachable!("Demo command should be handled before execute_command"),
         Commands::Standings { season, date, by } => {
             let group_by = by.to_standings_groupby();
             commands::standings::run(client, season, date, group_by, config).await
@@ -342,6 +271,17 @@ async fn main() {
     // Handle Config command separately (doesn't need a client)
     if let Commands::Config = command {
         handle_config_command();
+        return;
+    }
+
+    // Handle Demo command separately (debug builds only, doesn't need a client)
+    #[cfg(debug_assertions)]
+    if let Commands::Demo = command {
+        if let Err(e) = commands::demo::run().await {
+            eprintln!("Error running demo: {}", e);
+            tracing::error!("Demo failed: {:#}", e);
+            std::process::exit(1);
+        }
         return;
     }
 

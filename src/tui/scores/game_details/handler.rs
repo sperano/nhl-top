@@ -4,7 +4,7 @@ use nhl_api::Boxscore;
 use crate::tui::scores::game_details::state::{GameDetailsState, PlayerSection};
 use crate::tui::scores::game_details::players;
 use crate::tui::scores::panel::ScoresPanel;
-use crate::SharedDataHandle;
+use crate::types::SharedDataHandle;
 
 /// Handle key events for game details navigation
 /// Returns true if the event was handled, false if parent should handle
@@ -139,7 +139,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use crate::SharedData;
+    use crate::types::SharedData;
 
     fn create_mock_shared_data() -> Arc<RwLock<SharedData>> {
         Arc::new(RwLock::new(SharedData::default()))

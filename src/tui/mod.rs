@@ -32,7 +32,7 @@ use ratatui::{
     Terminal,
     Frame,
 };
-use crate::SharedDataHandle;
+use crate::types::SharedDataHandle;
 use crate::commands::scores_format::PeriodScores;
 use crate::config::{self, DisplayConfig};
 use app::{AppState, CurrentTab};

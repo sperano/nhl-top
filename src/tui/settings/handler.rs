@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use super::{State, build_settings_list, SettingValue};
-use crate::SharedDataHandle;
+use crate::types::SharedDataHandle;
 use crate::config;
 
 /// Handle key events for settings tab

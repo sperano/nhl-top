@@ -755,7 +755,7 @@ fn render_player_panel(
     player_info_map: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
 ) {
     use crate::tui::widgets::{RenderableWidget, PlayerBioCard, CareerStatsTable};
-    use crate::NHL_LEAGUE_ABBREV;
+    use crate::types::NHL_LEAGUE_ABBREV;
 
     let mut lines = Vec::new();
 

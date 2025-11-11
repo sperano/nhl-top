@@ -7,6 +7,21 @@
 #[cfg(test)]
 pub mod testing;
 
+// Focus management system
+pub mod focus;
+pub mod tree;
+pub mod container;
+pub mod link;
+pub mod list;
+pub mod table;
+pub mod breadcrumb_focusable;
+
+pub use container::{Container, FocusPosition};
+pub use link::{Link, LinkBuilder, LinkStyle};
+pub use list::{List, ListStyle};
+pub use table::{FocusableTable, ColumnDef, Alignment, TableStyle, HighlightMode};
+pub use breadcrumb_focusable::{BreadcrumbWidget, BreadcrumbSegment, BreadcrumbStyle};
+
 // Small reusable widgets
 pub mod section_header;
 pub mod horizontal_separator;

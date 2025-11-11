@@ -213,7 +213,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use tokio::sync::RwLock;
-    use crate::SharedData;
+    use crate::types::SharedData;
     use crate::commands::standings::GroupBy;
     use std::str::FromStr;
 
