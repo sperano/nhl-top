@@ -148,7 +148,7 @@ impl DemoState {
         // Create action list with links
         let mut action_list = List::new();
         action_list.add_item(Box::new(
-            Link::new("Refresh Data").with_action(|| NavigationAction::PopPanel)
+            Link::new("Refresh Data")  // No action - just does nothing when activated
         ));
         action_list.add_item(Box::new(
             Link::new("Exit Demo").with_action(|| NavigationAction::PopPanel)
