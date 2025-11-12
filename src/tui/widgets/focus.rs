@@ -162,6 +162,15 @@ pub trait Focusable: RenderableWidget {
     fn focus_last(&mut self) {
         self.set_focused(true);
     }
+
+    /// Get the current selection index (for widgets that have selection)
+    ///
+    /// Returns None for widgets that don't support selection, or Some(index)
+    /// for widgets like List and Table that maintain a selected item.
+    /// This is read-only - used for testing and debugging.
+    fn selected_index(&self) -> Option<usize> {
+        None
+    }
 }
 
 #[cfg(test)]

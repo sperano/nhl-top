@@ -185,9 +185,13 @@ impl AppState {
         self.scores.subtab_focused = false;
         self.scores.box_selection_active = false;
         self.standings.subtab_focused = false;
-        self.standings.team_selection_active = false;
-        self.standings.selected_team_index = 0;
-        self.standings.selected_column = 0;
+        // Exit table focus mode if active
+        if let Some(idx) = self.standings.focused_table_index {
+            if idx < self.standings.team_tables.len() {
+                self.standings.team_tables[idx].set_focused(false);
+            }
+            self.standings.focused_table_index = None;
+        }
         self.settings.subtab_focused = false;
         self.browser.subtab_focused = false;
     }

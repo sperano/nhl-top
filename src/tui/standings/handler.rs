@@ -1,53 +1,11 @@
 use super::State;
-use super::layout::StandingsLayout;
-use super::panel::StandingsPanel;
 use super::state::{PanelState, TeamDetailState, PlayerDetailState};
+use crate::tui::common::CommonPanel;
 use crate::types::SharedDataHandle;
-use crate::commands::standings::GroupBy;
 use crate::tui::navigation::Panel;
+use crate::tui::widgets::focus::{InputResult, NavigationAction};
 use crossterm::event::{KeyCode, KeyEvent};
 use tokio::sync::mpsc;
-
-/// Navigate to a different column, adjusting selected_team_index if needed
-fn navigate_to_column(state: &mut State, new_column: usize, new_column_team_count: usize) {
-    state.selected_column = new_column;
-    // If the new column has fewer teams than our current index, clamp to last team
-    if state.selected_team_index >= new_column_team_count && new_column_team_count > 0 {
-        state.selected_team_index = new_column_team_count - 1;
-    }
-}
-
-/// Change view with save/restore of selection state
-async fn change_view<F>(state: &mut State, shared_data: &SharedDataHandle, view_fn: F) -> bool
-where
-    F: FnOnce(GroupBy) -> GroupBy,
-{
-    // Save current selection before changing views
-    state.save_current_selection();
-
-    // Change to new view
-    state.view = view_fn(state.view);
-
-    // Restore selection for new view (or default to 0,0)
-    state.restore_selection_for_view();
-
-    // Build layout for new view to validate selection bounds
-    let data = shared_data.read().await;
-    let layout = StandingsLayout::build(&data.standings, state.view, data.config.display_standings_western_first);
-    drop(data);
-
-    // Get team counts per column for validation
-    let team_counts: Vec<usize> = layout.columns.iter().map(|col| col.team_count).collect();
-    let max_columns = layout.column_count();
-
-    // Validate and clamp selection to ensure it's within bounds
-    state.validate_selection(max_columns, &team_counts);
-
-    // Reset scroll position for new view
-    state.scrollable.reset();
-
-    true
-}
 
 /// Handle navigation within panel views (TeamDetail, PlayerDetail)
 async fn handle_panel_navigation(
@@ -62,7 +20,7 @@ async fn handle_panel_navigation(
     };
 
     match &current_panel {
-        StandingsPanel::TeamDetail { team_abbrev, .. } => {
+        CommonPanel::TeamDetail { team_abbrev, .. } => {
             // Get or create TeamDetailState from cache
             let cache_key = current_panel.cache_key();
             let mut panel_state = state
@@ -122,13 +80,13 @@ async fn handle_panel_navigation(
                         if let Some(stats) = data.club_stats.get(team_abbrev.as_str()) {
                             if let Some(skater) = stats.skaters.get(panel_state.selected_player_index) {
                                 let player_id = skater.player_id;
-                                let player_panel = StandingsPanel::PlayerDetail {
+                                let player_panel = CommonPanel::PlayerDetail {
                                     player_id,
                                     player_name: format!(
                                         "{} {}",
                                         skater.first_name.default, skater.last_name.default
                                     ),
-                                    from_team_name: team_abbrev.clone(),
+                                    from_context: format!("from team {}", team_abbrev),
                                 };
                                 drop(data);
 
@@ -189,7 +147,7 @@ async fn handle_panel_navigation(
 
             handled
         }
-        StandingsPanel::PlayerDetail { player_id, .. } => {
+        CommonPanel::PlayerDetail { player_id, .. } => {
             // Get or create PlayerDetailState from cache
             let cache_key = current_panel.cache_key();
             let mut player_state = state
@@ -314,7 +272,7 @@ async fn handle_panel_navigation(
                             if let Some((wins, losses, ot_losses, points, division, conference)) =
                                 team_data
                             {
-                                let team_panel = StandingsPanel::TeamDetail {
+                                let team_panel = CommonPanel::TeamDetail {
                                     team_name,
                                     team_abbrev: team_abbrev.clone(),
                                     wins,
@@ -379,6 +337,143 @@ async fn handle_panel_navigation(
     }
 }
 
+/// Handle input when using FocusableTable widgets for team navigation
+async fn handle_team_table_input(
+    key: KeyEvent,
+    state: &mut State,
+    shared_data: &SharedDataHandle,
+    refresh_tx: &mpsc::Sender<()>,
+) -> bool {
+    let focused_idx = match state.focused_table_index {
+        Some(idx) => idx,
+        None => return false, // Not in table mode
+    };
+
+    // Get mutable reference to the focused table
+    if focused_idx >= state.team_tables.len() {
+        return false;
+    }
+
+    // Handle input through the table
+    let result = {
+        let table = &mut state.team_tables[focused_idx];
+        table.handle_input(key)
+    };
+
+    match result {
+        InputResult::Handled => true,
+        InputResult::NotHandled => {
+            // Table didn't handle it - check for Left/Right to switch tables
+            match key.code {
+                KeyCode::Left => {
+                    // Move to left table if it exists
+                    if focused_idx > 0 {
+                        state.team_tables[focused_idx].set_focused(false);
+                        state.focused_table_index = Some(focused_idx - 1);
+                        state.team_tables[focused_idx - 1].set_focused(true);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                KeyCode::Right => {
+                    // Move to right table if it exists
+                    if focused_idx + 1 < state.team_tables.len() {
+                        state.team_tables[focused_idx].set_focused(false);
+                        state.focused_table_index = Some(focused_idx + 1);
+                        state.team_tables[focused_idx + 1].set_focused(true);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                KeyCode::Up => {
+                    // If we're at top of table, exit table mode
+                    if focused_idx < state.team_tables.len() {
+                        state.team_tables[focused_idx].set_focused(false);
+                        state.focused_table_index = None;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                KeyCode::Esc => {
+                    // Exit table mode
+                    if focused_idx < state.team_tables.len() {
+                        state.team_tables[focused_idx].set_focused(false);
+                        state.focused_table_index = None;
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            }
+        }
+        InputResult::Navigate(action) => {
+            // Handle navigation action (e.g., NavigateToTeam)
+            match action {
+                NavigationAction::NavigateToTeam(team_abbrev) => {
+                    // Look up team details from standings
+                    let team_data = {
+                        let data = shared_data.read().await;
+                        data.standings
+                            .iter()
+                            .find(|s| s.team_abbrev.default == team_abbrev)
+                            .map(|team| {
+                                (
+                                    team.team_common_name.default.clone(),
+                                    team.team_abbrev.default.clone(),
+                                    team.wins,
+                                    team.losses,
+                                    team.ot_losses,
+                                    team.points,
+                                    team.division_name.clone(),
+                                    team.conference_name.clone(),
+                                )
+                            })
+                    };
+
+                    if let Some((name, abbrev, wins, losses, ot_losses, points, division, conference)) = team_data {
+                        let panel = CommonPanel::TeamDetail {
+                            team_name: name,
+                            team_abbrev: abbrev.clone(),
+                            wins,
+                            losses,
+                            ot_losses,
+                            points,
+                            division_name: division,
+                            conference_name: conference,
+                        };
+
+                        // Create initial TeamDetailState and store in cache
+                        let panel_state = TeamDetailState::new();
+                        let cache_key = panel.cache_key();
+                        state
+                            .navigation
+                            .data
+                            .insert(cache_key, PanelState::TeamDetail(panel_state));
+
+                        state.navigation.navigate_to(panel);
+
+                        // Set selected_team_abbrev to trigger club stats fetch
+                        let mut data = shared_data.write().await;
+                        data.selected_team_abbrev = Some(abbrev);
+                        drop(data);
+
+                        // Trigger refresh to fetch club stats
+                        let _ = refresh_tx.send(()).await;
+                    }
+
+                    true
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
 pub async fn handle_key(
     key: KeyEvent,
     state: &mut State,
@@ -390,140 +485,47 @@ pub async fn handle_key(
         return handle_panel_navigation(key, state, shared_data, refresh_tx).await;
     }
 
-    // Build layout to get team counts for navigation
-        let data = shared_data.read().await;
-        let layout = StandingsLayout::build(&data.standings, state.view, data.config.display_standings_western_first);
-        drop(data);
+    // Check if we're using FocusableTable widgets for team navigation
+    if state.focused_table_index.is_some() {
+        return handle_team_table_input(key, state, shared_data, refresh_tx).await;
+    }
 
-        let max_columns = layout.column_count();
-        let team_count_in_current_column = layout.columns
-            .get(state.selected_column)
-            .map(|col| col.team_count)
-            .unwrap_or(0);
-
-        if state.team_selection_active {
-        // Team selection mode - navigate within the standings
-        match key.code {
-            KeyCode::Up => {
-                if state.selected_team_index == 0 {
-                    // At first team, exit team selection mode
-                    state.team_selection_active = false;
-                    true
-                } else {
-                    // Move up to previous team
-                    state.selected_team_index = state.selected_team_index.saturating_sub(1);
-                    true
-                }
-            }
-            KeyCode::Down => {
-                // Move down to next team
-                if state.selected_team_index + 1 < team_count_in_current_column {
-                    state.selected_team_index += 1;
-                }
-                true
-            }
-            KeyCode::Left => {
-                // Switch to left column (in two-column views)
-                if state.selected_column > 0 {
-                    let new_column = state.selected_column - 1;
-                    let new_column_team_count = layout.columns
-                        .get(new_column)
-                        .map(|col| col.team_count)
-                        .unwrap_or(0);
-                    navigate_to_column(state, new_column, new_column_team_count);
-                }
-                true
-            }
-            KeyCode::Right => {
-                // Switch to right column (in two-column views)
-                if state.selected_column + 1 < max_columns {
-                    let new_column = state.selected_column + 1;
-                    let new_column_team_count = layout.columns
-                        .get(new_column)
-                        .map(|col| col.team_count)
-                        .unwrap_or(0);
-                    navigate_to_column(state, new_column, new_column_team_count);
-                }
-                true
-            }
-            KeyCode::Enter => {
-                // Navigate to team detail panel
-                if let Some(team) = layout.get_team(state.selected_column, state.selected_team_index) {
-                    let team_abbrev = team.team_abbrev.default.clone();
-                    let panel = StandingsPanel::TeamDetail {
-                        team_name: team.team_common_name.default.clone(),
-                        team_abbrev: team_abbrev.clone(),
-                        wins: team.wins,
-                        losses: team.losses,
-                        ot_losses: team.ot_losses,
-                        points: team.points,
-                        division_name: team.division_name.clone(),
-                        conference_name: team.conference_name.clone(),
-                    };
-
-                    // Create initial TeamDetailState and store in cache
-                    let panel_state = TeamDetailState::new();
-                    let cache_key = panel.cache_key();
-                    state
-                        .navigation
-                        .data
-                        .insert(cache_key, PanelState::TeamDetail(panel_state));
-
-                    state.navigation.navigate_to(panel);
-
-                    // Set selected_team_abbrev to trigger club stats fetch
-                    let mut data = shared_data.write().await;
-                    data.selected_team_abbrev = Some(team_abbrev);
-                    drop(data);
-
-                    // Trigger refresh to fetch club stats
-                    let _ = refresh_tx.send(()).await;
-                }
-                true
-            }
-            KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
-                // Scrolling keys
-                state.scrollable.handle_key(key)
-            }
-            KeyCode::Esc => {
-                // Exit team selection mode
-                state.team_selection_active = false;
-                true
-            }
-            _ => false,
+    // View selection mode - switch between Division/Conference/League/Wildcard
+    match key.code {
+        KeyCode::Left => {
+            // Cycle to previous view
+            state.view = state.view.prev();
+            // Clear tables to force rebuild on next render
+            state.team_tables.clear();
+            state.focused_table_index = None;
+            true
         }
-    } else {
-        // View selection mode - switch between Division/Conference/League/Wildcard
-        match key.code {
-            KeyCode::Left => change_view(state, shared_data, |view| view.prev()).await,
-            KeyCode::Right => change_view(state, shared_data, |view| view.next()).await,
-            KeyCode::Down => {
-                // Enter team selection mode (if there are teams to select)
-                if team_count_in_current_column > 0 {
-                    state.team_selection_active = true;
-                }
-                true
-            }
-            KeyCode::Up => {
-                // Allow scrolling up even when not in team selection mode
-                if state.scrollable.scroll_offset == 0 {
-                    false // Let parent handler deal with it
-                } else {
-                    state.scrollable.handle_key(key)
-                }
-            }
-            KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End => {
-                // Manual scrolling
-                state.scrollable.handle_key(key)
-            }
-            _ => false,
+        KeyCode::Right => {
+            // Cycle to next view
+            state.view = state.view.next();
+            // Clear tables to force rebuild on next render
+            state.team_tables.clear();
+            state.focused_table_index = None;
+            true
         }
+        KeyCode::Down => {
+            // Enter table mode if tables are available
+            if !state.team_tables.is_empty() {
+                state.focused_table_index = Some(0);
+                state.team_tables[0].set_focused(true);
+                true
+            } else {
+                false
+            }
+        }
+        _ => false,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::standings::GroupBy;
     use crate::types::SharedData;
     use std::sync::Arc;
     use tokio::sync::RwLock;
@@ -549,11 +551,27 @@ mod tests {
 
     /// Helper to create shared data with test standings
     fn create_test_shared_data() -> SharedDataHandle {
-        let standings = vec![
+        let mut standings = vec![
             create_test_standing("TOR", "Toronto", 30, 60),
             create_test_standing("MTL", "Montreal", 25, 50),
             create_test_standing("OTT", "Ottawa", 20, 40),
         ];
+
+        // Add Western conference teams for multi-column tests
+        standings.push(Standing {
+            conference_abbrev: Some("W".to_string()),
+            conference_name: Some("Western".to_string()),
+            division_abbrev: "CEN".to_string(),
+            division_name: "Central".to_string(),
+            team_name: LocalizedString { default: "Chicago".to_string() },
+            team_common_name: LocalizedString { default: "Chicago".to_string() },
+            team_abbrev: LocalizedString { default: "CHI".to_string() },
+            team_logo: String::new(),
+            wins: 28,
+            losses: 20,
+            ot_losses: 5,
+            points: 61,
+        });
 
         Arc::new(RwLock::new(SharedData {
             standings: Arc::new(standings),
@@ -561,76 +579,6 @@ mod tests {
         }))
     }
 
-    #[tokio::test]
-    async fn test_esc_from_team_selection_mode_exits_to_view_selection() {
-        let mut state = State::new();
-        let shared_data = create_test_shared_data();
-        let (tx, _rx) = mpsc::channel::<()>(10);
-
-        // Navigate to Wildcard view
-        state.view = GroupBy::Wildcard;
-        state.subtab_focused = true;
-
-        // Enter team selection mode
-        state.team_selection_active = true;
-        state.selected_team_index = 1; // Select second team
-
-        // Press ESC
-        let key = KeyEvent::from(KeyCode::Esc);
-        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
-
-        // Should handle the key
-        assert!(handled, "ESC should be handled");
-
-        // Should exit team selection mode
-        assert!(!state.team_selection_active, "Should exit team selection mode");
-
-        // Should remain in subtab focused mode (view selection)
-        assert!(state.subtab_focused, "Should remain in subtab focused mode");
-
-        // Navigation stack should still be empty (not in panel)
-        assert!(state.navigation.is_at_root(), "Should not be in a panel");
-    }
-
-    #[tokio::test]
-    async fn test_esc_from_panel_selection_exits_to_team_list() {
-        let mut state = State::new();
-        let shared_data = create_test_shared_data();
-        let (tx, _rx) = mpsc::channel::<()>(10);
-
-        // Simulate being in a TeamDetail panel
-        state.view = GroupBy::Wildcard;
-        state.subtab_focused = true;
-        state.team_selection_active = true;
-
-        let panel = StandingsPanel::TeamDetail {
-            team_name: "Toronto".to_string(),
-            team_abbrev: "TOR".to_string(),
-            wins: 30,
-            losses: 20,
-            ot_losses: 5,
-            points: 65,
-            division_name: "Atlantic".to_string(),
-            conference_name: Some("Eastern".to_string()),
-        };
-        state.navigation.navigate_to(panel);
-
-        // Now we're in the panel with player selection inactive
-        assert!(!state.navigation.is_at_root(), "Should be in a panel");
-
-        // Press ESC
-        let key = KeyEvent::from(KeyCode::Esc);
-        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
-
-        // Should handle the key
-        assert!(handled, "ESC should be handled");
-
-        // Should pop back to team list (navigation stack should be empty)
-        assert!(state.navigation.is_at_root(), "Should be back at root (team list)");
-
-        // Should still be in team selection mode
-        assert!(state.team_selection_active, "Should remain in team selection mode");
-    }
 
     #[tokio::test]
     async fn test_esc_from_panel_player_selection_exits_selection_not_panel() {
@@ -641,9 +589,8 @@ mod tests {
         // Simulate being in a TeamDetail panel with player selection active
         state.view = GroupBy::Wildcard;
         state.subtab_focused = true;
-        state.team_selection_active = true;
 
-        let panel = StandingsPanel::TeamDetail {
+        let panel = CommonPanel::TeamDetail {
             team_name: "Toronto".to_string(),
             team_abbrev: "TOR".to_string(),
             wins: 30,
@@ -683,116 +630,308 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_complete_navigation_flow_with_esc() {
+    async fn test_view_navigation_left_right() {
         let mut state = State::new();
         let shared_data = create_test_shared_data();
         let (tx, _rx) = mpsc::channel::<()>(10);
 
-        // 1. Start in view selection mode
+        // Start in Wildcard view
         state.view = GroupBy::Wildcard;
         state.subtab_focused = true;
-        state.team_selection_active = false;
-        assert!(state.navigation.is_at_root());
 
-        // 2. Press Down to enter team selection mode
-        let key = KeyEvent::from(KeyCode::Down);
+        // Press Right - should go to Division
+        let key = KeyEvent::from(KeyCode::Right);
         let handled = handle_key(key, &mut state, &shared_data, &tx).await;
-        assert!(handled);
-        assert!(state.team_selection_active, "Should enter team selection mode");
+        assert!(handled, "Right should be handled");
+        assert_eq!(state.view, GroupBy::Division);
 
-        // 3. Press Enter to open team panel
-        state.selected_team_index = 0;
-        let key = KeyEvent::from(KeyCode::Enter);
+        // Press Right - should go to Conference
+        let key = KeyEvent::from(KeyCode::Right);
         let handled = handle_key(key, &mut state, &shared_data, &tx).await;
-        assert!(handled);
-        assert!(!state.navigation.is_at_root(), "Should be in team panel");
+        assert!(handled, "Right should be handled");
+        assert_eq!(state.view, GroupBy::Conference);
 
-        // 4. Press ESC to go back to team list
-        let key = KeyEvent::from(KeyCode::Esc);
+        // Press Left - should go back to Division
+        let key = KeyEvent::from(KeyCode::Left);
         let handled = handle_key(key, &mut state, &shared_data, &tx).await;
-        assert!(handled);
-        assert!(state.navigation.is_at_root(), "Should be back at team list");
-        assert!(state.team_selection_active, "Should still be in team selection mode");
-
-        // 5. Press ESC again to exit team selection mode
-        let key = KeyEvent::from(KeyCode::Esc);
-        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
-        assert!(handled);
-        assert!(!state.team_selection_active, "Should exit team selection mode");
-        assert!(state.subtab_focused, "Should remain in subtab mode");
+        assert!(handled, "Left should be handled");
+        assert_eq!(state.view, GroupBy::Division);
     }
 
     #[tokio::test]
-    async fn test_down_arrow_enters_team_selection() {
+    async fn test_down_arrow_enters_table_mode() {
+        use crate::tui::widgets::focus::Focusable;
+
         let mut state = State::new();
         let shared_data = create_test_shared_data();
         let (tx, _rx) = mpsc::channel::<()>(10);
 
-        // Start in view selection mode
-        state.view = GroupBy::Wildcard;
+        // Start in view selection mode with tables built
+        state.view = GroupBy::League;
         state.subtab_focused = true;
-        state.team_selection_active = false;
 
-        // Press Down
+        // Build tables (simulating render)
+        let standings_data = shared_data.read().await;
+        let layout = super::super::layout::StandingsLayout::build(
+            &standings_data.standings,
+            state.view,
+            false,
+        );
+        drop(standings_data);
+        state.team_tables = super::super::view::build_team_tables(&layout);
+
+        // Should not be in table mode yet
+        assert!(state.focused_table_index.is_none(), "Should start in view selection mode");
+        assert!(!state.team_tables[0].is_focused(), "Table should not be focused initially");
+
+        // Press Down - should enter table mode
         let key = KeyEvent::from(KeyCode::Down);
         let handled = handle_key(key, &mut state, &shared_data, &tx).await;
 
         assert!(handled, "Down should be handled");
-        assert!(state.team_selection_active, "Should enter team selection mode");
+        assert_eq!(
+            state.focused_table_index,
+            Some(0),
+            "Should enter table mode with first table focused"
+        );
+        assert!(
+            state.team_tables[0].is_focused(),
+            "First table should be focused after Down"
+        );
     }
 
     #[tokio::test]
-    async fn test_up_arrow_at_first_team_exits_selection() {
+    async fn test_down_when_no_tables_built_does_nothing() {
         let mut state = State::new();
         let shared_data = create_test_shared_data();
         let (tx, _rx) = mpsc::channel::<()>(10);
 
-        // Start in team selection mode at first team
-        state.view = GroupBy::Wildcard;
+        // Start in view selection mode with NO tables
+        state.view = GroupBy::League;
         state.subtab_focused = true;
-        state.team_selection_active = true;
-        state.selected_team_index = 0;
+        state.team_tables.clear();
 
-        // Press Up
+        // Press Down - should not enter table mode
+        let key = KeyEvent::from(KeyCode::Down);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        assert!(!handled, "Down should not be handled when no tables exist");
+        assert!(state.focused_table_index.is_none(), "Should not enter table mode");
+    }
+
+    #[tokio::test]
+    async fn test_up_arrow_exits_table_mode() {
+        use crate::tui::widgets::focus::Focusable;
+
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Set up state: in table mode
+        state.view = GroupBy::League;
+        state.subtab_focused = true;
+
+        // Build tables
+        let standings_data = shared_data.read().await;
+        let layout = super::super::layout::StandingsLayout::build(
+            &standings_data.standings,
+            state.view,
+            false,
+        );
+        drop(standings_data);
+        state.team_tables = super::super::view::build_team_tables(&layout);
+        state.focused_table_index = Some(0);
+        state.team_tables[0].set_focused(true);
+
+        // Verify setup
+        assert!(state.team_tables[0].is_focused(), "Table should start focused");
+
+        // Press Up at top of table - should exit table mode
         let key = KeyEvent::from(KeyCode::Up);
         let handled = handle_key(key, &mut state, &shared_data, &tx).await;
 
         assert!(handled, "Up should be handled");
-        assert!(!state.team_selection_active, "Should exit team selection mode");
+        assert!(state.focused_table_index.is_none(), "Should exit table mode");
+        assert!(!state.team_tables[0].is_focused(), "Table should no longer be focused");
     }
 
     #[tokio::test]
-    async fn test_team_navigation_preserves_selection_across_views() {
+    async fn test_left_right_arrows_switch_tables() {
+        use crate::tui::widgets::focus::Focusable;
+
         let mut state = State::new();
         let shared_data = create_test_shared_data();
         let (tx, _rx) = mpsc::channel::<()>(10);
 
-        // Select team in Wildcard view
-        state.view = GroupBy::Wildcard;
-        state.team_selection_active = true;
-        state.selected_team_index = 2;
-        state.selected_column = 0;
+        // Set up state: Conference view with 2 tables
+        state.view = GroupBy::Conference;
+        state.subtab_focused = true;
 
-        // Save selection
-        state.save_current_selection();
+        // Build tables
+        let standings_data = shared_data.read().await;
+        let layout = super::super::layout::StandingsLayout::build(
+            &standings_data.standings,
+            state.view,
+            false,
+        );
+        drop(standings_data);
+        state.team_tables = super::super::view::build_team_tables(&layout);
 
-        // Switch to Division view
-        let handled = change_view(&mut state, &shared_data, |_| GroupBy::Division).await;
-        assert!(handled);
-        assert_eq!(state.view, GroupBy::Division);
+        // Should have 2 tables for Conference view
+        assert_eq!(state.team_tables.len(), 2, "Conference view should have 2 tables");
 
-        // Selection should reset to default for new view
-        assert_eq!(state.selected_team_index, 0);
-        assert_eq!(state.selected_column, 0);
+        // Enter table mode (focus first table)
+        state.focused_table_index = Some(0);
+        state.team_tables[0].set_focused(true);
 
-        // Switch back to Wildcard
-        let handled = change_view(&mut state, &shared_data, |_| GroupBy::Wildcard).await;
-        assert!(handled);
-        assert_eq!(state.view, GroupBy::Wildcard);
+        // Press Right - should switch to second table
+        let key = KeyEvent::from(KeyCode::Right);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
 
-        // Selection should be restored
-        assert_eq!(state.selected_team_index, 2);
-        assert_eq!(state.selected_column, 0);
+        assert!(handled, "Right should be handled");
+        assert_eq!(state.focused_table_index, Some(1), "Should focus second table");
+        assert!(!state.team_tables[0].is_focused(), "First table should no longer be focused");
+        assert!(state.team_tables[1].is_focused(), "Second table should be focused");
+
+        // Press Left - should switch back to first table
+        let key = KeyEvent::from(KeyCode::Left);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        assert!(handled, "Left should be handled");
+        assert_eq!(state.focused_table_index, Some(0), "Should focus first table");
+        assert!(state.team_tables[0].is_focused(), "First table should be focused");
+        assert!(!state.team_tables[1].is_focused(), "Second table should no longer be focused");
+    }
+
+    #[tokio::test]
+    async fn test_esc_exits_table_mode() {
+        use crate::tui::widgets::focus::Focusable;
+
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Set up state: in table mode
+        state.view = GroupBy::League;
+        state.subtab_focused = true;
+
+        // Build tables
+        let standings_data = shared_data.read().await;
+        let layout = super::super::layout::StandingsLayout::build(
+            &standings_data.standings,
+            state.view,
+            false,
+        );
+        drop(standings_data);
+        state.team_tables = super::super::view::build_team_tables(&layout);
+        state.focused_table_index = Some(0);
+        state.team_tables[0].set_focused(true);
+
+        // Press ESC - should exit table mode
+        let key = KeyEvent::from(KeyCode::Esc);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        assert!(handled, "ESC should be handled");
+        assert!(state.focused_table_index.is_none(), "Should exit table mode");
+        assert!(!state.team_tables[0].is_focused(), "Table should no longer be focused");
+    }
+
+    #[tokio::test]
+    async fn test_view_change_clears_tables_and_resets_focus() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Set up state: in League view with tables built
+        state.view = GroupBy::League;
+        state.subtab_focused = true;
+
+        // Build tables
+        let standings_data = shared_data.read().await;
+        let layout = super::super::layout::StandingsLayout::build(
+            &standings_data.standings,
+            state.view,
+            false,
+        );
+        drop(standings_data);
+        state.team_tables = super::super::view::build_team_tables(&layout);
+
+        // Verify setup: tables exist, NOT in table mode (in view selection mode)
+        assert!(!state.team_tables.is_empty(), "Tables should be built");
+        assert_eq!(state.focused_table_index, None, "Should be in view selection mode");
+
+        // Change view by pressing Right (in view selection mode)
+        let key = KeyEvent::from(KeyCode::Right);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        assert!(handled, "Right should be handled");
+        assert_eq!(state.view, GroupBy::Wildcard, "View should change to Wildcard (League -> Wildcard in cycle)");
+        assert!(state.team_tables.is_empty(), "Tables should be cleared after view change");
+        assert_eq!(state.focused_table_index, None, "Focus should still be None after view change");
+    }
+
+    #[tokio::test]
+    async fn test_team_selection_navigation_sequence() {
+        use crate::tui::widgets::focus::Focusable;
+
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Set up state: in League view
+        state.view = GroupBy::League;
+        state.subtab_focused = true;
+
+        // Build tables
+        let standings_data = shared_data.read().await;
+        let layout = super::super::layout::StandingsLayout::build(
+            &standings_data.standings,
+            state.view,
+            false,
+        );
+        drop(standings_data);
+        state.team_tables = super::super::view::build_team_tables(&layout);
+
+        // Enter table mode
+        state.focused_table_index = Some(0);
+        state.team_tables[0].set_focused(true);
+
+        // Start at row 0
+        assert_eq!(
+            state.team_tables[0].selected_index(),
+            Some(0),
+            "Should start at first team"
+        );
+
+        // Navigate down
+        let key = KeyEvent::from(KeyCode::Down);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled, "Down should be handled");
+        assert_eq!(
+            state.team_tables[0].selected_index(),
+            Some(1),
+            "Should move to second team"
+        );
+
+        // Navigate down again
+        let key = KeyEvent::from(KeyCode::Down);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled, "Down should be handled");
+        assert_eq!(
+            state.team_tables[0].selected_index(),
+            Some(2),
+            "Should move to third team"
+        );
+
+        // Navigate up
+        let key = KeyEvent::from(KeyCode::Up);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled, "Up should be handled");
+        assert_eq!(
+            state.team_tables[0].selected_index(),
+            Some(1),
+            "Should move back to second team"
+        );
     }
 }
 

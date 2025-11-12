@@ -452,6 +452,10 @@ where
         self.select_row(last);
         self.set_focused(true);
     }
+
+    fn selected_index(&self) -> Option<usize> {
+        self.selected_row()
+    }
 }
 
 impl<T> super::RenderableWidget for FocusableTable<T> {

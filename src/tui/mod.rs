@@ -93,9 +93,8 @@ fn log_widget_tree(app_state: &AppState) {
         CurrentTab::Standings => {
             tracing::debug!("Standings state:");
             tracing::debug!("  - view: {:?}", app_state.standings.view);
-            tracing::debug!("  - team_selection_active: {}", app_state.standings.team_selection_active);
-            tracing::debug!("  - selected_team_index: {:?}", app_state.standings.selected_team_index);
-            tracing::debug!("  - selected_column: {:?}", app_state.standings.selected_column);
+            tracing::debug!("  - focused_table_index: {:?}", app_state.standings.focused_table_index);
+            tracing::debug!("  - num_tables: {}", app_state.standings.team_tables.len());
             tracing::debug!("  - navigation depth: {}", app_state.standings.navigation.stack.depth());
             tracing::debug!("  - container: {}", if app_state.standings.container.is_some() { "Some" } else { "None" });
         }
@@ -140,9 +139,9 @@ fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
             return None; // Let scores handler handle ESC
         }
 
-        // If on Standings tab and team selection is active, don't handle ESC here
-        // Let the standings handler exit team selection mode
-        if matches!(app_state.current_tab, CurrentTab::Standings) && app_state.standings.team_selection_active {
+        // If on Standings tab and a table is focused, don't handle ESC here
+        // Let the standings handler exit table focus mode
+        if matches!(app_state.current_tab, CurrentTab::Standings) && app_state.standings.focused_table_index.is_some() {
             return None; // Let standings handler handle ESC
         }
 
@@ -746,7 +745,7 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
 mod tests {
     use super::*;
     use crate::tui::app::AppState;
-    use crate::tui::standings::panel::StandingsPanel;
+    use crate::tui::common::CommonPanel;
     use crate::tui::context::BreadcrumbProvider;
 
     #[test]
@@ -796,7 +795,7 @@ mod tests {
         app_state.standings.subtab_focused = true;
 
         // Navigate into a panel
-        let panel = StandingsPanel::TeamDetail {
+        let panel = CommonPanel::TeamDetail {
             team_name: "Canadiens".to_string(),
             team_abbrev: "MTL".to_string(),
             wins: 30,

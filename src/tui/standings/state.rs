@@ -1,9 +1,9 @@
 use crate::tui::widgets::Container;
+use crate::tui::widgets::focus::Focusable;
 use crate::commands::standings::GroupBy;
 use crate::tui::common::scrollable::Scrollable;
 use crate::tui::navigation::NavigationContext;
-use super::panel::StandingsPanel;
-use std::collections::HashMap;
+use crate::tui::common::CommonPanel;
 
 /// Panel-specific state for TeamDetail view
 #[derive(Debug, Clone)]
@@ -48,41 +48,25 @@ pub enum PanelState {
     PlayerDetail(PlayerDetailState),
 }
 
-/// Selection state for a specific view (column + team index)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ViewSelection {
-    pub column: usize,
-    pub team_index: usize,
-}
-
-impl ViewSelection {
-    pub fn new(column: usize, team_index: usize) -> Self {
-        Self { column, team_index }
-    }
-
-    pub fn default() -> Self {
-        Self { column: 0, team_index: 0 }
-    }
-}
 
 pub struct State {
     pub container: Option<Container>,
     pub subtab_focused: bool,
 
-    // Active fields for current implementation
+    // Current standings view (Division, Conference, League, Wildcard)
     pub view: GroupBy,
-    pub team_selection_active: bool,
-    pub selected_team_index: usize,
-    pub selected_column: usize,
-    pub scrollable: Scrollable,
 
-    // Per-view selection memory
-    // Remembers which team was selected in each view when you switch between them
-    pub view_selections: HashMap<GroupBy, ViewSelection>,
+    // Scrollable for panel views (TeamDetail, PlayerDetail)
+    pub scrollable: Scrollable,
 
     // Navigation context for panel drill-down (team details, player details)
     // Uses PanelState to store panel-specific state (selection, scrolling, etc.)
-    pub navigation: NavigationContext<StandingsPanel, String, PanelState>,
+    pub navigation: NavigationContext<CommonPanel, String, PanelState>,
+
+    // FocusableTable widgets for each column (1 for League, 2 for others)
+    pub team_tables: Vec<Box<dyn Focusable>>,
+    // Index of the currently focused table (None if in view selection mode)
+    pub focused_table_index: Option<usize>,
 }
 
 impl State {
@@ -91,51 +75,10 @@ impl State {
             container: None,
             subtab_focused: false,
             view: GroupBy::Wildcard,
-            team_selection_active: false,
-            selected_team_index: 0,
-            selected_column: 0,
             scrollable: Scrollable::new(),
-            view_selections: HashMap::new(),
             navigation: NavigationContext::new(),
-        }
-    }
-
-    /// Save current selection for the current view
-    pub fn save_current_selection(&mut self) {
-        let selection = ViewSelection::new(self.selected_column, self.selected_team_index);
-        self.view_selections.insert(self.view, selection);
-    }
-
-    /// Restore selection for the current view, or use default if not saved
-    /// Returns true if a saved selection was restored
-    pub fn restore_selection_for_view(&mut self) -> bool {
-        if let Some(selection) = self.view_selections.get(&self.view).copied() {
-            self.selected_column = selection.column;
-            self.selected_team_index = selection.team_index;
-            true
-        } else {
-            // No saved selection, use default
-            self.selected_column = 0;
-            self.selected_team_index = 0;
-            false
-        }
-    }
-
-    /// Validate and clamp selection to ensure it's within bounds for the given layout
-    /// Call this after restoring selection to ensure it's still valid
-    pub fn validate_selection(&mut self, max_columns: usize, team_counts: &[usize]) {
-        // Clamp column to valid range
-        if self.selected_column >= max_columns {
-            self.selected_column = if max_columns > 0 { max_columns - 1 } else { 0 };
-        }
-
-        // Clamp team index to valid range for current column
-        if let Some(&team_count) = team_counts.get(self.selected_column) {
-            if self.selected_team_index >= team_count && team_count > 0 {
-                self.selected_team_index = team_count - 1;
-            } else if team_count == 0 {
-                self.selected_team_index = 0;
-            }
+            team_tables: Vec::new(),
+            focused_table_index: None,
         }
     }
 

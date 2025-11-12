@@ -1,10 +1,10 @@
-//! Panel definitions for standings navigation
+//! Generic panel definitions for navigation across tabs
 
 use crate::tui::navigation::Panel;
 
-/// Panels that can be navigated to in standings view
+/// Generic panels that can be navigated to across different tabs
 #[derive(Clone, Debug, PartialEq)]
-pub enum StandingsPanel {
+pub enum CommonPanel {
     /// Team detail view showing team info and roster
     TeamDetail {
         team_name: String,
@@ -20,22 +20,23 @@ pub enum StandingsPanel {
     PlayerDetail {
         player_id: i64,
         player_name: String,
-        from_team_name: String,
+        /// Generic context string: "from team TOR", "from game 2024020001", etc.
+        from_context: String,
     },
 }
 
-impl Panel for StandingsPanel {
+impl Panel for CommonPanel {
     fn breadcrumb_label(&self) -> String {
         match self {
-            StandingsPanel::TeamDetail { team_name, .. } => team_name.clone(),
-            StandingsPanel::PlayerDetail { player_name, .. } => player_name.clone(),
+            Self::TeamDetail { team_name, .. } => team_name.clone(),
+            Self::PlayerDetail { player_name, .. } => player_name.clone(),
         }
     }
 
     fn cache_key(&self) -> String {
         match self {
-            StandingsPanel::TeamDetail { team_abbrev, .. } => format!("team:{}", team_abbrev),
-            StandingsPanel::PlayerDetail { player_id, .. } => format!("player:{}", player_id),
+            Self::TeamDetail { team_abbrev, .. } => format!("team:{}", team_abbrev),
+            Self::PlayerDetail { player_id, .. } => format!("player:{}", player_id),
         }
     }
 }
@@ -101,5 +102,50 @@ pub fn fake_team_data(team_name: &str) -> TeamDetailData {
             GoalieStat { name: "Ilya Samsonov".into(), gp: 35, gaa: "2.89".into(), sv_pct: ".903".into(), so: 2 },
             GoalieStat { name: "Joseph Woll".into(), gp: 23, gaa: "2.52".into(), sv_pct: ".915".into(), so: 1 },
         ],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_team_detail_breadcrumb_label() {
+        let panel = CommonPanel::TeamDetail {
+            team_name: "Toronto Maple Leafs".to_string(),
+            team_abbrev: "TOR".to_string(),
+            wins: 50,
+            losses: 20,
+            ot_losses: 12,
+            points: 112,
+            division_name: "Atlantic".to_string(),
+            conference_name: Some("Eastern".to_string()),
+        };
+
+        assert_eq!(panel.breadcrumb_label(), "Toronto Maple Leafs");
+        assert_eq!(panel.cache_key(), "team:TOR");
+    }
+
+    #[test]
+    fn test_player_detail_breadcrumb_label() {
+        let panel = CommonPanel::PlayerDetail {
+            player_id: 8478402,
+            player_name: "Auston Matthews".to_string(),
+            from_context: "from team TOR".to_string(),
+        };
+
+        assert_eq!(panel.breadcrumb_label(), "Auston Matthews");
+        assert_eq!(panel.cache_key(), "player:8478402");
+    }
+
+    #[test]
+    fn test_fake_team_data() {
+        let data = fake_team_data("Maple Leafs");
+        assert_eq!(data.team_name, "Maple Leafs");
+        assert_eq!(data.city, "Toronto");
+        assert_eq!(data.conference, "Eastern");
+        assert_eq!(data.division, "Atlantic");
+        assert!(!data.players.is_empty());
+        assert!(!data.goalies.is_empty());
     }
 }

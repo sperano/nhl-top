@@ -12,7 +12,7 @@ use crate::config::DisplayConfig;
 use crate::tui::widgets::RenderableWidget;
 use crate::tui::widgets::section_header::render_section_header;
 use crate::tui::widgets::horizontal_separator::render_horizontal_separator;
-use crate::tui::standings::panel::GoalieStat;
+use crate::tui::common::panels::GoalieStat;
 
 /// Column width constants
 const GOALIE_NAME_COL_WIDTH: usize = 25;

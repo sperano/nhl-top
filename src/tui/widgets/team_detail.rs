@@ -96,7 +96,7 @@ impl<'a> RenderableWidget for TeamDetail<'a> {
         if let Some(stats) = self.club_stats.get(self.team_abbrev) {
             if !stats.skaters.is_empty() {
                 // Convert skaters to PlayerStat format
-                use crate::tui::standings::panel::PlayerStat;
+                use crate::tui::common::panels::PlayerStat;
                 let players: Vec<PlayerStat> = stats.skaters.iter().map(|skater| {
                     PlayerStat {
                         name: format!("{} {}", skater.first_name.default, skater.last_name.default),
