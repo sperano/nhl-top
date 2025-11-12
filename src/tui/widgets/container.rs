@@ -15,18 +15,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{buffer::Buffer, layout::Rect};
 
 /// A container that manages vertical navigation between focusable children
-///
-/// # Example
-///
-/// ```rust
-/// let table = FocusableTable::new(data);
-/// let list = List::new();
-///
-/// let container = Container::new()
-///     .add_child(Box::new(table))
-///     .add_child(Box::new(list))
-///     .with_wrap(true);
-/// ```
 pub struct Container {
     id: WidgetId,
     children: Vec<Box<dyn Focusable>>,

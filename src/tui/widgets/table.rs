@@ -20,18 +20,6 @@ use ratatui::{
 /// - Enter to activate the current cell
 /// - Automatic scrolling
 /// - Customizable styling
-///
-/// # Example
-///
-/// ```rust
-/// let standings = vec![team1, team2, team3];
-/// let table = FocusableTable::new(standings)
-///     .with_columns(vec![
-///         ColumnDef::new("Team", 20, |t| t.name.clone(), Alignment::Left, true),
-///         ColumnDef::new("GP", 5, |t| t.games.to_string(), Alignment::Right, false),
-///     ])
-///     .with_on_activate(|team| NavigationAction::NavigateToTeam(team.abbrev.clone()));
-/// ```
 pub struct FocusableTable<T> {
     id: WidgetId,
     /// Table data rows

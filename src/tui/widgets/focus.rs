@@ -95,47 +95,6 @@ pub enum NavigationAction {
 /// - Container widgets (List, Table) have focusable children
 /// - Leaf widgets (Link, Button) have no children
 /// - Focus can be delegated from parent to child
-///
-/// # Example
-///
-/// ```rust
-/// use crate::tui::widgets::focus::*;
-/// use crossterm::event::{KeyCode, KeyEvent};
-///
-/// struct Button {
-///     id: WidgetId,
-///     focused: bool,
-///     on_click: Box<dyn FnMut()>,
-/// }
-///
-/// impl Focusable for Button {
-///     fn widget_id(&self) -> WidgetId {
-///         self.id
-///     }
-///
-///     fn can_focus(&self) -> bool {
-///         true
-///     }
-///
-///     fn is_focused(&self) -> bool {
-///         self.focused
-///     }
-///
-///     fn set_focused(&mut self, focused: bool) {
-///         self.focused = focused;
-///     }
-///
-///     fn handle_input(&mut self, event: KeyEvent) -> InputResult {
-///         match event.code {
-///             KeyCode::Enter => {
-///                 (self.on_click)();
-///                 InputResult::Handled
-///             }
-///             _ => InputResult::NotHandled,
-///         }
-///     }
-/// }
-/// ```
 pub trait Focusable: RenderableWidget {
     /// Get the unique ID of this widget
     fn widget_id(&self) -> WidgetId;

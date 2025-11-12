@@ -16,15 +16,6 @@ use ratatui::{
 ///
 /// The breadcrumb shows a navigation trail with segments separated by a separator.
 /// Users can navigate between segments with Left/Right arrows and activate them with Enter.
-///
-/// # Example
-///
-/// ```rust
-/// let mut breadcrumb = BreadcrumbWidget::new();
-/// breadcrumb.add_segment_with_action("Home", || NavigationAction::PopPanel);
-/// breadcrumb.add_segment_with_action("Teams", || NavigationAction::PopPanel);
-/// breadcrumb.add_segment("Toronto Maple Leafs", false);
-/// ```
 pub struct BreadcrumbWidget {
     id: WidgetId,
     /// Breadcrumb segments

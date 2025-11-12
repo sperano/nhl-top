@@ -1,29 +1,50 @@
+use crate::tui::widgets::Container;
+
+// === COMMENTED OUT FOR REFACTORING - WILL REACTIVATE LATER ===
+// This code represents the old state-based settings implementation
+// Keep for reference when rebuilding settings functionality with Container widgets
+
 pub struct State {
-    /// Index of currently selected setting in the settings list
-    pub selected_setting_index: usize,
-    /// Whether subtab mode is focused (for main TUI navigation)
+    pub container: Option<Container>,
     pub subtab_focused: bool,
+
+    // === OLD FIELDS - COMMENTED FOR REFERENCE ===
+    // /// Index of currently selected setting in the settings list
+    // pub selected_setting_index: usize,
+    // /// Selected color index in the color picker (0-23 for 4x6 grid)
+    // pub selected_color_index: usize,
+
+    // Keep these for backward compatibility during transition
     /// Editing state: Some((setting_name, edit_buffer)) when editing a string/int
     pub editing: Option<(String, String)>,
     /// List modal state: Some((setting_name, options, selected_index)) when showing dropdown
     pub list_modal: Option<(String, Vec<String>, usize)>,
     /// Color picker modal state: Some(setting_name) when showing color picker
     pub color_modal: Option<String>,
-    /// Selected color index in the color picker (0-23 for 4x6 grid)
-    pub selected_color_index: usize,
 }
 
 impl State {
     pub fn new() -> Self {
         State {
-            selected_setting_index: 0,
+            container: None,
             subtab_focused: false,
             editing: None,
             list_modal: None,
             color_modal: None,
-            selected_color_index: 0,
         }
     }
+
+    // === OLD IMPLEMENTATION - COMMENTED FOR REFERENCE ===
+    // pub fn new() -> Self {
+    //     State {
+    //         selected_setting_index: 0,
+    //         subtab_focused: false,
+    //         editing: None,
+    //         list_modal: None,
+    //         color_modal: None,
+    //         selected_color_index: 0,
+    //     }
+    // }
 }
 
 impl Default for State {

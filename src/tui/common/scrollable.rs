@@ -6,6 +6,7 @@ use ratatui::{
 };
 
 /// A wrapper that makes any content scrollable
+#[derive(Debug, Clone)]
 pub struct Scrollable {
     pub scroll_offset: u16,
     pub content_height: usize,

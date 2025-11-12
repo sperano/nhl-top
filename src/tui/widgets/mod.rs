@@ -43,8 +43,8 @@ pub use game_grid::GameGrid;
 pub mod standings_table;
 pub use standings_table::StandingsTable;
 
-pub mod player_stats_table;
-pub use player_stats_table::PlayerStatsTable;
+pub mod roster_stats_table;
+pub use roster_stats_table::RosterStatsTable;
 
 pub mod goalie_stats_table;
 pub use goalie_stats_table::GoalieStatsTable;
@@ -80,6 +80,15 @@ pub use tab_bar::TabBar;
 pub mod status_bar;
 pub use status_bar::{StatusBar, KeyHint, KeyHintStyle};
 
+pub mod team_detail;
+pub use team_detail::TeamDetail;
+
+pub mod player_detail;
+pub use player_detail::PlayerDetail;
+
+pub mod scroll_rendering;
+pub use scroll_rendering::{render_scrollable_widget, render_scrollable_widgets};
+
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -97,35 +106,8 @@ use crate::config::DisplayConfig;
 ///
 /// # Object Safety
 ///
-/// This trait is object-safe, meaning you can use trait objects:
-/// ```rust
-/// let widgets: Vec<Box<dyn RenderableWidget>> = vec![
-///     Box::new(GameBox { ... }),
-///     Box::new(ScoreTable { ... }),
-/// ];
-///
-/// for widget in widgets {
-///     widget.render(area, buf, config);
-/// }
-/// ```
-///
-/// # Example
-///
-/// ```rust
-/// use ratatui::{buffer::Buffer, layout::Rect, style::Style};
-/// use crate::config::DisplayConfig;
-/// use crate::tui::widgets::RenderableWidget;
-///
-/// struct MyWidget {
-///     text: String,
-/// }
-///
-/// impl RenderableWidget for MyWidget {
-///     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-///         buf.set_string(area.x, area.y, &self.text, Style::default());
-///     }
-/// }
-/// ```
+/// This trait is object-safe, meaning you can use trait objects to store
+/// different widget types in collections.
 pub trait RenderableWidget {
     /// Render this widget into the provided buffer
     ///

@@ -1,10 +1,14 @@
+use crate::tui::widgets::Container;
+
 pub struct State {
-    // Placeholder for future stats state
+    pub container: Option<Container>,
 }
 
 impl State {
     pub fn new() -> Self {
-        State {}
+        Self {
+            container: None,
+        }
     }
 }
 

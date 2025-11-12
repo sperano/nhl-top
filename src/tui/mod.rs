@@ -175,13 +175,20 @@ async fn handle_arrow_and_enter_keys(
                     CurrentTab::Standings => {
                         standings::handle_key(key, &mut app_state.standings, shared_data, refresh_tx).await
                     }
-                    CurrentTab::Stats => false,
-                    CurrentTab::Players => false,
+                    CurrentTab::Stats => {
+                        use crate::tui::widgets::focus::InputResult;
+                        matches!(stats::handle_key(key, &mut app_state.stats), InputResult::Handled | InputResult::Navigate(_))
+                    }
+                    CurrentTab::Players => {
+                        use crate::tui::widgets::focus::InputResult;
+                        matches!(players::handle_key(key, &mut app_state.players), InputResult::Handled | InputResult::Navigate(_))
+                    }
                     CurrentTab::Settings => {
                         settings::handle_key(key, &mut app_state.settings, shared_data).await
                     }
                     CurrentTab::Browser => {
-                        browser::handle_key(key, &mut app_state.browser, shared_data).await
+                        use crate::tui::widgets::focus::InputResult;
+                        matches!(browser::handle_key(key, &mut app_state.browser).await, InputResult::Handled | InputResult::Navigate(_))
                     }
                 };
 
@@ -305,13 +312,13 @@ fn create_breadcrumb(app_state: &AppState, data: &RenderData) -> Option<widgets:
 
     let items = match app_state.current_tab {
         CurrentTab::Scores => {
-            let provider = context::ScoresBreadcrumbProvider {
-                state: &app_state.scores,
-                game_date: &data.game_date,
-            };
-            provider.get_breadcrumb_items()
+            // Scores renders breadcrumb within its own subtab area
+            return None;
         }
-        CurrentTab::Standings => app_state.standings.get_breadcrumb_items(),
+        CurrentTab::Standings => {
+            // Standings renders breadcrumb within its own subtab area
+            return None;
+        }
         CurrentTab::Stats => app_state.stats.get_breadcrumb_items(),
         CurrentTab::Players => app_state.players.get_breadcrumb_items(),
         CurrentTab::Settings => app_state.settings.get_breadcrumb_items(),
@@ -412,9 +419,18 @@ fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
     // Note: subtabs are rendered within the content area allocated by the layout manager
     let has_subtabs = app_state.has_subtabs();
     let (subtab_area, main_content_area) = if has_subtabs {
+        // Scores and Standings need 3 lines when focused (subtabs + separator + breadcrumb)
+        // Otherwise 2 lines (subtabs + separator)
+        let subtab_height = if matches!(app_state.current_tab, CurrentTab::Scores | CurrentTab::Standings)
+            && app_state.is_subtab_focused() {
+            3
+        } else {
+            SUBTAB_BAR_HEIGHT
+        };
+
         // Split content area into subtab bar and actual content
         let constraints = vec![
-            Constraint::Length(SUBTAB_BAR_HEIGHT),
+            Constraint::Length(subtab_height),
             Constraint::Min(0),
         ];
         let sub_chunks = Layout::default()
@@ -461,26 +477,23 @@ fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
             );
         }
         CurrentTab::Standings => {
-            // Update layout cache if needed
-            if app_state.standings.layout_cache.is_none() {
-                app_state.standings.update_layout(&data.standings, data.western_first);
-            }
-
             standings::render_content(
                 f,
                 main_content_area,
                 &mut app_state.standings,
                 &data.display,
+                &data.standings,
+                data.western_first,
                 &data.club_stats,
                 &data.selected_team_abbrev,
                 &data.player_info,
             );
         }
         CurrentTab::Stats => {
-            stats::render_content(f, main_content_area);
+            stats::render_content(f, main_content_area, &mut app_state.stats);
         }
         CurrentTab::Players => {
-            players::render_content(f, main_content_area);
+            players::render_content(f, main_content_area, &mut app_state.players);
         }
         CurrentTab::Settings => {
             settings::render_content(f, main_content_area, &mut app_state.settings, &data.config);

@@ -7,9 +7,14 @@ use crate::tui::navigation::Panel;
 pub enum StandingsPanel {
     /// Team detail view showing team info and roster
     TeamDetail {
-        team_id: i64,
         team_name: String,
         team_abbrev: String,
+        wins: i32,
+        losses: i32,
+        ot_losses: i32,
+        points: i32,
+        division_name: String,
+        conference_name: Option<String>,
     },
     /// Player detail view showing player stats and career
     PlayerDetail {
@@ -29,7 +34,7 @@ impl Panel for StandingsPanel {
 
     fn cache_key(&self) -> String {
         match self {
-            StandingsPanel::TeamDetail { team_id, .. } => format!("team:{}", team_id),
+            StandingsPanel::TeamDetail { team_abbrev, .. } => format!("team:{}", team_abbrev),
             StandingsPanel::PlayerDetail { player_id, .. } => format!("player:{}", player_id),
         }
     }

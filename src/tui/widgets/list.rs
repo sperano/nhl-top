@@ -19,14 +19,6 @@ use ratatui::{
 /// - Automatic scrolling to keep selected item visible
 /// - Focus delegation to selected item
 /// - Home/End keys for jumping to first/last item
-///
-/// # Example
-///
-/// ```rust
-/// let mut list = List::new();
-/// list.add_item(Box::new(Link::player("Connor McDavid", 8478402)));
-/// list.add_item(Box::new(Link::player("Leon Draisaitl", 8477934)));
-/// ```
 pub struct List {
     id: WidgetId,
     items: Vec<Box<dyn Focusable>>,

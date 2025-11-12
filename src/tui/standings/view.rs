@@ -1,83 +1,182 @@
-use ratatui::{
-    layout::Rect,
-    style::Style,
-    text::{Line, Span},
-    widgets::{Paragraph},
-    Frame,
-    buffer::Buffer,
+use super::State;
+use super::layout::StandingsLayout;
+use super::panel::StandingsPanel;
+use super::state::{PanelState, TeamDetailState, PlayerDetailState};
+use crate::tui::widgets::{
+    Container, RenderableWidget, StandingsTable,
+    TeamDetail, PlayerDetail, render_scrollable_widget,
 };
+use crate::commands::standings::GroupBy;
+use crate::tui::common::subtab::render_subtabs_with_breadcrumb;
+use crate::tui::navigation::Panel;
+use ratatui::{layout::Rect, widgets::{Block, Borders, Paragraph}, Frame, style::Style};
 use std::sync::Arc;
 use std::collections::HashMap;
 use crate::config::DisplayConfig;
-use crate::commands::standings::GroupBy;
-use crate::formatting::format_header;
-use crate::types::NHL_LEAGUE_ABBREV;
-use super::{State, layout::StandingsLayout};
-use super::panel::{StandingsPanel, PlayerStat, GoalieStat};
-use crate::tui::common::separator::build_tab_separator_line;
-use crate::tui::common::styling::{base_tab_style, selection_style};
-use crate::tui::common::breadcrumb::render_breadcrumb_simple;
-use crate::tui::widgets::{RenderableWidget, StandingsTable};
 
 // Layout Constants
 const CONTENT_LEFT_MARGIN: usize = 2;
-const STANDINGS_COLUMN_WIDTH: usize = 48; // Actual table width with all columns
+const STANDINGS_COLUMN_WIDTH: usize = 48;
 const COLUMN_SPACING: usize = 4;
 
+fn build_container() -> Container {
+    Container::new()
+}
+
 pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<DisplayConfig>) {
-    let base_style = base_tab_style(state.subtab_focused);
+    use crate::tui::context::BreadcrumbProvider;
 
-    if let Some(nav_ctx) = &state.navigation {
-        if !nav_ctx.is_at_root() {
-            let trail = nav_ctx.stack.breadcrumb_trail();
-            render_breadcrumb_simple(f, area, &trail, theme, base_style);
-            return;
-        }
-    }
-
-    // Otherwise show view selection tabs
-    let views = GroupBy::all();
-    let standings_view = state.view;
     let focused = state.subtab_focused;
 
-    // Build subtab line with separators
-    let separator = format!(" {} ", theme.box_chars.vertical);
-    let mut subtab_spans = Vec::new();
+    // Get view labels
+    let views = GroupBy::all();
+    let tab_labels: Vec<String> = views.iter().map(|v| v.name().to_string()).collect();
 
-    for (i, view) in views.iter().enumerate() {
-        if i > 0 {
-            subtab_spans.push(Span::styled(&separator, base_style));
+    // Find selected index
+    let selected_index = views.iter().position(|v| *v == state.view).unwrap_or(0);
+
+    // Format breadcrumb - only show when in panel views (stack depth > 2)
+    let breadcrumb_text = if state.subtab_focused {
+        let items = state.get_breadcrumb_items();
+        // Only show breadcrumb when we have more than 2 items (i.e., in a panel)
+        if items.len() > 2 {
+            Some(items.join(" ▸ "))
+        } else {
+            None
         }
+    } else {
+        None
+    };
 
-        let tab_text = view.name().to_string();
-        let style = selection_style(
-            base_style,
-            *view == standings_view,
-            focused,
-            theme.selection_fg,
-            theme.unfocused_selection_fg(),
-        );
-        subtab_spans.push(Span::styled(tab_text, style));
-    }
-    let subtab_line = Line::from(subtab_spans);
-
-    // Build separator line with connectors
-    let tab_names = views.iter().map(|view| view.name().to_string());
-    let separator_line = build_tab_separator_line(
-        tab_names,
-        area.width as usize,
-        base_style,
-        &theme.box_chars,
+    // Use shared rendering function
+    render_subtabs_with_breadcrumb(
+        f,
+        area,
+        tab_labels,
+        selected_index,
+        focused,
+        breadcrumb_text,
+        theme,
     );
+}
 
-    let separator_with_margin = Line::from(vec![
-        Span::styled(separator_line.to_string(), base_style),
-    ]);
+/// Render a panel view (team details, player details, etc.)
+fn render_panel(
+    f: &mut Frame,
+    area: Rect,
+    panel: &StandingsPanel,
+    state: &mut State,
+    club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>,
+    player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
+    theme: &Arc<DisplayConfig>,
+) {
+    match panel {
+        StandingsPanel::TeamDetail {
+            team_name,
+            team_abbrev,
+            wins,
+            losses,
+            ot_losses,
+            points,
+            division_name,
+            conference_name,
+        } => {
+            // Get panel state from cache
+            let cache_key = panel.cache_key();
+            let mut panel_state = state
+                .navigation
+                .data
+                .get(&cache_key)
+                .and_then(|s| match s {
+                    PanelState::TeamDetail(tds) => Some(tds.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(TeamDetailState::new);
 
-    // Render subtabs with separator line
-    let subtab_widget = Paragraph::new(vec![subtab_line, separator_with_margin]);
+            let conference_str = conference_name.as_deref().unwrap_or("Unknown");
 
-    f.render_widget(subtab_widget, area);
+            // Create widget
+            let selection = if panel_state.selection_active {
+                Some(panel_state.selected_player_index)
+            } else {
+                None
+            };
+
+            let widget = TeamDetail::new(
+                team_name,
+                team_abbrev,
+                conference_str,
+                division_name,
+                *wins,
+                *losses,
+                *ot_losses,
+                *points,
+                club_stats,
+            )
+            .with_selection(selection)
+            .with_instructions(true);
+
+            // Render with scrolling
+            render_scrollable_widget(
+                &widget,
+                f,
+                area,
+                &mut panel_state.scrollable,
+                theme,
+                true, // blank line at top (after breadcrumb)
+            );
+
+            // Save updated state back to cache
+            state.navigation.data.insert(cache_key, PanelState::TeamDetail(panel_state));
+        }
+        StandingsPanel::PlayerDetail { player_id, player_name, .. } => {
+            // Get panel state from cache
+            let cache_key = panel.cache_key();
+            let mut panel_state = state
+                .navigation
+                .data
+                .get(&cache_key)
+                .and_then(|s| match s {
+                    PanelState::PlayerDetail(pds) => Some(pds.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(PlayerDetailState::new);
+
+            if let Some(player) = player_info.get(player_id) {
+                // Determine which season is selected (if any)
+                let season_selection = if panel_state.selection_active {
+                    Some(panel_state.selected_season_index)
+                } else {
+                    None
+                };
+
+                // Create widget
+                let widget = PlayerDetail::new(player, player_name)
+                    .with_selection(season_selection)
+                    .with_instructions(true);
+
+                // Render with scrolling
+                render_scrollable_widget(
+                    &widget,
+                    f,
+                    area,
+                    &mut panel_state.scrollable,
+                    theme,
+                    true, // blank line at top (after breadcrumb)
+                );
+            } else {
+                // Loading state - render simple message
+                let buf = f.buffer_mut();
+                let y = area.y + 1; // blank line after breadcrumb
+                buf.set_string(area.x, y, "", Style::default());
+                buf.set_string(area.x, y + 1, "  Loading player information...", Style::default());
+                buf.set_string(area.x, y + 2, "", Style::default());
+            }
+
+            // Save updated state back to cache
+            state.navigation.data.insert(cache_key, PanelState::PlayerDetail(panel_state));
+        }
+    }
 }
 
 pub fn render_content(
@@ -85,65 +184,69 @@ pub fn render_content(
     area: Rect,
     state: &mut State,
     theme: &Arc<DisplayConfig>,
+    standings: &[nhl_api::Standing],
+    western_first: bool,
     club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>,
-    selected_team_abbrev: &Option<String>,
-    player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
+    _selected_team_abbrev: &Option<String>,
+    _player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
 ) {
-    let panel_to_render = state.navigation.as_ref()
-        .and_then(|nav_ctx| nav_ctx.stack.current())
-        .cloned();
+    if state.container.is_none() {
+        state.container = Some(build_container());
+    }
 
-    if let Some(panel) = panel_to_render {
-        render_panel(f, area, state, &panel, theme, club_stats, selected_team_abbrev, player_info);
+    // Check if we're in a panel view (navigation stack not at root)
+    if let Some(panel) = state.navigation.stack.current().cloned() {
+        render_panel(f, area, &panel, state, club_stats, _player_info, theme);
         return;
     }
 
-    // Build layout if standings data is available
-    let layout = match &state.layout_cache {
-        Some(layout) => layout.clone(),
-        None => return, // No data to render
-    };
+    // Build the layout from standings data
+    if standings.is_empty() {
+        let paragraph = Paragraph::new("Loading standings...")
+            .block(Block::default().borders(Borders::NONE));
+        f.render_widget(paragraph, area);
+        return;
+    }
 
-    // Render using widgets
-    render_layout_with_widgets(f, area, &layout, state, theme);
+    let layout = StandingsLayout::build(standings, state.view, western_first);
+
+    // Auto-scroll to keep selected team visible
+    if state.team_selection_active {
+        ensure_team_visible(state, &layout, theme);
+    }
+
+    render_standings_layout(f, area, &layout, state, theme);
 }
 
-/// Render the standings layout using widgets
-fn render_layout_with_widgets(
+// Helper function to render standings when we have the data
+pub fn render_standings_layout(
     f: &mut Frame,
     area: Rect,
     layout: &StandingsLayout,
     state: &mut State,
-    display: &Arc<DisplayConfig>,
+    theme: &Arc<DisplayConfig>,
 ) {
-    // Get buffer for direct widget rendering
     let buf = f.buffer_mut();
-
     let mut y_offset = area.y + 1; // Start with 1 line top margin
 
     match layout.view {
         GroupBy::League => {
-            render_single_column_with_widgets(buf, area, &mut y_offset, layout, state, display);
+            render_single_column(buf, area, &mut y_offset, layout, state, theme);
         }
         GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard => {
-            render_two_columns_with_widgets(buf, area, &mut y_offset, layout, state, display);
+            render_two_columns(buf, area, &mut y_offset, layout, state, theme);
         }
     }
 
-    // Calculate total content height for scrolling
+    // Update scrollable with content dimensions
     let content_height = (y_offset - area.y) as usize;
     state.scrollable.update_viewport_height(area.height);
     state.scrollable.update_content_height(content_height);
-
-    // Auto-scroll to ensure selected team is visible
-    if state.team_selection_active {
-        ensure_team_visible_with_widgets(state, layout, display);
-    }
 }
 
-/// Render a single-column layout (League view) using widgets
-fn render_single_column_with_widgets(
-    buf: &mut Buffer,
+/// Render a single-column layout (League view)
+fn render_single_column(
+    buf: &mut ratatui::buffer::Buffer,
     area: Rect,
     y_offset: &mut u16,
     layout: &StandingsLayout,
@@ -152,9 +255,9 @@ fn render_single_column_with_widgets(
 ) {
     let column = &layout.columns[0];
     let mut team_idx = 0;
+    let scroll_offset = state.scrollable.scroll_offset;
 
     for group in &column.groups {
-        // Create StandingsTable widget for this group
         let header = if group.header.is_empty() {
             None
         } else {
@@ -181,11 +284,9 @@ fn render_single_column_with_widgets(
             CONTENT_LEFT_MARGIN as u16,
         );
 
-        // Calculate widget height
         let widget_height = widget.preferred_height().unwrap_or(0);
 
         // Apply scroll offset
-        let scroll_offset = state.scrollable.scroll_offset;
         if *y_offset >= area.y + scroll_offset && *y_offset < area.bottom() {
             let widget_area = Rect::new(
                 area.x,
@@ -201,9 +302,9 @@ fn render_single_column_with_widgets(
     }
 }
 
-/// Render a two-column layout (Conference/Division view) using widgets
-fn render_two_columns_with_widgets(
-    buf: &mut Buffer,
+/// Render a two-column layout (Conference/Division view)
+fn render_two_columns(
+    buf: &mut ratatui::buffer::Buffer,
     area: Rect,
     y_offset: &mut u16,
     layout: &StandingsLayout,
@@ -223,8 +324,9 @@ fn render_two_columns_with_widgets(
     let right_height: u16 = right_widgets.iter().map(|w| w.preferred_height().unwrap_or(0)).sum();
     let max_height = left_height.max(right_height);
 
-    // Render left column
     let scroll_offset = state.scrollable.scroll_offset;
+
+    // Render left column
     let mut left_y = *y_offset;
     for widget in &left_widgets {
         let widget_height = widget.preferred_height().unwrap_or(0);
@@ -307,8 +409,8 @@ fn create_column_widgets<'a>(
     widgets
 }
 
-/// Auto-scroll to ensure the selected team is visible in the viewport (widget-based)
-fn ensure_team_visible_with_widgets(
+/// Auto-scroll to ensure the selected team is visible in the viewport
+fn ensure_team_visible(
     state: &mut State,
     layout: &StandingsLayout,
     _display: &DisplayConfig,
@@ -372,344 +474,102 @@ fn ensure_team_visible_with_widgets(
     }
 }
 
-/// Render a division/group header with color
-fn render_header_lines(header_text: &str, margin: usize, display: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    let header = format_header(header_text, true, display);
-    for line in header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::from(vec![
-                Span::raw(" ".repeat(margin)),
-                Span::styled(line.to_string(), Style::default().fg(display.division_header_fg))
-            ]));
-        } else {
-            lines.push(Line::raw(""));
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::standings::GroupBy;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    #[test]
+    fn test_render_subtabs_without_breadcrumb() {
+        let mut state = State::new();
+        state.view = GroupBy::Division;
+        state.subtab_focused = false; // Not focused = no breadcrumb
+
+        let theme = Arc::new(DisplayConfig::default());
+        let backend = TestBackend::new(80, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|f| {
+            let area = Rect::new(0, 0, 80, 2); // 2 lines (no breadcrumb)
+            render_subtabs(f, area, &state, &theme);
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+
+        // Check that first line contains the view tabs
+        let first_line: String = (0..80)
+            .map(|x| buffer.cell((x, 0)).unwrap().symbol())
+            .collect();
+        assert!(first_line.contains("Wildcard")); // Tab name is "Wildcard" (one word)
+        assert!(first_line.contains("Division"));
+        assert!(first_line.contains("Conference"));
+        assert!(first_line.contains("League"));
+
+        // Second line should be the separator (contains horizontal line chars)
+        let second_line: String = (0..80)
+            .map(|x| buffer.cell((x, 1)).unwrap().symbol())
+            .collect();
+        assert!(second_line.contains("─") || second_line.contains("-"));
     }
-    lines
+
+    #[test]
+    fn test_render_subtabs_with_breadcrumb() {
+        use crate::tui::standings::panel::StandingsPanel;
+        use crate::tui::navigation::Panel;
+
+        let mut state = State::new();
+        state.view = GroupBy::Conference;
+        state.subtab_focused = true; // Focused = show breadcrumb
+
+        // Push a panel onto the navigation stack to simulate being in TeamDetail
+        // This makes breadcrumb depth > 2 (Standings > Conference > Team Name)
+        let team_panel = StandingsPanel::TeamDetail {
+            team_name: "Toronto Maple Leafs".to_string(),
+            team_abbrev: "TOR".to_string(),
+            wins: 50,
+            losses: 20,
+            ot_losses: 12,
+            points: 112,
+            division_name: "Atlantic".to_string(),
+            conference_name: Some("Eastern".to_string()),
+        };
+        state.navigation.stack.push(team_panel);
+
+        let theme = Arc::new(DisplayConfig::default());
+        let backend = TestBackend::new(80, 3);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|f| {
+            let area = Rect::new(0, 0, 80, 3); // 3 lines (with breadcrumb)
+            render_subtabs(f, area, &state, &theme);
+        }).unwrap();
+
+        let buffer = terminal.backend().buffer();
+
+        // Check that first line contains the view tabs
+        let first_line: String = (0..80)
+            .map(|x| buffer.cell((x, 0)).unwrap().symbol())
+            .collect();
+        assert!(first_line.contains("Conference"));
+
+        // Second line should be the separator
+        let second_line: String = (0..80)
+            .map(|x| buffer.cell((x, 1)).unwrap().symbol())
+            .collect();
+        assert!(second_line.contains("─") || second_line.contains("-"));
+
+        // Third line should be the breadcrumb (now includes team name)
+        let third_line: String = (0..80)
+            .map(|x| buffer.cell((x, 2)).unwrap().symbol())
+            .collect();
+        assert!(third_line.contains("Standings"));
+        assert!(third_line.contains("Conference"));
+        assert!(third_line.contains("Toronto Maple Leafs"));
+        assert!(third_line.contains("▸"));
+    }
 }
 
-/// Render a single-line header with color (for subsections)
-fn render_header_lines_single(header_text: &str, margin: usize, display: &Arc<DisplayConfig>) -> Vec<Line<'static>> {
-    let mut lines = Vec::new();
-    let header = format_header(header_text, false, display);
-    for line in header.lines() {
-        if !line.is_empty() {
-            lines.push(Line::from(vec![
-                Span::raw(" ".repeat(margin)),
-                Span::styled(line.to_string(), Style::default().fg(display.division_header_fg))
-            ]));
-        } else {
-            lines.push(Line::raw(""));
-        }
-    }
-    lines
-}
-
-fn render_panel(f: &mut Frame, area: Rect, state: &mut State, panel: &StandingsPanel, display: &Arc<DisplayConfig>, club_stats: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>, player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
-    match panel {
-        StandingsPanel::TeamDetail { team_name, .. } => {
-            render_team_panel(f, area, state, team_name, display, club_stats, selected_team_abbrev);
-        }
-        StandingsPanel::PlayerDetail { player_id, player_name, .. } => {
-            render_player_panel(f, area, state, *player_id, player_name, display, player_info);
-        }
-    }
-}
-
-fn render_team_panel(f: &mut Frame, area: Rect, state: &mut State, team_name: &str, display: &Arc<DisplayConfig>, club_stats_map: &Arc<HashMap<String, nhl_api::ClubStats>>, selected_team_abbrev: &Option<String>) {
-    use crate::tui::widgets::{RenderableWidget, PlayerStatsTable, GoalieStatsTable};
-
-    // Try to get real club stats data
-    let club_stats_data = selected_team_abbrev.as_ref()
-        .and_then(|abbrev| club_stats_map.get(abbrev))
-        .cloned();
-
-    let mut lines = Vec::new();
-
-    lines.push(Line::raw(""));
-    lines.extend(render_header_lines(team_name, 2, display));
-
-    // Show loading message if we don't have data yet
-    if club_stats_data.is_none() {
-        lines.push(Line::raw("  Loading team statistics..."));
-        lines.push(Line::raw(""));
-
-        state.panel_scrollable.update_viewport_height(area.height);
-        state.panel_scrollable.update_content_height(lines.len());
-
-        let paragraph = Paragraph::new(lines)
-            .scroll((state.panel_scrollable.scroll_offset, 0));
-        f.render_widget(paragraph, area);
-        return;
-    }
-
-    let stats = club_stats_data.unwrap();
-
-    // Convert API stats to panel format
-    let mut players: Vec<PlayerStat> = stats.skaters.iter().map(|s| PlayerStat {
-        name: format!("{} {}", s.first_name.default, s.last_name.default),
-        gp: s.games_played,
-        g: s.goals,
-        a: s.assists,
-        pts: s.points,
-    }).collect();
-
-    // Sort by points (highest to lowest)
-    players.sort_by(|a, b| b.pts.cmp(&a.pts));
-
-    let mut goalies: Vec<GoalieStat> = stats.goalies.iter().map(|g| GoalieStat {
-        name: format!("{} {}", g.first_name.default, g.last_name.default),
-        gp: g.games_played,
-        gaa: format!("{:.2}", g.goals_against_average),
-        sv_pct: format!("{:.3}", g.save_percentage),
-        so: g.shutouts,
-    }).collect();
-
-    // Sort by games played (highest to lowest)
-    goalies.sort_by(|a, b| b.gp.cmp(&a.gp));
-
-    // Determine which item is selected
-    let (player_selection, goalie_selection) = if state.panel_selection_active {
-        let idx = state.panel_selected_index;
-        if idx < players.len() {
-            (Some(idx), None)
-        } else {
-            (None, Some(idx - players.len()))
-        }
-    } else {
-        (None, None)
-    };
-
-    // Create widgets
-    let player_table = PlayerStatsTable::new(
-        &players,
-        Some("Player Statistics"),
-        player_selection,
-        0,
-    );
-
-    let goalie_table = GoalieStatsTable::new(
-        &goalies,
-        Some("Goaltender Statistics"),
-        goalie_selection,
-        0,
-    );
-
-    // Render widgets to buffer and convert to lines
-    let buf_width = area.width.max(60);
-    let player_height = player_table.preferred_height().unwrap_or(10);
-    let goalie_height = goalie_table.preferred_height().unwrap_or(10);
-
-    let mut buf = ratatui::buffer::Buffer::empty(Rect::new(0, 0, buf_width, player_height + goalie_height));
-
-    // Render player table
-    player_table.render(Rect::new(0, 0, buf_width, player_height), &mut buf, display);
-
-    // Render goalie table below player table
-    goalie_table.render(Rect::new(0, player_height, buf_width, goalie_height), &mut buf, display);
-
-    // Convert buffer to lines (preserving styles)
-    for y in 0..buf.area.height {
-        let mut spans = Vec::new();
-        let mut current_text = String::new();
-        let mut current_style = Style::default();
-
-        for x in 0..buf.area.width {
-            let cell = buf.cell((x, y)).unwrap();
-            let cell_style = cell.style();
-
-            // If style changed, push current span and start new one
-            if cell_style != current_style && !current_text.is_empty() {
-                spans.push(Span::styled(current_text.clone(), current_style));
-                current_text.clear();
-                current_style = cell_style;
-            } else if current_text.is_empty() {
-                current_style = cell_style;
-            }
-
-            current_text.push_str(cell.symbol());
-        }
-
-        // Push final span
-        if !current_text.is_empty() {
-            spans.push(Span::styled(current_text, current_style));
-        }
-
-        lines.push(Line::from(spans));
-    }
-
-    state.panel_scrollable.update_viewport_height(area.height);
-    state.panel_scrollable.update_content_height(lines.len());
-
-    // Calculate selected item line number for scrolling
-    let selected_item_line_number = if state.panel_selection_active {
-        let idx = state.panel_selected_index;
-        // Account for: blank line (1) + team header (3) + player table header (3 + 2 for table header/sep)
-        let base_offset = 1 + 3 + 3 + 2; // Lines before first player row
-        if idx < players.len() {
-            // Selected item is a player
-            Some(base_offset + idx)
-        } else {
-            // Selected item is a goalie
-            // Add player count + blank lines (1) + goalie header (3 + 2)
-            Some(base_offset + players.len() + 1 + 3 + 2 + (idx - players.len()))
-        }
-    } else {
-        None
-    };
-
-    if state.panel_selection_active {
-        if let Some(line_idx) = selected_item_line_number {
-            let scroll_offset = state.panel_scrollable.scroll_offset as usize;
-            let viewport_height = state.panel_scrollable.viewport_height as usize;
-            let viewport_end = scroll_offset + viewport_height;
-
-            if line_idx < scroll_offset {
-                state.panel_scrollable.scroll_offset = line_idx as u16;
-            } else if line_idx >= viewport_end {
-                let new_offset = (line_idx + 1).saturating_sub(viewport_height);
-                state.panel_scrollable.scroll_offset = new_offset as u16;
-            }
-        }
-    }
-
-    let paragraph = Paragraph::new(lines)
-        .scroll((state.panel_scrollable.scroll_offset, 0));
-    f.render_widget(paragraph, area);
-}
-
-fn render_player_panel(f: &mut Frame, area: Rect, state: &mut State, player_id: i64, player_name: &str, display: &Arc<DisplayConfig>, player_info_map: &Arc<HashMap<i64, nhl_api::PlayerLanding>>) {
-    use crate::tui::widgets::{RenderableWidget, PlayerBioCard, CareerStatsTable};
-
-    let mut lines = Vec::new();
-
-    lines.push(Line::raw(""));
-    lines.extend(render_header_lines(player_name, 2, display));
-
-    // Get real player data
-    let player_data = player_info_map.get(&player_id);
-
-    if player_data.is_none() {
-        lines.push(Line::raw("  Loading player information..."));
-        lines.push(Line::raw(""));
-
-        state.panel_scrollable.update_viewport_height(area.height);
-        state.panel_scrollable.update_content_height(lines.len());
-
-        let paragraph = Paragraph::new(lines)
-            .scroll((state.panel_scrollable.scroll_offset, 0));
-        f.render_widget(paragraph, area);
-        return;
-    }
-
-    let player = player_data.unwrap();
-
-    // Filter to only NHL seasons
-    let nhl_seasons: Vec<nhl_api::SeasonTotal> = if let Some(season_totals) = &player.season_totals {
-        season_totals.iter()
-            .filter(|s| s.league_abbrev == NHL_LEAGUE_ABBREV)
-            .cloned()
-            .collect()
-    } else {
-        vec![]
-    };
-
-    // Determine which season is selected (if any)
-    let season_selection = if state.panel_selection_active {
-        Some(state.panel_selected_index)
-    } else {
-        None
-    };
-
-    // Create widgets
-    let bio_card = PlayerBioCard::new(player, Some("Player Information"), 0);
-    let career_table = if !nhl_seasons.is_empty() {
-        Some(CareerStatsTable::new(
-            &nhl_seasons,
-            Some("NHL Career Statistics"),
-            season_selection,
-            0,
-        ))
-    } else {
-        None
-    };
-
-    // Render widgets to buffer and convert to lines
-    let buf_width = area.width.max(60);
-    let bio_height = bio_card.preferred_height().unwrap_or(10);
-    let career_height = career_table.as_ref().and_then(|t| t.preferred_height()).unwrap_or(0);
-
-    let total_height = bio_height + career_height;
-    let mut buf = ratatui::buffer::Buffer::empty(Rect::new(0, 0, buf_width, total_height));
-
-    // Render bio card
-    bio_card.render(Rect::new(0, 0, buf_width, bio_height), &mut buf, display);
-
-    // Render career table if present
-    if let Some(table) = &career_table {
-        table.render(Rect::new(0, bio_height, buf_width, career_height), &mut buf, display);
-    }
-
-    // Convert buffer to lines (preserving styles)
-    for y in 0..buf.area.height {
-        let mut spans = Vec::new();
-        let mut current_text = String::new();
-        let mut current_style = Style::default();
-
-        for x in 0..buf.area.width {
-            let cell = buf.cell((x, y)).unwrap();
-            let cell_style = cell.style();
-
-            // If style changed, push current span and start new one
-            if cell_style != current_style && !current_text.is_empty() {
-                spans.push(Span::styled(current_text.clone(), current_style));
-                current_text.clear();
-                current_style = cell_style;
-            } else if current_text.is_empty() {
-                current_style = cell_style;
-            }
-
-            current_text.push_str(cell.symbol());
-        }
-
-        // Push final span
-        if !current_text.is_empty() {
-            spans.push(Span::styled(current_text, current_style));
-        }
-
-        lines.push(Line::from(spans));
-    }
-
-    state.panel_scrollable.update_viewport_height(area.height);
-    state.panel_scrollable.update_content_height(lines.len());
-
-    // Calculate selected item line number for scrolling
-    let selected_item_line_number = if state.panel_selection_active && !nhl_seasons.is_empty() {
-        let idx = state.panel_selected_index;
-        // Account for: blank (1) + player header (3) + bio card height + career header (3) + table header/sep (2)
-        let base_offset = 1 + 3 + bio_height as usize + 3 + 2;
-        Some(base_offset + idx)
-    } else {
-        None
-    };
-
-    if state.panel_selection_active {
-        if let Some(line_idx) = selected_item_line_number {
-            let scroll_offset = state.panel_scrollable.scroll_offset as usize;
-            let viewport_height = state.panel_scrollable.viewport_height as usize;
-            let viewport_end = scroll_offset + viewport_height;
-
-            if line_idx < scroll_offset {
-                state.panel_scrollable.scroll_offset = line_idx as u16;
-            } else if line_idx >= viewport_end {
-                let new_offset = (line_idx + 1).saturating_sub(viewport_height);
-                state.panel_scrollable.scroll_offset = new_offset as u16;
-            }
-        }
-    }
-
-    let paragraph = Paragraph::new(lines)
-        .scroll((state.panel_scrollable.scroll_offset, 0));
-    f.render_widget(paragraph, area);
-}
+// === OLD IMPLEMENTATION - KEPT FOR REFERENCE ===
+// [... 748 lines of old code commented out earlier ...]

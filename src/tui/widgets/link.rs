@@ -17,13 +17,6 @@ use ratatui::{
 ///
 /// Links can navigate to teams, players, games, or trigger custom actions.
 /// They change appearance when focused to provide visual feedback.
-///
-/// # Example
-///
-/// ```rust
-/// let player_link = Link::player("Connor McDavid", 8478402);
-/// let team_link = Link::team("Edmonton Oilers", "EDM");
-/// ```
 pub struct Link {
     id: WidgetId,
     text: String,

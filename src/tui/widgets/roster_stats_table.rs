@@ -1,4 +1,4 @@
-/// PlayerStatsTable widget - displays roster player statistics
+/// RosterStatsTable widget - displays roster player statistics
 ///
 /// This widget renders a table showing skater statistics with columns for:
 /// - Player name
@@ -22,9 +22,9 @@ const A_COL_WIDTH: usize = 4;
 const PTS_COL_WIDTH: usize = 5;
 const TABLE_WIDTH: usize = 48; // Total width including margins
 
-/// Widget for displaying player statistics table
+/// Widget for displaying roster player statistics table
 #[derive(Debug)]
-pub struct PlayerStatsTable<'a> {
+pub struct RosterStatsTable<'a> {
     /// Players to display in the table
     pub players: &'a [PlayerStat],
     /// Optional header text (e.g., "Player Statistics")
@@ -35,8 +35,8 @@ pub struct PlayerStatsTable<'a> {
     pub margin: u16,
 }
 
-impl<'a> PlayerStatsTable<'a> {
-    /// Create a new PlayerStatsTable widget
+impl<'a> RosterStatsTable<'a> {
+    /// Create a new RosterStatsTable widget
     pub fn new(
         players: &'a [PlayerStat],
         header: Option<&'a str>,
@@ -82,7 +82,7 @@ impl<'a> PlayerStatsTable<'a> {
     }
 }
 
-impl<'a> RenderableWidget for PlayerStatsTable<'a> {
+impl<'a> RenderableWidget for RosterStatsTable<'a> {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let mut y = area.y;
         let margin = self.margin;
@@ -170,9 +170,9 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_empty() {
+    fn test_roster_stats_table_empty() {
         let players = vec![];
-        let widget = PlayerStatsTable::new(&players, None, None, 2);
+        let widget = RosterStatsTable::new(&players, None, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
@@ -185,14 +185,14 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_with_players() {
+    fn test_roster_stats_table_with_players() {
         let players = vec![
             create_test_player("Auston Matthews", 58, 42, 31, 73),
             create_test_player("Mitchell Marner", 58, 18, 48, 66),
             create_test_player("William Nylander", 56, 28, 35, 63),
         ];
 
-        let widget = PlayerStatsTable::new(&players, None, None, 2);
+        let widget = RosterStatsTable::new(&players, None, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
@@ -208,13 +208,13 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_with_header() {
+    fn test_roster_stats_table_with_header() {
         let players = vec![
             create_test_player("Auston Matthews", 58, 42, 31, 73),
         ];
         let header = "Player Statistics";
 
-        let widget = PlayerStatsTable::new(
+        let widget = RosterStatsTable::new(
             &players,
             Some(header),
             None,
@@ -236,14 +236,14 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_with_selection() {
+    fn test_roster_stats_table_with_selection() {
         let players = vec![
             create_test_player("Auston Matthews", 58, 42, 31, 73),
             create_test_player("Mitchell Marner", 58, 18, 48, 66),
             create_test_player("William Nylander", 56, 28, 35, 63),
         ];
 
-        let widget = PlayerStatsTable::new(&players, None, Some(1), 2);
+        let widget = RosterStatsTable::new(&players, None, Some(1), 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);
@@ -259,13 +259,13 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_preferred_dimensions() {
+    fn test_roster_stats_table_preferred_dimensions() {
         let players = vec![
             create_test_player("Player A", 10, 5, 5, 10),
             create_test_player("Player B", 10, 4, 6, 10),
         ];
 
-        let widget = PlayerStatsTable::new(&players, None, None, 2);
+        let widget = RosterStatsTable::new(&players, None, None, 2);
 
         // Width should be fixed
         assert_eq!(widget.preferred_width(), Some(TABLE_WIDTH as u16));
@@ -275,14 +275,14 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_height_with_header() {
+    fn test_roster_stats_table_height_with_header() {
         let players = vec![
             create_test_player("Player A", 10, 5, 5, 10),
             create_test_player("Player B", 10, 4, 6, 10),
         ];
         let header = "Player Statistics";
 
-        let widget = PlayerStatsTable::new(
+        let widget = RosterStatsTable::new(
             &players,
             Some(header),
             None,
@@ -294,12 +294,12 @@ mod tests {
     }
 
     #[test]
-    fn test_player_stats_table_column_alignment() {
+    fn test_roster_stats_table_column_alignment() {
         let players = vec![
             create_test_player("A", 1, 2, 3, 5),
         ];
 
-        let widget = PlayerStatsTable::new(&players, None, None, 2);
+        let widget = RosterStatsTable::new(&players, None, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_widget_with_config(&widget, 48, height, &config);

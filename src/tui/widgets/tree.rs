@@ -15,18 +15,6 @@ use std::collections::HashMap;
 /// - Arrow key navigation (delegated to widgets)
 /// - Focus path tracking for breadcrumbs
 /// - Input routing to focused widgets
-///
-/// # Example
-///
-/// ```rust
-/// let mut tree = WidgetTree::new();
-/// tree.set_root(Box::new(my_widget));
-///
-/// // Handle keyboard input
-/// if tree.handle_input(key_event) {
-///     // Input was handled
-/// }
-/// ```
 pub struct WidgetTree {
     /// Root widget of the tree
     root: Option<Box<dyn Focusable>>,

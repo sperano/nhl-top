@@ -33,7 +33,7 @@ const PTS_COL_WIDTH: usize = 4;
 /// Spacing between columns in two-column layout
 const COLUMN_SPACING: usize = 4;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GroupBy {
     Division,
     Conference,
