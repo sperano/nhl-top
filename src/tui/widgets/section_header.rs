@@ -64,7 +64,7 @@ mod tests {
         assert_buffer(&buf, &[
             "Test Header                                                                     ",
             "───────────                                                                     ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -81,7 +81,7 @@ mod tests {
         assert_buffer(&buf, &[
             "Test Header                                                                     ",
             "═══════════                                                                     ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -97,7 +97,7 @@ mod tests {
         assert_buffer(&buf, &[
             "    Test Header                                                                 ",
             "    ───────────                                                                 ",
-        ]);
+        ], 80);
     }
 
     #[test]

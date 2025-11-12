@@ -35,27 +35,24 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<Disp
     // Find selected index
     let selected_index = views.iter().position(|v| *v == state.view).unwrap_or(0);
 
-    // Format breadcrumb - only show when in panel views (stack depth > 2)
-    let breadcrumb_text = if state.subtab_focused {
-        let items = state.get_breadcrumb_items();
-        // Only show breadcrumb when we have more than 2 items (i.e., in a panel)
-        if items.len() > 2 {
-            Some(items.join(" ▸ "))
-        } else {
-            None
-        }
+    // Get breadcrumb items if focused
+    // Only pass them if we have items; visibility will be determined by render function
+    let breadcrumb_items = if state.subtab_focused {
+        Some(state.get_breadcrumb_items())
     } else {
         None
     };
 
     // Use shared rendering function
+    // Skip the first BREADCRUMB_MIN_DEPTH items (e.g., skip "Standings" and "Division")
     render_subtabs_with_breadcrumb(
         f,
         area,
         tab_labels,
         selected_index,
         focused,
-        breadcrumb_text,
+        breadcrumb_items,
+        crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH,
         theme,
     );
 }
@@ -488,7 +485,7 @@ mod tests {
         state.subtab_focused = false; // Not focused = no breadcrumb
 
         let theme = Arc::new(DisplayConfig::default());
-        let backend = TestBackend::new(80, 3);
+        let backend = TestBackend::new(80, 80);
         let mut terminal = Terminal::new(backend).unwrap();
 
         terminal.draw(|f| {
@@ -498,20 +495,11 @@ mod tests {
 
         let buffer = terminal.backend().buffer();
 
-        // Check that first line contains the view tabs
-        let first_line: String = (0..80)
-            .map(|x| buffer.cell((x, 0)).unwrap().symbol())
-            .collect();
-        assert!(first_line.contains("Wildcard")); // Tab name is "Wildcard" (one word)
-        assert!(first_line.contains("Division"));
-        assert!(first_line.contains("Conference"));
-        assert!(first_line.contains("League"));
-
-        // Second line should be the separator (contains horizontal line chars)
-        let second_line: String = (0..80)
-            .map(|x| buffer.cell((x, 1)).unwrap().symbol())
-            .collect();
-        assert!(second_line.contains("─") || second_line.contains("-"));
+        use crate::tui::widgets::testing::assert_buffer;
+        assert_buffer(buffer, &[
+            "Wildcard │ Division │ Conference │ League                                       ",
+            "─────────┴──────────┴────────────┴──────────────────────────────────────────────",
+        ], 80);
     }
 
     #[test]
@@ -538,7 +526,7 @@ mod tests {
         state.navigation.stack.push(team_panel);
 
         let theme = Arc::new(DisplayConfig::default());
-        let backend = TestBackend::new(80, 3);
+        let backend = TestBackend::new(80, 80);
         let mut terminal = Terminal::new(backend).unwrap();
 
         terminal.draw(|f| {
@@ -548,26 +536,14 @@ mod tests {
 
         let buffer = terminal.backend().buffer();
 
-        // Check that first line contains the view tabs
-        let first_line: String = (0..80)
-            .map(|x| buffer.cell((x, 0)).unwrap().symbol())
-            .collect();
-        assert!(first_line.contains("Conference"));
-
-        // Second line should be the separator
-        let second_line: String = (0..80)
-            .map(|x| buffer.cell((x, 1)).unwrap().symbol())
-            .collect();
-        assert!(second_line.contains("─") || second_line.contains("-"));
-
-        // Third line should be the breadcrumb (now includes team name)
-        let third_line: String = (0..80)
-            .map(|x| buffer.cell((x, 2)).unwrap().symbol())
-            .collect();
-        assert!(third_line.contains("Standings"));
-        assert!(third_line.contains("Conference"));
-        assert!(third_line.contains("Toronto Maple Leafs"));
-        assert!(third_line.contains("▸"));
+        // With skip=BREADCRUMB_MIN_DEPTH (2), breadcrumb should only show "Toronto Maple Leafs"
+        // (skipping "Standings" and "Conference")
+        use crate::tui::widgets::testing::assert_buffer;
+        assert_buffer(buffer, &[
+            "Wildcard │ Division │ Conference │ League                                       ",
+            "─────────┴──────────┴────────────┴──────────────────────────────────────────────",
+            "▸ Toronto Maple Leafs                                                           ",
+        ], 80);
     }
 }
 

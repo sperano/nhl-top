@@ -11,7 +11,7 @@ pub mod widgets;
 mod layout;
 mod context;
 pub mod command_palette;
-pub use context::{NavigationContextProvider};
+pub use context::{NavigationContextProvider, BreadcrumbProvider};
 
 use widgets::RenderableWidget;
 use layout::{Layout as LayoutManager};
@@ -52,10 +52,82 @@ const STATUS_BAR_HEIGHT: u16 = 2;
 /// Event polling interval in milliseconds
 const EVENT_POLL_INTERVAL_MS: u64 = 100;
 
+/// Development feature: Save terminal buffer to file
+#[cfg(feature = "development")]
+fn save_screenshot(buffer: &Buffer, area: Rect) -> std::io::Result<String> {
+    use std::io::Write;
+
+    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+    let filename = format!("nhl-screenshot-{}.txt", timestamp);
+
+    let mut file = std::fs::File::create(&filename)?;
+
+    for y in 0..area.height {
+        for x in 0..area.width {
+            let cell = &buffer[(x, y)];
+            write!(file, "{}", cell.symbol())?;
+        }
+        writeln!(file)?;
+    }
+
+    Ok(filename)
+}
+
+/// Development feature: Log widget tree structure
+#[cfg(feature = "development")]
+fn log_widget_tree(app_state: &AppState) {
+    tracing::debug!("=== Widget Tree Debug ===");
+    tracing::debug!("Current tab: {:?}", app_state.current_tab);
+    tracing::debug!("Subtab focused: {}", app_state.is_subtab_focused());
+    tracing::debug!("Has subtabs: {}", app_state.has_subtabs());
+
+    match app_state.current_tab {
+        CurrentTab::Scores => {
+            tracing::debug!("Scores state:");
+            tracing::debug!("  - selected_index: {}", app_state.scores.selected_index);
+            tracing::debug!("  - box_selection_active: {}", app_state.scores.box_selection_active);
+            tracing::debug!("  - selected_box: {:?}", app_state.scores.selected_box);
+            tracing::debug!("  - boxscore_view_active: {}", app_state.scores.boxscore_view_active);
+            tracing::debug!("  - container: {}", if app_state.scores.container.is_some() { "Some" } else { "None" });
+        }
+        CurrentTab::Standings => {
+            tracing::debug!("Standings state:");
+            tracing::debug!("  - view: {:?}", app_state.standings.view);
+            tracing::debug!("  - team_selection_active: {}", app_state.standings.team_selection_active);
+            tracing::debug!("  - selected_team_index: {:?}", app_state.standings.selected_team_index);
+            tracing::debug!("  - selected_column: {:?}", app_state.standings.selected_column);
+            tracing::debug!("  - navigation depth: {}", app_state.standings.navigation.stack.depth());
+            tracing::debug!("  - container: {}", if app_state.standings.container.is_some() { "Some" } else { "None" });
+        }
+        CurrentTab::Stats => {
+            tracing::debug!("Stats state:");
+            tracing::debug!("  - container: {}", if app_state.stats.container.is_some() { "Some" } else { "None" });
+        }
+        CurrentTab::Players => {
+            tracing::debug!("Players state:");
+            tracing::debug!("  - container: {}", if app_state.players.container.is_some() { "Some" } else { "None" });
+        }
+        CurrentTab::Settings => {
+            tracing::debug!("Settings state:");
+            tracing::debug!("  - editing: {}", app_state.settings.editing.is_some());
+            tracing::debug!("  - list_modal: {}", app_state.settings.list_modal.is_some());
+            tracing::debug!("  - color_modal: {}", app_state.settings.color_modal.is_some());
+        }
+        CurrentTab::Browser => {
+            tracing::debug!("Browser state:");
+            tracing::debug!("  - container: {}", if app_state.browser.container.is_some() { "Some" } else { "None" });
+        }
+    }
+
+    tracing::debug!("Command palette active: {}", app_state.command_palette_active);
+    tracing::debug!("========================");
+}
+
 /// Handles ESC key presses - exits subtab mode or signals app exit
 /// Returns Some(true) to exit app, Some(false) to continue, None if not ESC
 fn handle_esc_key(key: KeyEvent, app_state: &mut AppState) -> Option<bool> {
     if key.code == KeyCode::Esc {
+        tracing::debug!("ESC key pressed, subtab_focused={}", app_state.is_subtab_focused());
         // If on Scores tab and boxscore view is active, don't handle ESC here
         // Let the scores handler close the boxscore view
         if matches!(app_state.current_tab, CurrentTab::Scores) && app_state.scores.boxscore_view_active {
@@ -220,11 +292,16 @@ async fn handle_arrow_and_enter_keys(
 
 /// Main key event dispatcher - coordinates all key handling logic
 /// Returns true to signal app exit, false to continue running
+///
+/// Development feature flag: When `screenshot_requested` is Some, it will be set to true
+/// when Shift-S is pressed, signaling the main loop to take a screenshot
 async fn handle_key_event(
     key: KeyEvent,
     app_state: &mut AppState,
     shared_data: &SharedDataHandle,
     refresh_tx: &mpsc::Sender<()>,
+    #[cfg(feature = "development")]
+    screenshot_requested: &mut bool,
 ) -> bool {
     // Handle command palette if active
     if app_state.command_palette_active {
@@ -256,6 +333,29 @@ async fn handle_key_event(
     // Handle Q key globally to quit from anywhere
     if key.code == KeyCode::Char('q') || key.code == KeyCode::Char('Q') {
         return true; // Exit app
+    }
+
+    // Development features: Screenshot and widget tree debugging
+    #[cfg(feature = "development")]
+    {
+        use crossterm::event::KeyModifiers;
+
+        // Shift-S: Take screenshot (save terminal buffer to file)
+        if key.code == KeyCode::Char('S') && key.modifiers.contains(KeyModifiers::SHIFT) {
+            tracing::info!("Screenshot requested via Shift-S");
+            *screenshot_requested = true;
+            return false;
+        }
+
+        // Shift-D: Print widget tree to logs
+        if key.code == KeyCode::Char('D') && key.modifiers.contains(KeyModifiers::SHIFT) {
+            tracing::info!("Widget tree debug requested via Shift-D");
+            log_widget_tree(app_state);
+            let mut data = shared_data.write().await;
+            data.status_message = Some("Widget tree logged to file".to_string());
+            data.status_is_error = false;
+            return false;
+        }
     }
 
     // Try ESC key handler first
@@ -303,7 +403,7 @@ struct RenderData {
 }
 
 /// Create breadcrumb widget if navigation depth > 0
-fn create_breadcrumb(app_state: &AppState, data: &RenderData) -> Option<widgets::EnhancedBreadcrumb> {
+fn create_breadcrumb(app_state: &AppState, data: &RenderData) -> Option<widgets::Breadcrumb> {
     use context::BreadcrumbProvider;
 
     if !app_state.is_subtab_focused() {
@@ -329,10 +429,11 @@ fn create_breadcrumb(app_state: &AppState, data: &RenderData) -> Option<widgets:
         return None;
     }
 
-    Some(widgets::EnhancedBreadcrumb {
+    Some(widgets::Breadcrumb {
         items,
         separator: " ▸ ".to_string(),
         icon: None,
+        skip_items: 0,
     })
 }
 
@@ -419,11 +520,25 @@ fn render_frame(f: &mut Frame, app_state: &mut AppState, data: &RenderData) {
     // Note: subtabs are rendered within the content area allocated by the layout manager
     let has_subtabs = app_state.has_subtabs();
     let (subtab_area, main_content_area) = if has_subtabs {
-        // Scores and Standings need 3 lines when focused (subtabs + separator + breadcrumb)
-        // Otherwise 2 lines (subtabs + separator)
-        let subtab_height = if matches!(app_state.current_tab, CurrentTab::Scores | CurrentTab::Standings)
-            && app_state.is_subtab_focused() {
-            3
+        // Calculate subtab height based on whether breadcrumb will be shown
+        // Breadcrumb is only shown when there are > BREADCRUMB_MIN_DEPTH items
+        let subtab_height = if app_state.is_subtab_focused() {
+            match app_state.current_tab {
+                CurrentTab::Scores => {
+                    // Scores has 2 items: ["Scores", "date"] - not shown (2 <= BREADCRUMB_MIN_DEPTH)
+                    SUBTAB_BAR_HEIGHT
+                }
+                CurrentTab::Standings => {
+                    // Standings shows breadcrumb when depth > BREADCRUMB_MIN_DEPTH
+                    let breadcrumb_items = app_state.standings.get_breadcrumb_items();
+                    if breadcrumb_items.len() > crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH {
+                        3 // 3 lines (tabs + separator + breadcrumb)
+                    } else {
+                        SUBTAB_BAR_HEIGHT // 2 lines (tabs + separator)
+                    }
+                }
+                _ => SUBTAB_BAR_HEIGHT,
+            }
         } else {
             SUBTAB_BAR_HEIGHT
         };
@@ -535,6 +650,10 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
 
     let mut app_state = AppState::default();
 
+    // Development feature: screenshot request flag
+    #[cfg(feature = "development")]
+    let mut screenshot_requested = false;
+
     // Main loop
     loop {
         // Read data from shared state
@@ -561,14 +680,50 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
             }
         };
 
+        // Development feature: Capture buffer if screenshot requested
+        #[cfg(feature = "development")]
+        let mut screenshot_buffer: Option<Buffer> = None;
+
         terminal.draw(|f| {
             render_frame(f, &mut app_state, &render_data);
+
+            // Development feature: Clone buffer if screenshot requested
+            #[cfg(feature = "development")]
+            if screenshot_requested {
+                screenshot_buffer = Some(f.buffer_mut().clone());
+            }
         })?;
+
+        // Development feature: Save screenshot if captured
+        #[cfg(feature = "development")]
+        if let Some(buffer) = screenshot_buffer {
+            screenshot_requested = false;
+            let area = Rect::new(0, 0, buffer.area().width, buffer.area().height);
+            match save_screenshot(&buffer, area) {
+                Ok(filename) => {
+                    tracing::info!("Screenshot saved to: {}", filename);
+                    let mut data = shared_data.write().await;
+                    data.status_message = Some(format!("Screenshot saved: {}", filename));
+                    data.status_is_error = false;
+                }
+                Err(e) => {
+                    tracing::error!("Failed to save screenshot: {}", e);
+                    let mut data = shared_data.write().await;
+                    data.status_message = Some(format!("Screenshot failed: {}", e));
+                    data.status_is_error = true;
+                }
+            }
+        }
 
         // Handle events
         if event::poll(std::time::Duration::from_millis(EVENT_POLL_INTERVAL_MS))? {
             if let Event::Key(key) = event::read()? {
-                if handle_key_event(key, &mut app_state, &shared_data, &refresh_tx).await {
+                #[cfg(feature = "development")]
+                let should_exit = handle_key_event(key, &mut app_state, &shared_data, &refresh_tx, &mut screenshot_requested).await;
+                #[cfg(not(feature = "development"))]
+                let should_exit = handle_key_event(key, &mut app_state, &shared_data, &refresh_tx).await;
+
+                if should_exit {
                     break;
                 }
             }
@@ -585,4 +740,131 @@ pub async fn run(shared_data: SharedDataHandle, refresh_tx: mpsc::Sender<()>) ->
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::app::AppState;
+    use crate::tui::standings::panel::StandingsPanel;
+    use crate::tui::context::BreadcrumbProvider;
+
+    #[test]
+    fn test_subtab_height_standings_at_root() {
+        // Regression test for: "when standings subtab has focus, a new line appears"
+        // Bug: Layout was allocating 3 lines for subtabs even when breadcrumb wasn't shown
+
+        let mut app_state = AppState::default();
+        app_state.current_tab = CurrentTab::Standings;
+        app_state.standings.subtab_focused = true;
+
+        // At root (no panel open), breadcrumb should NOT be shown
+        let breadcrumb_items = app_state.standings.get_breadcrumb_items();
+        assert!(breadcrumb_items.len() <= crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH);
+
+        // Subtab height calculation (extracted from render_frame logic)
+        let subtab_height = if app_state.is_subtab_focused() {
+            match app_state.current_tab {
+                CurrentTab::Scores => {
+                    SUBTAB_BAR_HEIGHT // Scores has 2 items, not shown
+                }
+                CurrentTab::Standings => {
+                    let breadcrumb_items = app_state.standings.get_breadcrumb_items();
+                    if breadcrumb_items.len() > crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH {
+                        3 // 3 lines (tabs + separator + breadcrumb)
+                    } else {
+                        SUBTAB_BAR_HEIGHT // 2 lines (tabs + separator)
+                    }
+                }
+                _ => SUBTAB_BAR_HEIGHT,
+            }
+        } else {
+            SUBTAB_BAR_HEIGHT
+        };
+
+        // Should be 2 lines (tabs + separator), not 3
+        assert_eq!(subtab_height, SUBTAB_BAR_HEIGHT);
+        assert_eq!(subtab_height, 2);
+    }
+
+    #[test]
+    fn test_subtab_height_standings_in_panel() {
+        // When in a panel, breadcrumb SHOULD be shown, so height should be 3
+
+        let mut app_state = AppState::default();
+        app_state.current_tab = CurrentTab::Standings;
+        app_state.standings.subtab_focused = true;
+
+        // Navigate into a panel
+        let panel = StandingsPanel::TeamDetail {
+            team_name: "Canadiens".to_string(),
+            team_abbrev: "MTL".to_string(),
+            wins: 30,
+            losses: 20,
+            ot_losses: 5,
+            points: 65,
+            division_name: "Atlantic".to_string(),
+            conference_name: Some("Eastern".to_string()),
+        };
+        app_state.standings.navigation.navigate_to(panel);
+
+        // In a panel - breadcrumb items should exceed BREADCRUMB_MIN_DEPTH
+        let breadcrumb_items = app_state.standings.get_breadcrumb_items();
+        assert!(breadcrumb_items.len() > crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH);
+
+        // Subtab height calculation
+        let subtab_height = if app_state.is_subtab_focused() {
+            match app_state.current_tab {
+                CurrentTab::Scores => {
+                    SUBTAB_BAR_HEIGHT // Scores has 2 items, not shown
+                }
+                CurrentTab::Standings => {
+                    let breadcrumb_items = app_state.standings.get_breadcrumb_items();
+                    if breadcrumb_items.len() > crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH {
+                        3 // Should be 3 lines (breadcrumb shown)
+                    } else {
+                        SUBTAB_BAR_HEIGHT
+                    }
+                }
+                _ => SUBTAB_BAR_HEIGHT,
+            }
+        } else {
+            SUBTAB_BAR_HEIGHT
+        };
+
+        // Should be 3 lines (tabs + separator + breadcrumb)
+        assert_eq!(subtab_height, 3);
+    }
+
+    #[test]
+    fn test_subtab_height_standings_not_focused() {
+        // When subtab is NOT focused, should always be 2 lines
+
+        let mut app_state = AppState::default();
+        app_state.current_tab = CurrentTab::Standings;
+        app_state.standings.subtab_focused = false; // NOT focused
+
+        let subtab_height = if app_state.is_subtab_focused() {
+            match app_state.current_tab {
+                CurrentTab::Scores => {
+                    SUBTAB_BAR_HEIGHT // Scores has 2 items, not shown
+                }
+                CurrentTab::Standings => {
+                    let breadcrumb_items = app_state.standings.get_breadcrumb_items();
+                    if breadcrumb_items.len() > crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH {
+                        3
+                    } else {
+                        SUBTAB_BAR_HEIGHT
+                    }
+                }
+                _ => SUBTAB_BAR_HEIGHT,
+            }
+        } else {
+            SUBTAB_BAR_HEIGHT
+        };
+
+        // Should be 2 lines
+        assert_eq!(subtab_height, SUBTAB_BAR_HEIGHT);
+        assert_eq!(subtab_height, 2);
+    }
 }

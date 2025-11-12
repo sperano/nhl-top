@@ -67,8 +67,8 @@ pub use team_stats_panel::TeamStatsPanel;
 pub mod action_bar;
 pub use action_bar::{ActionBar, Action};
 
-pub mod enhanced_breadcrumb;
-pub use enhanced_breadcrumb::EnhancedBreadcrumb;
+pub mod breadcrumb;
+pub use breadcrumb::Breadcrumb;
 
 pub mod command_palette;
 pub use command_palette::{CommandPalette, SearchResult};

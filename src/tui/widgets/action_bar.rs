@@ -164,7 +164,7 @@ mod tests {
 
         assert_buffer(&buf, &[
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -176,7 +176,7 @@ mod tests {
 
         assert_buffer(&buf, &[
             "                           Actions: [Enter] View Team                           ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -190,7 +190,7 @@ mod tests {
 
         assert_buffer(&buf, &[
             "         Actions: [Enter] View Team │ [G] Game Log │ [T] Team Page              ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
 
         assert_buffer(&buf, &[
             "                  Actions: [Enter] View Team │ [G] Game Log                     ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -240,7 +240,7 @@ mod tests {
 
         assert_buffer(&buf, &[
             "                               Actions: [A] Test                                ",
-        ]);
+        ], 80);
     }
 
     #[test]

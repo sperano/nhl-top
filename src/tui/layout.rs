@@ -10,14 +10,14 @@ use ratatui::{
     Frame,
 };
 use crate::config::DisplayConfig;
-use crate::tui::widgets::{TabBar, EnhancedBreadcrumb, ActionBar, StatusBar, CommandPalette, RenderableWidget};
+use crate::tui::widgets::{TabBar, Breadcrumb, ActionBar, StatusBar, CommandPalette, RenderableWidget};
 
 /// Unified layout manager for the TUI
 ///
 /// This struct manages the positioning and rendering of all top-level UI components.
 pub struct Layout {
     pub tab_bar: TabBar,
-    pub breadcrumb: Option<EnhancedBreadcrumb>,
+    pub breadcrumb: Option<Breadcrumb>,
     pub action_bar: Option<ActionBar>,
     pub status_bar: StatusBar,
     pub command_palette: Option<CommandPalette>,
@@ -195,7 +195,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
 mod tests {
     use super::*;
     use crate::tui::app::CurrentTab;
-    use crate::tui::widgets::{EnhancedBreadcrumb, ActionBar, Action};
+    use crate::tui::widgets::{Breadcrumb, ActionBar, Action};
 
     #[test]
     fn test_layout_areas_minimal() {
@@ -227,10 +227,11 @@ mod tests {
     fn test_layout_areas_with_all_components() {
         let layout = Layout {
             tab_bar: TabBar::new(CurrentTab::Standings, true),
-            breadcrumb: Some(EnhancedBreadcrumb {
+            breadcrumb: Some(Breadcrumb {
                 items: vec!["Standings".to_string()],
                 separator: " ▸ ".to_string(),
-                icon: Some("📍".to_string()),
+                icon: Some(" ▸ ".to_string()),
+                skip_items: 0,
             }),
             action_bar: Some(ActionBar {
                 actions: vec![Action {
@@ -302,10 +303,11 @@ mod tests {
     fn test_layout_areas_with_breadcrumb() {
         let layout = Layout {
             tab_bar: TabBar::new(CurrentTab::Standings, true),
-            breadcrumb: Some(EnhancedBreadcrumb {
+            breadcrumb: Some(Breadcrumb {
                 items: vec!["Standings".to_string(), "Eastern".to_string()],
                 separator: " > ".to_string(),
                 icon: None,
+                skip_items: 0,
             }),
             action_bar: None,
             status_bar: StatusBar::new(),
@@ -471,7 +473,7 @@ mod tests {
         // Test rendering with all optional components present
         use ratatui::backend::TestBackend;
         use ratatui::Terminal;
-        use crate::tui::widgets::{EnhancedBreadcrumb, ActionBar, Action};
+        use crate::tui::widgets::{Breadcrumb, ActionBar, Action};
         use crate::tui::widgets::testing::test_config;
 
         let backend = TestBackend::new(100, 30);
@@ -479,10 +481,11 @@ mod tests {
 
         let layout = Layout {
             tab_bar: TabBar::new(CurrentTab::Standings, true),
-            breadcrumb: Some(EnhancedBreadcrumb {
+            breadcrumb: Some(Breadcrumb {
                 items: vec!["Standings".to_string(), "Division".to_string()],
                 separator: " ▸ ".to_string(),
-                icon: Some("📍".to_string()),
+                icon: Some(" ▸ ".to_string()),
+                skip_items: 0,
             }),
             action_bar: Some(ActionBar {
                 actions: vec![Action {

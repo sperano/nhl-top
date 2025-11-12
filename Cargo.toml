@@ -29,3 +29,4 @@ unicode-width = "0.1"
 
 [features]
 game_stats = []
+development = []

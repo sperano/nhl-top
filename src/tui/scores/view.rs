@@ -64,20 +64,22 @@ pub fn render_subtabs(
     let date_labels: Vec<String> = dates.iter().map(format_date_mmdd).collect();
 
     // Format breadcrumb
-    let breadcrumb_text = if state.subtab_focused {
-        Some(format!("Scores ▸ {}", format_date_full(game_date)))
+    let breadcrumb_items = if state.subtab_focused {
+        Some(vec!["Scores".to_string(), format_date_full(game_date)])
     } else {
         None
     };
 
     // Use shared rendering function
+    // For Scores, we don't skip any items (skip = 0) since breadcrumb is always just ["Scores", "date"]
     render_subtabs_with_breadcrumb(
         f,
         area,
         date_labels,
         state.selected_index,
         focused,
-        breadcrumb_text,
+        breadcrumb_items,
+        0, // Don't skip any items for Scores tab
         display,
     );
 }
@@ -321,19 +323,8 @@ pub fn render_content(
 //     let focused = state.subtab_focused && !state.box_selection_active;
 //     let base_style = base_tab_style(focused);
 //
-//     // Check if we should show breadcrumbs instead of date tabs
-//     if let Some(nav_ctx) = &state.navigation {
-//         if !nav_ctx.is_at_root() {
-//             let trail = nav_ctx.stack.breadcrumb_trail();
-//             use crate::tui::common::breadcrumb::render_breadcrumb_simple;
-//             render_breadcrumb_simple(f, area, &trail, theme, base_style);
-//             return;
-//         }
-//     }
-//
-//     // Otherwise show date tabs
-//     let dates = calculate_date_window(game_date, state.selected_index);
-//     let date_strings: Vec<String> = dates.iter().map(format_date_mmdd).collect();
+//     // Old implementation (before widget migration)
+//     // Now using render_subtabs_with_breadcrumb() instead
 //
 //     let subtab_spans = build_date_subtab_spans(
 //         &date_strings,

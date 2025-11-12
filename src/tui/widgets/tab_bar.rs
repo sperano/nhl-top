@@ -198,7 +198,7 @@ mod tests {
         assert_buffer(&buf, &[
             "Scores │ Standings │ Stats │ Players │ Settings │ Browser                       ",
             "───────┴───────────┴───────┴─────────┴──────────┴───────────────────────────────",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
         assert_buffer(&buf, &[
             "Scores | Standings | Stats | Players | Settings | Browser                       ",
             "--------------------------------------------------------------------------------",
-        ]);
+        ], 80);
     }
 
     #[test]

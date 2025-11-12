@@ -189,7 +189,7 @@ mod tests {
             "─────────────                                               ",
             "#   Name                   SA  Saves     GA    SV%          ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
             "35  Joseph Woll            30     28      2  0.933          ",
             "60  Matt Murray            15     13      2  0.867          ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 
     #[test]
@@ -259,7 +259,7 @@ mod tests {
             "#   Name                   SA  Saves     GA    SV%          ",
             "35  Test Goalie            32     29      3  0.906          ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 
     #[test]
@@ -279,6 +279,6 @@ mod tests {
             "#   Name                   SA  Saves     GA    SV%          ",
             "35  Test Goalie             0      0      0      -          ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 }

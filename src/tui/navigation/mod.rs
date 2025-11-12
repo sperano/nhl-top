@@ -70,11 +70,7 @@ impl<P: Panel> NavigationStack<P> {
     /// Pop the current panel and return to the previous one
     /// Returns the popped panel if successful, None if stack is empty
     pub fn pop(&mut self) -> Option<P> {
-        if self.stack.len() > 1 {
-            self.stack.pop()
-        } else {
-            None
-        }
+        self.stack.pop()
     }
 
     /// Get the current (top) panel
@@ -310,9 +306,11 @@ mod tests {
             "Canadiens"
         );
 
+        // Pop the last item - should succeed and return to empty stack
         let popped = nav.pop();
-        assert!(popped.is_none());
-        assert_eq!(nav.depth(), 1);
+        assert!(popped.is_some());
+        assert_eq!(nav.depth(), 0);
+        assert!(nav.is_empty());
     }
 
     #[test]

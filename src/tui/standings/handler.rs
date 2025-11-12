@@ -388,8 +388,9 @@ pub async fn handle_key(
     // If we're in a panel view (navigation stack not at root), handle panel navigation
     if !state.navigation.is_at_root() {
         return handle_panel_navigation(key, state, shared_data, refresh_tx).await;
-    } else {
-        // Build layout to get team counts for navigation
+    }
+
+    // Build layout to get team counts for navigation
         let data = shared_data.read().await;
         let layout = StandingsLayout::build(&data.standings, state.view, data.config.display_standings_western_first);
         drop(data);
@@ -518,6 +519,280 @@ pub async fn handle_key(
             _ => false,
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::SharedData;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
+    use nhl_api::{Standing, LocalizedString};
+
+    /// Create a minimal test standing entry
+    fn create_test_standing(abbrev: &str, name: &str, wins: i32, points: i32) -> Standing {
+        Standing {
+            conference_abbrev: Some("E".to_string()),
+            conference_name: Some("Eastern".to_string()),
+            division_abbrev: "ATL".to_string(),
+            division_name: "Atlantic".to_string(),
+            team_name: LocalizedString { default: name.to_string() },
+            team_common_name: LocalizedString { default: name.to_string() },
+            team_abbrev: LocalizedString { default: abbrev.to_string() },
+            team_logo: String::new(),
+            wins,
+            losses: 0,
+            ot_losses: 0,
+            points,
+        }
+    }
+
+    /// Helper to create shared data with test standings
+    fn create_test_shared_data() -> SharedDataHandle {
+        let standings = vec![
+            create_test_standing("TOR", "Toronto", 30, 60),
+            create_test_standing("MTL", "Montreal", 25, 50),
+            create_test_standing("OTT", "Ottawa", 20, 40),
+        ];
+
+        Arc::new(RwLock::new(SharedData {
+            standings: Arc::new(standings),
+            ..Default::default()
+        }))
+    }
+
+    #[tokio::test]
+    async fn test_esc_from_team_selection_mode_exits_to_view_selection() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Navigate to Wildcard view
+        state.view = GroupBy::Wildcard;
+        state.subtab_focused = true;
+
+        // Enter team selection mode
+        state.team_selection_active = true;
+        state.selected_team_index = 1; // Select second team
+
+        // Press ESC
+        let key = KeyEvent::from(KeyCode::Esc);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        // Should handle the key
+        assert!(handled, "ESC should be handled");
+
+        // Should exit team selection mode
+        assert!(!state.team_selection_active, "Should exit team selection mode");
+
+        // Should remain in subtab focused mode (view selection)
+        assert!(state.subtab_focused, "Should remain in subtab focused mode");
+
+        // Navigation stack should still be empty (not in panel)
+        assert!(state.navigation.is_at_root(), "Should not be in a panel");
+    }
+
+    #[tokio::test]
+    async fn test_esc_from_panel_selection_exits_to_team_list() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Simulate being in a TeamDetail panel
+        state.view = GroupBy::Wildcard;
+        state.subtab_focused = true;
+        state.team_selection_active = true;
+
+        let panel = StandingsPanel::TeamDetail {
+            team_name: "Toronto".to_string(),
+            team_abbrev: "TOR".to_string(),
+            wins: 30,
+            losses: 20,
+            ot_losses: 5,
+            points: 65,
+            division_name: "Atlantic".to_string(),
+            conference_name: Some("Eastern".to_string()),
+        };
+        state.navigation.navigate_to(panel);
+
+        // Now we're in the panel with player selection inactive
+        assert!(!state.navigation.is_at_root(), "Should be in a panel");
+
+        // Press ESC
+        let key = KeyEvent::from(KeyCode::Esc);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        // Should handle the key
+        assert!(handled, "ESC should be handled");
+
+        // Should pop back to team list (navigation stack should be empty)
+        assert!(state.navigation.is_at_root(), "Should be back at root (team list)");
+
+        // Should still be in team selection mode
+        assert!(state.team_selection_active, "Should remain in team selection mode");
+    }
+
+    #[tokio::test]
+    async fn test_esc_from_panel_player_selection_exits_selection_not_panel() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Simulate being in a TeamDetail panel with player selection active
+        state.view = GroupBy::Wildcard;
+        state.subtab_focused = true;
+        state.team_selection_active = true;
+
+        let panel = StandingsPanel::TeamDetail {
+            team_name: "Toronto".to_string(),
+            team_abbrev: "TOR".to_string(),
+            wins: 30,
+            losses: 20,
+            ot_losses: 5,
+            points: 65,
+            division_name: "Atlantic".to_string(),
+            conference_name: Some("Eastern".to_string()),
+        };
+        let cache_key = panel.cache_key();
+        state.navigation.navigate_to(panel);
+
+        // Create panel state with selection active
+        let mut panel_state = TeamDetailState::new();
+        panel_state.selection_active = true;
+        panel_state.selected_player_index = 2;
+        state.navigation.data.insert(cache_key.clone(), PanelState::TeamDetail(panel_state));
+
+        // Press ESC
+        let key = KeyEvent::from(KeyCode::Esc);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        // Should handle the key
+        assert!(handled, "ESC should be handled");
+
+        // Should still be in the panel (not popped)
+        assert!(!state.navigation.is_at_root(), "Should still be in the panel");
+
+        // Should have exited player selection mode
+        let updated_state = state.navigation.data.get(&cache_key);
+        assert!(updated_state.is_some(), "Panel state should still exist");
+        if let Some(PanelState::TeamDetail(tds)) = updated_state {
+            assert!(!tds.selection_active, "Should exit player selection mode");
+        } else {
+            panic!("Panel state should be TeamDetail");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_complete_navigation_flow_with_esc() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // 1. Start in view selection mode
+        state.view = GroupBy::Wildcard;
+        state.subtab_focused = true;
+        state.team_selection_active = false;
+        assert!(state.navigation.is_at_root());
+
+        // 2. Press Down to enter team selection mode
+        let key = KeyEvent::from(KeyCode::Down);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled);
+        assert!(state.team_selection_active, "Should enter team selection mode");
+
+        // 3. Press Enter to open team panel
+        state.selected_team_index = 0;
+        let key = KeyEvent::from(KeyCode::Enter);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled);
+        assert!(!state.navigation.is_at_root(), "Should be in team panel");
+
+        // 4. Press ESC to go back to team list
+        let key = KeyEvent::from(KeyCode::Esc);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled);
+        assert!(state.navigation.is_at_root(), "Should be back at team list");
+        assert!(state.team_selection_active, "Should still be in team selection mode");
+
+        // 5. Press ESC again to exit team selection mode
+        let key = KeyEvent::from(KeyCode::Esc);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+        assert!(handled);
+        assert!(!state.team_selection_active, "Should exit team selection mode");
+        assert!(state.subtab_focused, "Should remain in subtab mode");
+    }
+
+    #[tokio::test]
+    async fn test_down_arrow_enters_team_selection() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Start in view selection mode
+        state.view = GroupBy::Wildcard;
+        state.subtab_focused = true;
+        state.team_selection_active = false;
+
+        // Press Down
+        let key = KeyEvent::from(KeyCode::Down);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        assert!(handled, "Down should be handled");
+        assert!(state.team_selection_active, "Should enter team selection mode");
+    }
+
+    #[tokio::test]
+    async fn test_up_arrow_at_first_team_exits_selection() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Start in team selection mode at first team
+        state.view = GroupBy::Wildcard;
+        state.subtab_focused = true;
+        state.team_selection_active = true;
+        state.selected_team_index = 0;
+
+        // Press Up
+        let key = KeyEvent::from(KeyCode::Up);
+        let handled = handle_key(key, &mut state, &shared_data, &tx).await;
+
+        assert!(handled, "Up should be handled");
+        assert!(!state.team_selection_active, "Should exit team selection mode");
+    }
+
+    #[tokio::test]
+    async fn test_team_navigation_preserves_selection_across_views() {
+        let mut state = State::new();
+        let shared_data = create_test_shared_data();
+        let (tx, _rx) = mpsc::channel::<()>(10);
+
+        // Select team in Wildcard view
+        state.view = GroupBy::Wildcard;
+        state.team_selection_active = true;
+        state.selected_team_index = 2;
+        state.selected_column = 0;
+
+        // Save selection
+        state.save_current_selection();
+
+        // Switch to Division view
+        let handled = change_view(&mut state, &shared_data, |_| GroupBy::Division).await;
+        assert!(handled);
+        assert_eq!(state.view, GroupBy::Division);
+
+        // Selection should reset to default for new view
+        assert_eq!(state.selected_team_index, 0);
+        assert_eq!(state.selected_column, 0);
+
+        // Switch back to Wildcard
+        let handled = change_view(&mut state, &shared_data, |_| GroupBy::Wildcard).await;
+        assert!(handled);
+        assert_eq!(state.view, GroupBy::Wildcard);
+
+        // Selection should be restored
+        assert_eq!(state.selected_team_index, 2);
+        assert_eq!(state.selected_column, 0);
     }
 }
 

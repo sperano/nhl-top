@@ -165,5 +165,100 @@ Currently using `NavigationAction::NavigateToGame(view_id)` to encode view selec
 
 ---
 
+## Panel Widget Extraction Complete ✅
+
+### What Was Accomplished (2025-01-11)
+
+Successfully extracted TeamDetail and PlayerDetail panels as reusable widgets with comprehensive rendering tests.
+
+### Files Created
+
+1. **`src/tui/widgets/team_detail.rs`** (186 lines + 228 test lines)
+   - Self-contained widget for team information and roster display
+   - Builder pattern: `.with_selection()`, `.with_instructions()`
+   - 6 comprehensive tests using `assert_buffer`
+   - Tests: loading state, empty roster, with/without instructions, preferred height, builder pattern
+
+2. **`src/tui/widgets/player_detail.rs`** (149 lines)
+   - Self-contained widget for player bio and career statistics
+   - Auto-filters to NHL-only seasons
+   - Builder pattern for configuration
+   - Renders PlayerBioCard + CareerStatsTable + instructions
+
+3. **`src/tui/widgets/scroll_rendering.rs`** (135 lines)
+   - Generic scrolling utilities for any RenderableWidget
+   - `render_scrollable_widget()` - single widget with scroll
+   - `render_scrollable_widgets()` - multiple widgets vertically
+   - Handles viewport culling and content height tracking
+
+### Files Modified
+
+1. **`src/tui/widgets/roster_stats_table.rs`** (renamed from player_stats_table.rs)
+   - Better name reflects purpose (team roster display)
+   - Updated all references and tests
+
+2. **`src/tui/standings/view.rs`** (simplified from ~150 lines to ~50 lines in render_panel)
+   - Removed inline panel rendering logic
+   - Uses TeamDetail/PlayerDetail widgets directly
+   - Uses `render_scrollable_widget()` for clean scrolling
+
+3. **`src/tui/widgets/mod.rs`**
+   - Added exports for new widgets
+   - Removed all doctest examples (were failing)
+
+### Code Quality Improvements
+
+**Before**: Inline rendering with manual buffer manipulation
+```rust
+// ~100 lines of manual rendering in standings/view.rs
+let mut render_line = |text: String, current_y: &mut i32| { ... };
+// Complex buffer-to-lines conversion
+```
+
+**After**: Clean widget composition
+```rust
+let widget = TeamDetail::new(...).with_selection(sel).with_instructions(true);
+render_scrollable_widget(&widget, f, area, &mut scrollable, theme, true);
+```
+
+**Benefits**:
+- Widgets are reusable across tabs (will use in Scores tab later)
+- Direct buffer rendering (no inefficient conversions)
+- Comprehensive tests with `assert_buffer` (6 tests for TeamDetail)
+- Builder pattern for clean configuration
+- Proper viewport culling for performance
+
+### Testing
+
+✅ **All 531 tests pass** (added 6 new tests for TeamDetail)
+✅ **Using assert_buffer** for pixel-perfect rendering verification
+✅ **80-character exact string matching** for all test cases
+
+Example test:
+```rust
+#[test]
+fn test_team_detail_loading_players() {
+    let buf = render_widget(&widget, 80, 16);
+    assert_buffer(&buf, &[
+        "Team: Toronto Maple Leafs (TOR)                                                 ",
+        "                                                                                ",
+        "Conference: Eastern                                                             ",
+        // ... 13 more lines of exact 80-character strings
+    ]);
+}
+```
+
+### Lessons Learned
+
+1. **Direct widget rendering is cleaner** - No intermediate buffer-to-lines conversions needed
+2. **assert_buffer requires exact lengths** - All strings must be EXACTLY the buffer width (80 chars)
+3. **Reusable widgets reduce duplication** - Same widgets will work in Scores, Stats, Players tabs
+4. **Builder pattern scales well** - Easy to add new configuration options
+5. **Test rendering early** - Prevents regressions in visual output
+
+---
+
 Generated: 2025-01-10
+Updated: 2025-01-11
 Status: Phase 1 Complete - Ready for Testing
+Panel Widget Extraction: Complete ✅

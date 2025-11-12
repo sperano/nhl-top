@@ -240,7 +240,7 @@ mod tests {
         assert_buffer(&buf, &[
             "  Team                       GP   W   L  OT  PTS",
             "  ──────────────────────────────────────────────",
-        ]);
+        ], 48);
     }
 
     #[test]
@@ -262,7 +262,7 @@ mod tests {
             "  Toronto Maple Leafs        10   6   3   1   13",
             "  Montreal Canadiens         10   5   4   1   11",
             "  Boston Bruins              10   4   5   1    9",
-        ]);
+        ], 48);
     }
 
     #[test]
@@ -290,7 +290,7 @@ mod tests {
             "  ──────────────────────────────────────────────",
             "  Toronto Maple Leafs        10   6   3   1   13",
             "                                                ",
-        ]);
+        ], 48);
     }
 
     #[test]
@@ -312,7 +312,7 @@ mod tests {
             "  Toronto Maple Leafs        10   6   3   1   13",
             "  Montreal Canadiens         10   5   4   1   11",
             "  Boston Bruins              10   4   5   1    9",
-        ]);
+        ], 48);
     }
 
     #[test]
@@ -335,7 +335,7 @@ mod tests {
             "  Montreal Canadiens         10   5   4   1   11",
             "  ──────────────────────────────────────────────",
             "  Boston Bruins              10   4   5   1    9",
-        ]);
+        ], 48);
     }
 
     #[test]

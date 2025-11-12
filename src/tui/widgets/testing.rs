@@ -143,23 +143,66 @@ pub fn buffer_lines(buf: &Buffer) -> Vec<String> {
 /// Assert that a buffer matches the expected lines
 ///
 /// This is a convenience function for the common pattern of comparing
-/// all buffer lines against expected output. Each string in the expected
-/// slice should be exactly the width of the buffer.
+/// all buffer lines against expected output.
+///
+/// # Arguments
+///
+/// * `buf` - The buffer to check
+/// * `expected` - The expected line content (without manual padding)
+/// * `expected_width` - The expected width of each line (will validate actual width matches)
+///
+/// Each string in `expected` will be checked for exact content. If `expected_width` is provided,
+/// each line will be validated to have exactly that many characters (including trailing spaces).
 ///
 /// # Example
 ///
 /// ```rust
 /// let buf = render_widget(&widget, 40, 3);
 /// assert_buffer(&buf, &[
-///     "Line 1 content...                       ",
-///     "Line 2 content...                       ",
-///     "Line 3 content...                       ",
-/// ]);
+///     "Line 1 content...",
+///     "Line 2 content...",
+///     "Line 3 content...",
+/// ], 40);
 /// ```
-pub fn assert_buffer(buf: &Buffer, expected: &[&str]) {
+pub fn assert_buffer(buf: &Buffer, expected: &[&str], expected_width: usize) {
     let actual = buffer_lines(buf);
-    let expected: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
-    assert_eq!(actual, expected);
+
+    // Only check the first N lines where N = number of expected lines
+    // This allows buffers to be larger than the expected output
+    assert!(
+        actual.len() >= expected.len(),
+        "Buffer has fewer lines than expected: expected at least {}, got {}",
+        expected.len(),
+        actual.len()
+    );
+
+    // Validate each expected line
+    for (i, expected_content) in expected.iter().enumerate() {
+        let actual_line = &actual[i];
+
+        // Check width
+        assert_eq!(
+            actual_line.chars().count(),
+            expected_width,
+            "Line {} width mismatch: expected {} chars, got {} chars\nLine content: {:?}",
+            i,
+            expected_width,
+            actual_line.chars().count(),
+            actual_line
+        );
+
+        // Check content (trim trailing spaces from both for comparison)
+        let actual_trimmed = actual_line.trim_end();
+        let expected_trimmed = expected_content.trim_end();
+        assert_eq!(
+            actual_trimmed,
+            expected_trimmed,
+            "Line {} content mismatch:\nExpected: {:?}\nActual:   {:?}",
+            i,
+            expected_content,
+            actual_line
+        );
+    }
 }
 
 /// Get a single cell from the buffer

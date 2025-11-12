@@ -1,35 +1,38 @@
-/// EnhancedBreadcrumb widget - displays navigation breadcrumb with optional icon
+/// Breadcrumb widget - displays navigation breadcrumb trail
 ///
 /// This widget renders a breadcrumb trail showing the current navigation context.
-/// Format: "📍 Standings ▸ Division ▸ Maple Leafs ▸ Matthews"
-/// The last item is highlighted in the selection color, previous items use normal foreground.
+/// Format: "▸ Standings▸ Division▸ Maple Leafs"
+/// Uses the separator character as the icon for consistency.
 
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::RenderableWidget;
 
 const DEFAULT_SEPARATOR: &str = " ▸ ";
-const DEFAULT_ICON: &str = "📍";
 const ELLIPSIS: &str = "...";
 
 /// Widget for displaying navigation breadcrumb trail
 #[derive(Debug)]
-pub struct EnhancedBreadcrumb {
+pub struct Breadcrumb {
     /// Breadcrumb items (e.g., ["Standings", "Division", "Maple Leafs"])
     pub items: Vec<String>,
     /// Separator between items (default: " ▸ ")
     pub separator: String,
-    /// Optional icon at the start (default: "📍")
+    /// Optional icon at the start (default: same as separator)
     pub icon: Option<String>,
+    /// Number of items to skip from the start (default: 0)
+    pub skip_items: usize,
 }
 
-impl EnhancedBreadcrumb {
-    /// Create a new EnhancedBreadcrumb with the given items
+impl Breadcrumb {
+    /// Create a new Breadcrumb with the given items
     pub fn new(items: Vec<String>) -> Self {
+        let separator = DEFAULT_SEPARATOR.to_string();
         Self {
             items,
-            separator: DEFAULT_SEPARATOR.to_string(),
-            icon: Some(DEFAULT_ICON.to_string()),
+            icon: Some(separator.trim_start().to_string()),
+            separator,
+            skip_items: 0,
         }
     }
 
@@ -45,16 +48,24 @@ impl EnhancedBreadcrumb {
         self
     }
 
+    /// Set the number of items to skip from the start
+    pub fn with_skip(mut self, skip_items: usize) -> Self {
+        self.skip_items = skip_items;
+        self
+    }
+
     /// Format the breadcrumb as a string
     fn format_breadcrumb(&self) -> String {
         let mut result = String::new();
 
         if let Some(icon) = &self.icon {
             result.push_str(icon);
-            result.push(' ');
         }
 
-        for (idx, item) in self.items.iter().enumerate() {
+        // Skip the first N items
+        let items_to_show = self.items.iter().skip(self.skip_items);
+
+        for (idx, item) in items_to_show.enumerate() {
             if idx > 0 {
                 result.push_str(&self.separator);
             }
@@ -73,14 +84,16 @@ impl EnhancedBreadcrumb {
         }
 
         // If we need to truncate, keep the icon and last item visible
-        if let Some(last) = self.items.last() {
+        // Use items after skip_items
+        let items_to_show: Vec<_> = self.items.iter().skip(self.skip_items).collect();
+        if let Some(last) = items_to_show.last() {
             let icon_part = if let Some(icon) = &self.icon {
-                format!("{} ", icon)
+                icon.clone()
             } else {
                 String::new()
             };
 
-            let last_part = last.clone();
+            let last_part = (*last).clone();
             let needed = icon_part.len() + ELLIPSIS.len() + self.separator.len() + last_part.len();
 
             if needed <= width {
@@ -97,17 +110,19 @@ impl EnhancedBreadcrumb {
     }
 }
 
-impl Default for EnhancedBreadcrumb {
+impl Default for Breadcrumb {
     fn default() -> Self {
+        let separator = DEFAULT_SEPARATOR.to_string();
         Self {
             items: Vec::new(),
-            separator: DEFAULT_SEPARATOR.to_string(),
-            icon: Some(DEFAULT_ICON.to_string()),
+            icon: Some(separator.trim_start().to_string()),
+            separator,
+            skip_items: 0,
         }
     }
 }
 
-impl RenderableWidget for EnhancedBreadcrumb {
+impl RenderableWidget for Breadcrumb {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if self.items.is_empty() || area.width == 0 || area.height == 0 {
             return;
@@ -120,29 +135,29 @@ impl RenderableWidget for EnhancedBreadcrumb {
 
         // Calculate segments for styling
         let mut segments: Vec<(String, Style)> = Vec::new();
-        let mut current_pos = 0;
+        let mut current_char_pos = 0;
 
         // Icon segment (if present)
         if let Some(icon) = &self.icon {
-            let icon_with_space = format!("{} ", icon);
-            if breadcrumb.starts_with(&icon_with_space) {
-                segments.push((icon_with_space.clone(), Style::default()));
-                current_pos = icon_with_space.len();
+            if breadcrumb.starts_with(icon) {
+                segments.push((icon.clone(), Style::default()));
+                current_char_pos = icon.chars().count();
             }
         }
 
         // If breadcrumb was truncated, just render it with default style
         if breadcrumb.contains(ELLIPSIS) {
-            let remaining = breadcrumb[current_pos..].to_string();
+            let remaining: String = breadcrumb.chars().skip(current_char_pos).collect();
             segments.push((remaining, Style::default()));
         } else {
-            // Render each item with appropriate styling
-            for (idx, item) in self.items.iter().enumerate() {
+            // Render each item with appropriate styling (after skipping)
+            let items_to_render: Vec<_> = self.items.iter().skip(self.skip_items).collect();
+            for (idx, item) in items_to_render.iter().enumerate() {
                 if idx > 0 {
                     segments.push((self.separator.clone(), Style::default()));
                 }
 
-                let style = if idx == self.items.len() - 1 {
+                let style = if idx == items_to_render.len() - 1 {
                     // Last item: highlighted
                     Style::default().fg(config.selection_fg)
                 } else {
@@ -150,7 +165,7 @@ impl RenderableWidget for EnhancedBreadcrumb {
                     Style::default()
                 };
 
-                segments.push((item.clone(), style));
+                segments.push(((*item).clone(), style));
             }
         }
 
@@ -182,27 +197,27 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_empty() {
-        let widget = EnhancedBreadcrumb::new(vec![]);
+        let widget = Breadcrumb::new(vec![]);
         let buf = render_widget(&widget, 80, 1);
 
         assert_buffer(&buf, &[
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
     fn test_breadcrumb_single_item() {
-        let widget = EnhancedBreadcrumb::new(vec!["Standings".to_string()]);
+        let widget = Breadcrumb::new(vec!["Standings".to_string()]);
         let buf = render_widget(&widget, 80, 1);
 
         assert_buffer(&buf, &[
-            "📍 Standings                                                                     ",
-        ]);
+            "▸ Standings                                                                    ",
+        ], 80);
     }
 
     #[test]
     fn test_breadcrumb_multiple_items() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "Standings".to_string(),
             "Division".to_string(),
             "Maple Leafs".to_string(),
@@ -210,13 +225,13 @@ mod tests {
         let buf = render_widget(&widget, 80, 1);
 
         assert_buffer(&buf, &[
-            "📍 Standings ▸ Division ▸ Maple Leafs                                            ",
-        ]);
+            "▸ Standings ▸ Division ▸ Maple Leafs                                            ",
+        ], 80);
     }
 
     #[test]
     fn test_breadcrumb_custom_separator() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "A".to_string(),
             "B".to_string(),
         ])
@@ -225,37 +240,37 @@ mod tests {
         let buf = render_widget(&widget, 80, 1);
 
         assert_buffer(&buf, &[
-            "📍 A > B                                                                         ",
-        ]);
+            "▸ A > B                                                                         ",
+        ], 80);
     }
 
     #[test]
     fn test_breadcrumb_no_icon() {
-        let widget = EnhancedBreadcrumb::new(vec!["Standings".to_string()])
+        let widget = Breadcrumb::new(vec!["Standings".to_string()])
             .with_icon(None);
 
         let buf = render_widget(&widget, 80, 1);
 
         assert_buffer(&buf, &[
             "Standings                                                                       ",
-        ]);
+        ], 80);
     }
 
     #[test]
     fn test_breadcrumb_custom_icon() {
-        let widget = EnhancedBreadcrumb::new(vec!["Home".to_string()])
-            .with_icon(Some("🏠".to_string()));
+        let widget = Breadcrumb::new(vec!["Home".to_string()])
+            .with_icon(Some("🏠 ".to_string()));
 
         let buf = render_widget(&widget, 80, 1);
 
         assert_buffer(&buf, &[
-            "🏠 Home                                                                          ",
-        ]);
+            "🏠 Home                                                                         ",
+        ], 80);
     }
 
     #[test]
     fn test_breadcrumb_truncation() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "Very Long First Item".to_string(),
             "Second".to_string(),
             "Last".to_string(),
@@ -264,22 +279,22 @@ mod tests {
         let buf = render_widget(&widget, 20, 1);
 
         assert_buffer(&buf, &[
-            "📍 ... ▸ Last        ",
-        ]);
+            "▸ ... ▸ Last",
+        ], 20);
     }
 
     #[test]
     fn test_breadcrumb_default() {
-        let widget = EnhancedBreadcrumb::default();
+        let widget = Breadcrumb::default();
 
         assert!(widget.items.is_empty());
         assert_eq!(widget.separator, DEFAULT_SEPARATOR);
-        assert_eq!(widget.icon, Some(DEFAULT_ICON.to_string()));
+        assert_eq!(widget.icon, Some(DEFAULT_SEPARATOR.trim_start().to_string()));
     }
 
     #[test]
     fn test_breadcrumb_preferred_dimensions() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "A".to_string(),
             "B".to_string(),
         ]);
@@ -292,7 +307,7 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_very_narrow_width() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "A".to_string(),
             "B".to_string(),
             "C".to_string(),
@@ -300,13 +315,13 @@ mod tests {
 
         let buf = render_widget(&widget, 2, 1);
         assert_buffer(&buf, &[
-            "  ",
-        ]);
+            "",
+        ], 2);
     }
 
     #[test]
     fn test_breadcrumb_zero_area() {
-        let widget = EnhancedBreadcrumb::new(vec!["Test".to_string()]);
+        let widget = Breadcrumb::new(vec!["Test".to_string()]);
         let buf = render_widget(&widget, 0, 0);
 
         // Should not panic
@@ -315,19 +330,19 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_format() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "A".to_string(),
             "B".to_string(),
             "C".to_string(),
         ]);
 
         let formatted = widget.format_breadcrumb();
-        assert_eq!(formatted, "📍 A ▸ B ▸ C");
+        assert_eq!(formatted, "▸ A ▸ B ▸ C");
     }
 
     #[test]
     fn test_breadcrumb_truncate_to_fit() {
-        let widget = EnhancedBreadcrumb::new(vec![
+        let widget = Breadcrumb::new(vec![
             "First".to_string(),
             "Second".to_string(),
             "Third".to_string(),
@@ -335,7 +350,7 @@ mod tests {
 
         // Test with plenty of space
         let full = widget.truncate_to_fit(100);
-        assert_eq!(full, "📍 First ▸ Second ▸ Third");
+        assert_eq!(full, "▸ First ▸ Second ▸ Third");
 
         // Test with limited space (should show icon, ellipsis, separator, and last item)
         let truncated = widget.truncate_to_fit(20);

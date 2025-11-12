@@ -218,7 +218,7 @@ mod tests {
             "  Birthplace:    Toronto, ON, CAN                                               ",
             "                                                                                ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -239,7 +239,7 @@ mod tests {
             "    Birthplace:    Boston, MA, USA                                              ",
             "                                                                                ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
             "    Birthplace:    Montreal, QC, CAN                                            ",
             "                                                                                ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod tests {
             "    Birthplace:    Stockholm, SWE                                               ",
             "                                                                                ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
             "    Weight:        210 lbs                                                      ",
             "                                                                                ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -334,6 +334,6 @@ mod tests {
             "    Weight:        200 lbs                                                      ",
             "                                                                                ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 }

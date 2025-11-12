@@ -224,7 +224,7 @@ mod tests {
             "                                                                                ",
             "Press ESC to go back                                                            ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
     #[test]
@@ -270,7 +270,7 @@ mod tests {
             "                                                                                ",
             "Press ESC to go back                                                            ",
             "                                                                                ",
-        ]);
+        ], 80);
     }
 
 
@@ -305,7 +305,7 @@ mod tests {
             "                                                                                ",
             "                                                                                ",
             "  Loading players...                                                            ",
-        ]);
+        ], 80);
     }
 
     #[test]

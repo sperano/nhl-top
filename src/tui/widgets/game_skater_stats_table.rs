@@ -200,7 +200,7 @@ mod tests {
             "──────────────                                              ",
             "#   Name                 Pos    G   A   P  +/-    TOI       ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 
     #[test]
@@ -224,7 +224,7 @@ mod tests {
             "16  Mitch Marner         RW     0   3   3    2  19:42       ",
             "88  William Nylander     RW     1   1   2    0  18:30       ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 
     #[test]
@@ -246,7 +246,7 @@ mod tests {
             "44  Morgan Rielly        D      0   2   2   -1  22:45       ",
             "22  Jake McCabe          D      0   0   0    0  19:15       ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 
     #[test]
@@ -295,6 +295,6 @@ mod tests {
             "#   Name                 Pos    G   A   P  +/-    TOI       ",
             "34  Test Player          C      2   3   5   -2  20:15       ",
             "                                                            ",
-        ]);
+        ], 60);
     }
 }

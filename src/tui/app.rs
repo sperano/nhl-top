@@ -137,6 +137,7 @@ impl AppState {
     }
 
     pub fn navigate_tab_left(&mut self) {
+        let old_tab = self.current_tab;
         self.current_tab = match self.current_tab {
             CurrentTab::Scores => CurrentTab::Browser,
             CurrentTab::Standings => CurrentTab::Scores,
@@ -145,11 +146,13 @@ impl AppState {
             CurrentTab::Settings => CurrentTab::Players,
             CurrentTab::Browser => CurrentTab::Settings,
         };
+        tracing::debug!("Tab navigation: {:?} -> {:?} (left)", old_tab, self.current_tab);
         // Reset subtab focus when changing tabs
         self.exit_subtab_mode();
     }
 
     pub fn navigate_tab_right(&mut self) {
+        let old_tab = self.current_tab;
         self.current_tab = match self.current_tab {
             CurrentTab::Scores => CurrentTab::Standings,
             CurrentTab::Standings => CurrentTab::Stats,
@@ -158,11 +161,13 @@ impl AppState {
             CurrentTab::Settings => CurrentTab::Browser,
             CurrentTab::Browser => CurrentTab::Scores,
         };
+        tracing::debug!("Tab navigation: {:?} -> {:?} (right)", old_tab, self.current_tab);
         // Reset subtab focus when changing tabs
         self.exit_subtab_mode();
     }
 
     pub fn enter_subtab_mode(&mut self) {
+        tracing::debug!("Entering subtab mode on {:?}", self.current_tab);
         match self.current_tab {
             CurrentTab::Scores => self.scores.subtab_focused = true,
             CurrentTab::Standings => self.standings.subtab_focused = true,
@@ -176,6 +181,7 @@ impl AppState {
     }
 
     pub fn exit_subtab_mode(&mut self) {
+        tracing::debug!("Exiting subtab mode on {:?}", self.current_tab);
         self.scores.subtab_focused = false;
         self.scores.box_selection_active = false;
         self.standings.subtab_focused = false;

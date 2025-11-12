@@ -6,13 +6,19 @@
 use crate::config::DisplayConfig;
 use crate::tui::common::styling::{base_tab_style, selection_style};
 use crate::tui::common::separator::build_tab_separator_line;
+use crate::tui::widgets::{Breadcrumb, RenderableWidget};
 use ratatui::{
-    layout::Rect,
+    layout::{Rect, Constraint, Direction, Layout},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
+    buffer::Buffer,
 };
 use std::sync::Arc;
+
+/// Minimum breadcrumb depth required to show breadcrumb
+/// Breadcrumb is only shown if there are more than this many items
+pub const BREADCRUMB_MIN_DEPTH: usize = 2;
 
 /// Render subtabs with optional breadcrumb
 ///
@@ -22,7 +28,8 @@ use std::sync::Arc;
 /// * `tab_labels` - Labels for each tab
 /// * `selected_index` - Index of currently selected tab
 /// * `focused` - Whether the subtab area is focused
-/// * `breadcrumb_text` - Optional breadcrumb text (only shown if focused)
+/// * `breadcrumb_items` - Optional breadcrumb items (only shown if focused and length > BREADCRUMB_MIN_DEPTH)
+/// * `breadcrumb_skip` - Number of breadcrumb items to skip from the start
 /// * `display` - Display configuration
 pub fn render_subtabs_with_breadcrumb(
     f: &mut Frame,
@@ -30,7 +37,8 @@ pub fn render_subtabs_with_breadcrumb(
     tab_labels: Vec<String>,
     selected_index: usize,
     focused: bool,
-    breadcrumb_text: Option<String>,
+    breadcrumb_items: Option<Vec<String>>,
+    breadcrumb_skip: usize,
     display: &Arc<DisplayConfig>,
 ) {
     let base_style = base_tab_style(focused);
@@ -63,19 +71,51 @@ pub fn render_subtabs_with_breadcrumb(
         &display.box_chars,
     );
 
-    // Build lines (tabs + separator + optional breadcrumb)
-    let mut lines = vec![tab_line, separator_line];
-    if focused {
-        if let Some(breadcrumb) = breadcrumb_text {
-            let breadcrumb_line = Line::from(vec![Span::styled(breadcrumb, base_style)]);
-            lines.push(breadcrumb_line);
+    // If breadcrumb is present and focused, split area into subtabs and breadcrumb
+    // Only show breadcrumb if there are more than BREADCRUMB_MIN_DEPTH items
+    let should_show_breadcrumb = focused
+        && breadcrumb_items.as_ref().map_or(false, |items| items.len() > BREADCRUMB_MIN_DEPTH)
+        && area.height >= 3;
+
+    if should_show_breadcrumb {
+        let breadcrumb_items = breadcrumb_items.unwrap();
+
+        // Split area: 2 lines for subtabs, 1 line for breadcrumb
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(2), // Subtabs + separator
+                Constraint::Length(1), // Breadcrumb
+            ])
+            .split(area);
+
+        // Render subtabs
+        let subtab_widget = Paragraph::new(vec![tab_line, separator_line])
+            .block(Block::default().borders(Borders::NONE));
+        f.render_widget(subtab_widget, chunks[0]);
+
+        // Render breadcrumb using Breadcrumb widget with skip
+        let breadcrumb = Breadcrumb::new(breadcrumb_items).with_skip(breadcrumb_skip);
+        let breadcrumb_area = Rect::new(0, 0, chunks[1].width, chunks[1].height);
+        let mut buf = Buffer::empty(breadcrumb_area);
+        breadcrumb.render(breadcrumb_area, &mut buf, display);
+
+        // Copy buffer to frame
+        let frame_buf = f.buffer_mut();
+        for y in 0..chunks[1].height {
+            for x in 0..chunks[1].width {
+                let cell = &buf[(x, y)];
+                frame_buf[(chunks[1].x + x, chunks[1].y + y)]
+                    .set_symbol(cell.symbol())
+                    .set_style(cell.style());
+            }
         }
+    } else {
+        // No breadcrumb: just render subtabs
+        let widget = Paragraph::new(vec![tab_line, separator_line])
+            .block(Block::default().borders(Borders::NONE));
+        f.render_widget(widget, area);
     }
-
-    let widget = Paragraph::new(lines)
-        .block(Block::default().borders(Borders::NONE));
-
-    f.render_widget(widget, area);
 }
 
 #[cfg(test)]
@@ -83,34 +123,36 @@ mod tests {
     use super::*;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use crate::tui::widgets::testing::assert_buffer;
 
     #[test]
     fn test_render_subtabs_without_breadcrumb() {
         let display = Arc::new(DisplayConfig::default());
-        let backend = TestBackend::new(80, 2);
+        let backend = TestBackend::new(80, 80);
         let mut terminal = Terminal::new(backend).unwrap();
 
         terminal.draw(|f| {
-            let area = Rect::new(0, 0, 80, 2);
+            let area = Rect::new(0, 0, 80, 80);
             render_subtabs_with_breadcrumb(
                 f,
                 area,
                 vec!["Tab1".to_string(), "Tab2".to_string(), "Tab3".to_string()],
                 1,
                 false, // not focused = no breadcrumb
-                Some("Breadcrumb text".to_string()),
+                Some(vec!["Test".to_string(), "Breadcrumb".to_string()]),
+                0, // skip 0 items
                 &display,
             );
         }).unwrap();
 
         let buffer = terminal.backend().buffer();
-        let first_line: String = (0..80)
-            .map(|x| buffer.cell((x, 0)).unwrap().symbol())
-            .collect();
 
-        assert!(first_line.contains("Tab1"));
-        assert!(first_line.contains("Tab2"));
-        assert!(first_line.contains("Tab3"));
+        // Line 0: tabs with Tab2 selected (index 1)
+        // Line 1: separator line
+        assert_buffer(buffer, &[
+            "Tab1 │ Tab2 │ Tab3                                                              ",
+            "─────┴──────┴───────────────────────────────────────────────────────────────────",
+        ], 80);
     }
 
     #[test]
@@ -121,32 +163,28 @@ mod tests {
 
         terminal.draw(|f| {
             let area = Rect::new(0, 0, 80, 3);
+            // Test with 3 items to exceed BREADCRUMB_MIN_DEPTH (2)
             render_subtabs_with_breadcrumb(
                 f,
                 area,
                 vec!["Tab1".to_string(), "Tab2".to_string()],
                 0,
                 true, // focused = show breadcrumb
-                Some("Test ▸ Breadcrumb".to_string()),
+                Some(vec!["Standings".to_string(), "Division".to_string(), "Maple Leafs".to_string()]),
+                BREADCRUMB_MIN_DEPTH, // skip first 2 items
                 &display,
             );
         }).unwrap();
 
         let buffer = terminal.backend().buffer();
 
-        // First line: tabs
-        let first_line: String = (0..80)
-            .map(|x| buffer.cell((x, 0)).unwrap().symbol())
-            .collect();
-        assert!(first_line.contains("Tab1"));
-        assert!(first_line.contains("Tab2"));
-
-        // Third line: breadcrumb
-        let third_line: String = (0..80)
-            .map(|x| buffer.cell((x, 2)).unwrap().symbol())
-            .collect();
-        assert!(third_line.contains("Test"));
-        assert!(third_line.contains("Breadcrumb"));
-        assert!(third_line.contains("▸"));
+        // Line 0: tabs with Tab1 selected (index 0)
+        // Line 1: separator line
+        // Line 2: breadcrumb showing only "Maple Leafs" (skipped "Standings" and "Division")
+        assert_buffer(buffer, &[
+            "Tab1 │ Tab2                                                                     ",
+            "─────┴──────────────────────────────────────────────────────────────────────────",
+            "▸ Maple Leafs                                                                   ",
+        ], 80);
     }
 }
