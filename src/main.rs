@@ -1,7 +1,3 @@
-// Local modules
-mod background;
-
-// Import from library
 use nhl::types::{SharedData, SharedDataHandle, NHL_LEAGUE_ABBREV};
 use nhl::tui;
 use nhl::commands;

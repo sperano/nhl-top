@@ -38,31 +38,6 @@ pub trait BreadcrumbProvider {
     fn get_breadcrumb_items(&self) -> Vec<String>;
 }
 
-/// Scores tab breadcrumb provider that needs game_date
-pub struct ScoresBreadcrumbProvider<'a> {
-    pub state: &'a crate::tui::scores::State,
-    pub game_date: &'a GameDate,
-}
-
-/// Format a GameDate as "Mon DD, YYYY"
-fn format_date_full(date: &GameDate) -> String {
-    match date {
-        GameDate::Date(naive_date) => naive_date.format("%b %d, %Y").to_string(),
-        GameDate::Now => chrono::Local::now().date_naive().format("%b %d, %Y").to_string(),
-    }
-}
-
-impl BreadcrumbProvider for ScoresBreadcrumbProvider<'_> {
-    fn get_breadcrumb_items(&self) -> Vec<String> {
-        let mut items = vec!["Scores".to_string()];
-
-        if self.state.subtab_focused {
-            items.push(format_date_full(self.game_date));
-        }
-
-        items
-    }
-}
 
 /// An item that can be searched in the command palette
 #[derive(Debug, Clone)]
@@ -158,40 +133,6 @@ mod tests {
 
         assert_eq!(item.keywords.len(), 4);
         assert!(item.keywords.contains(&"habs".to_string()));
-    }
-
-    #[test]
-    fn test_scores_breadcrumb_provider_not_focused() {
-        use crate::tui::scores::State as ScoresState;
-
-        let state = ScoresState::new();
-        let date = GameDate::from_ymd(2024, 11, 8).unwrap();
-        let provider = ScoresBreadcrumbProvider {
-            state: &state,
-            game_date: &date,
-        };
-
-        let items = provider.get_breadcrumb_items();
-        assert_eq!(items.len(), 1);
-        assert_eq!(items[0], "Scores");
-    }
-
-    #[test]
-    fn test_scores_breadcrumb_provider_focused() {
-        use crate::tui::scores::State as ScoresState;
-
-        let mut state = ScoresState::new();
-        state.subtab_focused = true;
-        let date = GameDate::from_ymd(2024, 11, 8).unwrap();
-        let provider = ScoresBreadcrumbProvider {
-            state: &state,
-            game_date: &date,
-        };
-
-        let items = provider.get_breadcrumb_items();
-        assert_eq!(items.len(), 2);
-        assert_eq!(items[0], "Scores");
-        assert_eq!(items[1], "Nov 08, 2024");
     }
 
     #[test]

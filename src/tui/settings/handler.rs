@@ -1,23 +1,3 @@
-use super::State;
-use crate::tui::widgets::focus::{Focusable, InputResult};
-use crossterm::event::KeyEvent;
-use crate::types::SharedDataHandle;
-
-pub async fn handle_key(
-    key: KeyEvent,
-    state: &mut State,
-    _shared_data: &SharedDataHandle,
-) -> bool {
-    if let Some(ref mut container) = state.container {
-        // Convert InputResult to bool:
-        // - Handled or Navigate means the input was handled (return true)
-        // - NotHandled means it wasn't (return false)
-        matches!(container.handle_input(key), InputResult::Handled | InputResult::Navigate(_))
-    } else {
-        false
-    }
-}
-
 // === COMMENTED OUT FOR REFACTORING - WILL REACTIVATE LATER ===
 // This code represents the old state-based settings handler implementation
 // Keep for reference when rebuilding settings functionality with Container widgets

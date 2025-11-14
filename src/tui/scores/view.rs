@@ -1,5 +1,4 @@
 use super::State;
-use super::state::DATE_WINDOW_SIZE;
 use crate::config::DisplayConfig;
 use crate::tui::widgets::{Container, GameBox, GameGrid, GameState, RenderableWidget};
 use crate::commands::scores_format::PeriodScores;
@@ -10,28 +9,6 @@ use ratatui::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-
-fn build_container() -> Container {
-    Container::new()
-}
-
-/// Calculate the date window based on game_date and selected_index
-/// The window has a fixed base date (leftmost date) that only shifts when reaching edges
-/// Relationship: window_base_date = game_date - selected_index
-/// Window: [base, base+1, base+2, base+3, base+4]
-fn calculate_date_window(game_date: &nhl_api::GameDate, selected_index: usize) -> [nhl_api::GameDate; DATE_WINDOW_SIZE] {
-    // Calculate window base: the leftmost date in the window
-    let window_base_date = game_date.add_days(-(selected_index as i64));
-
-    // Window is always [base, base+1, base+2, base+3, base+4]
-    [
-        window_base_date.add_days(0),
-        window_base_date.add_days(1),
-        window_base_date.add_days(2),
-        window_base_date.add_days(3),
-        window_base_date.add_days(4),
-    ]
-}
 
 /// Format a GameDate as MM/DD
 fn format_date_mmdd(date: &nhl_api::GameDate) -> String {
@@ -47,28 +24,6 @@ fn format_date_full(date: &nhl_api::GameDate) -> String {
         nhl_api::GameDate::Date(naive_date) => naive_date.format("%b %d, %Y").to_string(),
         nhl_api::GameDate::Now => chrono::Local::now().date_naive().format("%b %d, %Y").to_string(),
     }
-}
-
-pub fn render_subtabs(
-    f: &mut Frame,
-    area: Rect,
-    state: &State,
-    game_date: &nhl_api::GameDate,
-    display: &Arc<DisplayConfig>,
-) {
-    let focused = state.subtab_focused && !state.box_selection_active;
-
-    // Calculate and format the date window
-    let dates = calculate_date_window(game_date, state.selected_index);
-    let date_labels: Vec<String> = dates.iter().map(format_date_mmdd).collect();
-
-    // Format breadcrumb
-    let breadcrumb_items = if state.subtab_focused {
-        Some(vec!["Scores".to_string(), format_date_full(game_date)])
-    } else {
-        None
-    };
-
 }
 
 /// Convert schedule data to GameBox widgets
@@ -174,10 +129,6 @@ pub fn render_content(
     _boxscore_loading: bool,
     _player_info: &Arc<HashMap<i64, nhl_api::PlayerLanding>>,
 ) {
-    // Build container if not present
-    if state.container.is_none() {
-        state.container = Some(build_container());
-    }
 
     // Handle empty schedule (loading state)
     if schedule.is_none() {
