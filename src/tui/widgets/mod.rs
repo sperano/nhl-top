@@ -9,7 +9,6 @@ pub mod testing;
 
 // Focus management system
 pub mod focus;
-pub mod tree;
 pub mod container;
 pub mod link;
 pub mod list;

@@ -1,4 +1,4 @@
-use super::{scores, standings, stats, players, settings, browser};
+use super::{scores, standings, settings};
 use super::widgets::CommandPalette;
 use super::context::NavigationCommand;
 use super::SharedDataHandle;
@@ -10,9 +10,7 @@ pub enum CurrentTab {
     Scores,
     Standings,
     Stats,
-    Players,
     Settings,
-    Browser,
 }
 
 impl CurrentTab {
@@ -38,9 +36,7 @@ impl CurrentTab {
             CurrentTab::Scores => 0,
             CurrentTab::Standings => 1,
             CurrentTab::Stats => 2,
-            CurrentTab::Players => 3,
-            CurrentTab::Settings => 4,
-            CurrentTab::Browser => 5,
+            CurrentTab::Settings => 3,
         }
     }
 }
@@ -49,10 +45,7 @@ pub struct AppState {
     pub current_tab: CurrentTab,
     pub scores: scores::State,
     pub standings: standings::State,
-    pub stats: stats::State,
-    pub players: players::State,
     pub settings: settings::State,
-    pub browser: browser::State,
     pub command_palette: Option<CommandPalette>,
     pub command_palette_active: bool,
 }
@@ -63,10 +56,7 @@ impl AppState {
             current_tab: CurrentTab::Scores,
             scores: scores::State::new(),
             standings: standings::State::new(),
-            stats: stats::State::new(),
-            players: players::State::new(),
             settings: settings::State::new(),
-            browser: browser::State::new(),
             command_palette: Some(CommandPalette::new()),
             command_palette_active: false,
         }
@@ -139,12 +129,10 @@ impl AppState {
     pub fn navigate_tab_left(&mut self) {
         let old_tab = self.current_tab;
         self.current_tab = match self.current_tab {
-            CurrentTab::Scores => CurrentTab::Browser,
+            CurrentTab::Scores => CurrentTab::Settings,
             CurrentTab::Standings => CurrentTab::Scores,
             CurrentTab::Stats => CurrentTab::Standings,
-            CurrentTab::Players => CurrentTab::Stats,
-            CurrentTab::Settings => CurrentTab::Players,
-            CurrentTab::Browser => CurrentTab::Settings,
+            CurrentTab::Settings => CurrentTab::Stats,
         };
         tracing::debug!("Tab navigation: {:?} -> {:?} (left)", old_tab, self.current_tab);
         // Reset subtab focus when changing tabs
@@ -156,10 +144,8 @@ impl AppState {
         self.current_tab = match self.current_tab {
             CurrentTab::Scores => CurrentTab::Standings,
             CurrentTab::Standings => CurrentTab::Stats,
-            CurrentTab::Stats => CurrentTab::Players,
-            CurrentTab::Players => CurrentTab::Settings,
-            CurrentTab::Settings => CurrentTab::Browser,
-            CurrentTab::Browser => CurrentTab::Scores,
+            CurrentTab::Stats => CurrentTab::Settings,
+            CurrentTab::Settings => CurrentTab::Scores,
         };
         tracing::debug!("Tab navigation: {:?} -> {:?} (right)", old_tab, self.current_tab);
         // Reset subtab focus when changing tabs
@@ -172,11 +158,9 @@ impl AppState {
             CurrentTab::Scores => self.scores.subtab_focused = true,
             CurrentTab::Standings => self.standings.subtab_focused = true,
             CurrentTab::Stats => {} // No subtabs for stats
-            CurrentTab::Players => {} // No subtabs for players
             CurrentTab::Settings => {
                 self.settings.subtab_focused = true;
             }
-            CurrentTab::Browser => self.browser.subtab_focused = true,
         }
     }
 
@@ -193,7 +177,6 @@ impl AppState {
             self.standings.focused_table_index = None;
         }
         self.settings.subtab_focused = false;
-        self.browser.subtab_focused = false;
     }
 
     pub fn is_subtab_focused(&self) -> bool {
@@ -201,14 +184,12 @@ impl AppState {
             CurrentTab::Scores => self.scores.subtab_focused,
             CurrentTab::Standings => self.standings.subtab_focused,
             CurrentTab::Stats => false,
-            CurrentTab::Players => false,
             CurrentTab::Settings => self.settings.subtab_focused,
-            CurrentTab::Browser => self.browser.subtab_focused,
         }
     }
 
     pub fn has_subtabs(&self) -> bool {
-        matches!(self.current_tab, CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings | CurrentTab::Browser)
+        matches!(self.current_tab, CurrentTab::Scores | CurrentTab::Standings | CurrentTab::Settings)
     }
 }
 
@@ -225,7 +206,6 @@ mod tests {
     use tokio::sync::RwLock;
     use crate::types::SharedData;
     use crate::commands::standings::GroupBy;
-    use std::str::FromStr;
 
     #[test]
     fn test_app_state_new() {

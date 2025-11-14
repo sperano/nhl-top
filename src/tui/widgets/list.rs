@@ -314,7 +314,6 @@ impl super::RenderableWidget for List {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         // Calculate visible range
         let visible_height = area.height as usize;
-        let visible_items = visible_height;
 
         let end_index = (self.scroll_offset + visible_height).min(self.items.len());
 

@@ -1,4 +1,4 @@
-use tracing::{debug, info, trace};
+use tracing::{debug, trace};
 use std::time::SystemTime;
 
 use crate::commands::standings::GroupBy;

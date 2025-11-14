@@ -1,12 +1,10 @@
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use nhl_api::{Client, GameDate, GameId};
 
 use super::action::Action;
 use super::component::Effect;
-use super::state::{AppState, LoadingKey};
+use super::state::{AppState};
 
 /// Effect handler for data fetching operations
 ///
@@ -74,7 +72,6 @@ impl DataEffects {
 
     /// Fetch team roster for a specific team
     pub fn fetch_team_roster(&self, team_abbrev: String) -> Effect {
-        let client = self.client.clone();
         let abbrev = team_abbrev.clone();
         Effect::Async(Box::pin(async move {
             // TODO: Implement roster fetching when available in nhl_api
@@ -86,7 +83,6 @@ impl DataEffects {
 
     /// Fetch player stats for a specific player
     pub fn fetch_player_stats(&self, player_id: i64) -> Effect {
-        let client = self.client.clone();
         Effect::Async(Box::pin(async move {
             // TODO: Implement player stats fetching when available in nhl_api
             // For now, return a placeholder

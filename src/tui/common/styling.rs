@@ -1,16 +1,5 @@
 use ratatui::style::{Style, Color};
 
-/// Get the base style for a tab bar based on focus state
-///
-/// When unfocused, applies DarkGray foreground to all elements
-pub fn base_tab_style(focused: bool) -> Style {
-    if focused {
-        Style::default()
-    } else {
-        Style::default().fg(Color::DarkGray)
-    }
-}
-
 /// Get the appropriate tab/subtab style based on selection and focus state
 ///
 /// # Arguments
@@ -40,18 +29,6 @@ pub fn selection_style(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_base_tab_style_focused() {
-        let style = base_tab_style(true);
-        assert_eq!(style, Style::default());
-    }
-
-    #[test]
-    fn test_base_tab_style_unfocused() {
-        let style = base_tab_style(false);
-        assert_eq!(style, Style::default().fg(Color::DarkGray));
-    }
 
     #[test]
     fn test_selection_style_selected_focused() {

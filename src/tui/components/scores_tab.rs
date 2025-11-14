@@ -1,7 +1,6 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
 use std::collections::HashMap;
@@ -10,7 +9,7 @@ use nhl_api::{DailySchedule, GameDate, GameMatchup};
 
 use crate::config::DisplayConfig;
 use crate::tui::framework::{
-    component::{vertical, Component, Constraint, Element, RenderableWidget},
+    component::{Component, Element, RenderableWidget},
 };
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
 use crate::commands::scores_format::{PeriodScores, format_period_text};

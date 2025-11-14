@@ -1,7 +1,7 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    text::{Line, Span},
+    text::{Line},
     widgets::{Block, Borders, Paragraph},
 };
 
@@ -10,7 +10,7 @@ use nhl_api::Standing;
 use crate::commands::standings::GroupBy;
 use crate::config::DisplayConfig;
 use crate::tui::framework::{
-    component::{vertical, Component, Constraint, Element, RenderableWidget},
+    component::{Component, Element, RenderableWidget},
     state::PanelState,
 };
 

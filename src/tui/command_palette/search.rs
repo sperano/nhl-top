@@ -80,7 +80,6 @@ pub fn parse_navigation_path(path: &[String]) -> Option<NavigationCommand> {
                 "scores" => Some(NavigationCommand::GoToTab(CurrentTab::Scores)),
                 "standings" => Some(NavigationCommand::GoToTab(CurrentTab::Standings)),
                 "stats" => Some(NavigationCommand::GoToTab(CurrentTab::Stats)),
-                "players" => Some(NavigationCommand::GoToTab(CurrentTab::Players)),
                 "settings" => Some(NavigationCommand::GoToTab(CurrentTab::Settings)),
                 _ => None,
             }

@@ -6,7 +6,6 @@
 
 use super::RenderableWidget;
 use crossterm::event::KeyEvent;
-use std::any::Any;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// A unique identifier for widgets in the tree

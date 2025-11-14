@@ -132,7 +132,7 @@ impl RenderableWidget for ScoreTable {
 
         // Row 2: Header row
         if y < area.bottom() {
-            self.render_header_row(buf, area.x, y, total_cols, padding, style, config);
+            self.render_header_row(buf, area.x, y, padding, style, config);
             y += 1;
         }
 
@@ -151,7 +151,6 @@ impl RenderableWidget for ScoreTable {
                 &self.away_team,
                 self.away_score,
                 self.away_periods.as_ref(),
-                total_cols,
                 padding,
                 style,
                 config,
@@ -168,7 +167,6 @@ impl RenderableWidget for ScoreTable {
                 &self.home_team,
                 self.home_score,
                 self.home_periods.as_ref(),
-                total_cols,
                 padding,
                 style,
                 config,
@@ -269,7 +267,6 @@ impl ScoreTable {
         buf: &mut Buffer,
         x: u16,
         y: u16,
-        total_cols: usize,
         padding: usize,
         style: Style,
         config: &DisplayConfig,
@@ -312,7 +309,6 @@ impl ScoreTable {
         team_abbrev: &str,
         team_score: Option<i32>,
         team_periods: Option<&Vec<i32>>,
-        total_cols: usize,
         padding: usize,
         style: Style,
         config: &DisplayConfig,

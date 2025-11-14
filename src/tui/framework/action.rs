@@ -1,7 +1,5 @@
 use nhl_api::{Boxscore, DailySchedule, GameDate, GameMatchup, Standing};
 
-use crate::commands::standings::GroupBy;
-
 /// Global actions - like Redux actions
 ///
 /// All state changes in the application happen through actions.

@@ -20,10 +20,6 @@ use crate::config::Config;
 use super::framework::{Runtime, DataEffects, Renderer, Action};
 use super::framework::action::ScoresAction;
 use super::framework::keys::key_to_action;
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
 
 /// Event polling interval in milliseconds
 const EVENT_POLL_INTERVAL_MS: u64 = 100;

@@ -9,7 +9,6 @@ use crate::tui::widgets::{
 };
 use crate::tui::widgets::focus::{Focusable, NavigationAction};
 use crate::commands::standings::GroupBy;
-use crate::tui::common::subtab::render_subtabs_with_breadcrumb;
 use crate::tui::navigation::Panel;
 use ratatui::{layout::Rect, widgets::{Block, Borders, Paragraph}, Frame, style::Style};
 use std::sync::Arc;
@@ -45,18 +44,6 @@ pub fn render_subtabs(f: &mut Frame, area: Rect, state: &State, theme: &Arc<Disp
         None
     };
 
-    // Use shared rendering function
-    // Skip the first BREADCRUMB_MIN_DEPTH items (e.g., skip "Standings" and "Division")
-    render_subtabs_with_breadcrumb(
-        f,
-        area,
-        tab_labels,
-        selected_index,
-        focused,
-        breadcrumb_items,
-        crate::tui::common::subtab::BREADCRUMB_MIN_DEPTH,
-        theme,
-    );
 }
 
 /// Render a panel view (team details, player details, etc.)

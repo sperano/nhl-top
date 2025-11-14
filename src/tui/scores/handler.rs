@@ -75,7 +75,7 @@ pub async fn handle_key(
     if state.box_selection_active {
         match key.code {
             KeyCode::Up => {
-                let (col, row) = state.selected_box;
+                let (_, row) = state.selected_box;
                 if row == 0 {
                     // At first row, exit box selection mode
                     state.box_selection_active = false;
@@ -86,7 +86,7 @@ pub async fn handle_key(
                 true
             }
             KeyCode::Down => {
-                let (col, row) = state.selected_box;
+                let (_, row) = state.selected_box;
                 let (_, num_rows) = state.grid_dimensions;
                 if row + 1 < num_rows {
                     state.selected_box.1 = row + 1;
@@ -94,14 +94,14 @@ pub async fn handle_key(
                 true
             }
             KeyCode::Left => {
-                let (col, row) = state.selected_box;
+                let (col, _) = state.selected_box;
                 if col > 0 {
                     state.selected_box.0 = col - 1;
                 }
                 true
             }
             KeyCode::Right => {
-                let (col, row) = state.selected_box;
+                let (col, _) = state.selected_box;
                 let (num_cols, _) = state.grid_dimensions;
                 if col + 1 < num_cols {
                     state.selected_box.0 = col + 1;

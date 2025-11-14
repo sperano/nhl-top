@@ -2,7 +2,6 @@ use super::State;
 use super::state::DATE_WINDOW_SIZE;
 use crate::config::DisplayConfig;
 use crate::tui::widgets::{Container, GameBox, GameGrid, GameState, RenderableWidget};
-use crate::tui::common::subtab::render_subtabs_with_breadcrumb;
 use crate::commands::scores_format::PeriodScores;
 use ratatui::{
     layout::Rect,
@@ -70,18 +69,6 @@ pub fn render_subtabs(
         None
     };
 
-    // Use shared rendering function
-    // For Scores, we don't skip any items (skip = 0) since breadcrumb is always just ["Scores", "date"]
-    render_subtabs_with_breadcrumb(
-        f,
-        area,
-        date_labels,
-        state.selected_index,
-        focused,
-        breadcrumb_items,
-        0, // Don't skip any items for Scores tab
-        display,
-    );
 }
 
 /// Convert schedule data to GameBox widgets
