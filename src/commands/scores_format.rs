@@ -45,6 +45,18 @@ pub struct PeriodScores {
     pub has_so: bool,
 }
 
+impl PeriodScores {
+    /// Calculate total score for away team
+    pub fn away_total(&self) -> i32 {
+        self.away_periods.iter().sum()
+    }
+
+    /// Calculate total score for home team
+    pub fn home_total(&self) -> i32 {
+        self.home_periods.iter().sum()
+    }
+}
+
 /// Format period text (e.g., "1st Period", "Overtime", "Shootout")
 pub fn format_period_text(period_type: &str, period_number: i32) -> String {
     match period_type {

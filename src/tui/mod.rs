@@ -11,7 +11,11 @@ pub mod widgets;
 mod layout;
 mod context;
 pub mod command_palette;
+pub mod framework;
+pub mod components;
+mod mod_experimental;
 pub use context::{NavigationContextProvider, BreadcrumbProvider};
+pub use mod_experimental::run_experimental;
 
 use widgets::RenderableWidget;
 use layout::{Layout as LayoutManager};

@@ -200,25 +200,18 @@ fn resolve_log_config<'a>(cli: &'a Cli, config: &'a config::Config) -> (&'a str,
     (log_level, log_file)
 }
 
-/// Run TUI mode with background data fetching
+/// Run TUI mode
 async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
-    let shared_data: SharedDataHandle = Arc::new(RwLock::new(SharedData {
-        config: config.clone(),
-        ..Default::default()
-    }));
-
-    // Create channel for manual refresh triggers
-    let (refresh_tx, refresh_rx) = mpsc::channel::<()>(REFRESH_CHANNEL_BUFFER_SIZE);
-
-    // Spawn background task to fetch data
-    let bg_client = create_client();
-    let shared_data_clone = Arc::clone(&shared_data);
-    let refresh_interval = config.refresh_interval as u64;
-    tokio::spawn(async move {
-        background::fetch_data_loop(bg_client, shared_data_clone, refresh_interval, refresh_rx).await;
-    });
-
-    tui::run(shared_data, refresh_tx).await
+    // Check if experimental mode is enabled
+    if std::env::var("NHL_EXPERIMENTAL").is_ok() {
+        tracing::info!("Running in experimental React-like mode");
+        let client = Arc::new(create_client());
+        tui::run_experimental(client, config).await
+    } else {
+        // Old TUI mode removed - experimental is now the only mode
+        eprintln!("Legacy TUI has been removed. Please use NHL_EXPERIMENTAL=1");
+        std::process::exit(1);
+    }
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler
