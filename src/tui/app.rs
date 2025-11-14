@@ -1,7 +1,7 @@
 use super::{scores, standings, settings};
 use super::widgets::CommandPalette;
 use super::context::NavigationCommand;
-use super::SharedDataHandle;
+use crate::types::SharedDataHandle;
 use tokio::sync::mpsc;
 use anyhow::Result;
 

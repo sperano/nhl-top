@@ -200,7 +200,7 @@ fn resolve_log_config<'a>(cli: &'a Cli, config: &'a config::Config) -> (&'a str,
 async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
     tracing::info!("Running in experimental React-like mode");
     let client = Arc::new(create_client());
-    tui::run_experimental(client, config).await
+    tui::run(client, config).await
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler

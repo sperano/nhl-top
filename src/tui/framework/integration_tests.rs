@@ -15,7 +15,7 @@ mod tests {
         renderer::Renderer,
         runtime::Runtime,
         state::AppState,
-        Component, Element,
+        Element,
     };
 
     fn create_test_runtime() -> Runtime {

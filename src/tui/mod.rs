@@ -1,3 +1,8 @@
+//! TUI module with React-like implementation
+//!
+//! This module provides the terminal user interface using a React-like architecture.
+
+// Module declarations
 mod common;
 mod scores;
 mod standings;
@@ -9,13 +14,34 @@ mod context;
 pub mod command_palette;
 pub mod framework;
 pub mod components;
-mod mod_experimental;
+
 pub use context::{NavigationContextProvider, BreadcrumbProvider};
-pub use mod_experimental::run_experimental;
 
-use crate::types::SharedDataHandle;
+use std::io;
+use std::sync::Arc;
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    Terminal,
+};
 
-/// Development feature: Save terminal buffer to file
+#[cfg(feature = "development")]
+use ratatui::{buffer::Buffer, layout::Rect};
+use nhl_api::Client;
+use crate::config::Config;
+
+use self::framework::{Runtime, DataEffects, Renderer, Action};
+use self::framework::action::ScoresAction;
+use self::framework::keys::key_to_action;
+
+/// Event polling interval in milliseconds
+const EVENT_POLL_INTERVAL_MS: u64 = 100;
+
+/// Development feature: Save terminal buffer to a text file
 #[cfg(feature = "development")]
 fn save_screenshot(buffer: &Buffer, area: Rect) -> std::io::Result<String> {
     use std::io::Write;
@@ -36,52 +62,141 @@ fn save_screenshot(buffer: &Buffer, area: Rect) -> std::io::Result<String> {
     Ok(filename)
 }
 
-/// Development feature: Log widget tree structure
-#[cfg(feature = "development")]
-fn log_widget_tree(app_state: &AppState) {
-    tracing::debug!("=== Widget Tree Debug ===");
-    tracing::debug!("Current tab: {:?}", app_state.current_tab);
-    tracing::debug!("Subtab focused: {}", app_state.is_subtab_focused());
-    tracing::debug!("Has subtabs: {}", app_state.has_subtabs());
+/// Run the React-like TUI (main entry point)
+pub async fn run(
+    client: Arc<Client>,
+    config: Config,
+) -> Result<(), io::Error> {
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
 
-    match app_state.current_tab {
-        CurrentTab::Scores => {
-            tracing::debug!("Scores state:");
-            tracing::debug!("  - selected_index: {}", app_state.scores.selected_index);
-            tracing::debug!("  - box_selection_active: {}", app_state.scores.box_selection_active);
-            tracing::debug!("  - selected_box: {:?}", app_state.scores.selected_box);
-            tracing::debug!("  - boxscore_view_active: {}", app_state.scores.boxscore_view_active);
-            tracing::debug!("  - container: {}", if app_state.scores.container.is_some() { "Some" } else { "None" });
+    // Create DataEffects handler
+    let data_effects = Arc::new(DataEffects::new(client));
+
+    // Create initial AppState with config
+    let mut initial_state = self::framework::AppState::default();
+    initial_state.system.config = config.clone();
+
+    // Create runtime with DataEffects
+    let mut runtime = Runtime::new(initial_state, data_effects);
+
+    // Create renderer
+    let mut renderer = Renderer::new();
+
+    // Trigger initial data load
+    runtime.dispatch(Action::RefreshData);
+
+    // Development feature: Screenshot support
+    #[cfg(feature = "development")]
+    let mut screenshot_requested = false;
+    #[cfg(feature = "development")]
+    let mut screenshot_buffer: Option<(Buffer, Rect)> = None;
+
+    // Main loop
+    loop {
+        // Process any actions from effects FIRST (so data loads trigger re-render)
+        let actions_processed = runtime.process_actions();
+
+        // Render
+        terminal.draw(|f| {
+            let area = f.size();
+
+            // Update boxes_per_row for game grid navigation
+            // GameBox dimensions: 37 wide + 2 margin = 39 per box
+            const GAME_BOX_WIDTH: u16 = 37;
+            const GAME_BOX_MARGIN: u16 = 2;
+            let boxes_per_row = (area.width / (GAME_BOX_WIDTH + GAME_BOX_MARGIN)).max(1);
+
+            // Dispatch action to update boxes_per_row if it changed
+            let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
+            if boxes_per_row != current_boxes_per_row {
+                runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(boxes_per_row)));
+            }
+
+            // Build virtual tree from current state
+            let element = runtime.build();
+
+            // Render virtual tree to ratatui buffer
+            let config = &runtime.state().system.config.display;
+            renderer.render(element, area, f.buffer_mut(), config);
+
+            // Development feature: Clone buffer if screenshot requested
+            #[cfg(feature = "development")]
+            if screenshot_requested {
+                screenshot_buffer = Some((f.buffer_mut().clone(), area));
+            }
+        })?;
+
+        // Development feature: Save screenshot if captured
+        #[cfg(feature = "development")]
+        if let Some((buffer, area)) = screenshot_buffer.take() {
+            screenshot_requested = false;
+            match save_screenshot(&buffer, area) {
+                Ok(filename) => {
+                    tracing::info!("Screenshot saved to: {}", filename);
+                    // TODO: Show status message in UI when we have status bar
+                }
+                Err(e) => {
+                    tracing::error!("Failed to save screenshot: {}", e);
+                }
+            }
         }
-        CurrentTab::Standings => {
-            tracing::debug!("Standings state:");
-            tracing::debug!("  - view: {:?}", app_state.standings.view);
-            tracing::debug!("  - focused_table_index: {:?}", app_state.standings.focused_table_index);
-            tracing::debug!("  - num_tables: {}", app_state.standings.team_tables.len());
-            tracing::debug!("  - navigation depth: {}", app_state.standings.navigation.stack.depth());
-            tracing::debug!("  - container: {}", if app_state.standings.container.is_some() { "Some" } else { "None" });
+
+        // If actions were processed, continue loop immediately to check for more
+        // This ensures UI updates immediately when async data arrives
+        if actions_processed > 0 {
+            tracing::trace!("Processed {} actions, continuing loop immediately for re-render", actions_processed);
+            continue;
         }
-        CurrentTab::Stats => {
-            tracing::debug!("Stats state:");
-            tracing::debug!("  - container: {}", if app_state.stats.container.is_some() { "Some" } else { "None" });
-        }
-        CurrentTab::Players => {
-            tracing::debug!("Players state:");
-            tracing::debug!("  - container: {}", if app_state.players.container.is_some() { "Some" } else { "None" });
-        }
-        CurrentTab::Settings => {
-            tracing::debug!("Settings state:");
-            tracing::debug!("  - editing: {}", app_state.settings.editing.is_some());
-            tracing::debug!("  - list_modal: {}", app_state.settings.list_modal.is_some());
-            tracing::debug!("  - color_modal: {}", app_state.settings.color_modal.is_some());
-        }
-        CurrentTab::Browser => {
-            tracing::debug!("Browser state:");
-            tracing::debug!("  - container: {}", if app_state.browser.container.is_some() { "Some" } else { "None" });
+
+        // Handle events (only block if no actions were processed)
+        if event::poll(std::time::Duration::from_millis(EVENT_POLL_INTERVAL_MS))? {
+            if let Event::Key(key) = event::read()? {
+                // Development feature: Shift-S for screenshot
+                #[cfg(feature = "development")]
+                {
+                    use crossterm::event::{KeyCode, KeyModifiers};
+                    if key.code == KeyCode::Char('S') && key.modifiers.contains(KeyModifiers::SHIFT) {
+                        tracing::info!("Screenshot requested via Shift-S");
+                        screenshot_requested = true;
+                        continue;
+                    }
+                }
+
+                // Convert key to action
+                let action = key_to_action(key, runtime.state());
+
+                // Check for quit action before handling
+                let should_quit = if let Some(ref act) = action {
+                    matches!(act, Action::Quit)
+                } else {
+                    false
+                };
+
+                // Dispatch action if we have one
+                if let Some(act) = action {
+                    runtime.dispatch(act);
+                }
+
+                if should_quit {
+                    break;
+                }
+            }
         }
     }
 
-    tracing::debug!("Command palette active: {}", app_state.command_palette_active);
-    tracing::debug!("========================");
-}
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
 
+    Ok(())
+}

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use crate::tui::widgets::{CommandPalette, SearchResult};
-use crate::tui::SharedDataHandle;
+use crate::types::SharedDataHandle;
 use crate::tui::context::NavigationCommand;
 use crate::tui::app::CurrentTab;
 use crate::commands::standings::GroupBy;

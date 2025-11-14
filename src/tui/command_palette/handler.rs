@@ -1,5 +1,5 @@
 use crate::tui::app::AppState;
-use crate::tui::SharedDataHandle;
+use crate::types::SharedDataHandle;
 use crossterm::event::{KeyCode, KeyEvent};
 use anyhow::Result;
 use tokio::sync::mpsc;
