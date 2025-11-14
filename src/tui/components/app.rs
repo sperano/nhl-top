@@ -1,0 +1,162 @@
+use crate::tui::framework::component::{vertical, Component, Constraint, Element};
+use crate::tui::framework::state::{AppState, LoadingKey};
+
+use super::{
+    boxscore_panel::BoxscorePanelProps, scores_tab::ScoresTabProps,
+    standings_tab::StandingsTabProps, BoxscorePanel, ScoresTab, SettingsTab, StandingsTab,
+    StatusBar, TabbedPanel, TabbedPanelProps, TabItem,
+};
+
+/// Root App component
+///
+/// This is the top-level component that renders the entire application.
+/// It uses the global AppState as props and delegates rendering to child components.
+pub struct App;
+
+impl Component for App {
+    type Props = AppState;
+    type State = ();
+    type Message = ();
+
+    fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
+        vertical(
+            [
+                Constraint::Min(0),    // TabbedPanel (tabs + content)
+                Constraint::Length(2), // StatusBar (2 lines: separator + content)
+            ],
+            vec![
+                self.render_main_tabs(props),
+                StatusBar.view(&props.system, &()),
+            ],
+        )
+    }
+}
+
+impl App {
+    /// Render main navigation tabs using TabbedPanel
+    fn render_main_tabs(&self, state: &AppState) -> Element {
+        use crate::tui::framework::action::Tab;
+
+        // If there's a panel open, render it instead of tabs
+        if let Some(panel_state) = state.navigation.panel_stack.last() {
+            return self.render_panel(state, panel_state);
+        }
+
+        // Convert Tab enum to string key
+        let active_key = match state.navigation.current_tab {
+            Tab::Scores => "scores",
+            Tab::Standings => "standings",
+            Tab::Stats => "stats",
+            Tab::Players => "players",
+            Tab::Settings => "settings",
+            Tab::Browser => "browser",
+        };
+
+        // Build tabs with their content
+        let tabs = vec![
+            TabItem::new("scores", "Scores", self.render_scores_tab(state)),
+            TabItem::new("standings", "Standings", self.render_standings_tab(state)),
+            TabItem::new("stats", "Stats", Element::None), // TODO
+            TabItem::new("players", "Players", Element::None), // TODO
+            TabItem::new("settings", "Settings", self.render_settings_tab(state)),
+            TabItem::new("browser", "Browser", Element::None), // TODO
+        ];
+
+        TabbedPanel.view(
+            &TabbedPanelProps {
+                active_key: active_key.into(),
+                tabs,
+                focused: !state.navigation.content_focused,
+            },
+            &(),
+        )
+    }
+
+    /// Render a panel overlay
+    fn render_panel(
+        &self,
+        state: &AppState,
+        panel_state: &crate::tui::framework::state::PanelState,
+    ) -> Element {
+        use crate::tui::framework::action::Panel;
+
+        match &panel_state.panel {
+            Panel::Boxscore { game_id } => {
+                let props = BoxscorePanelProps {
+                    game_id: *game_id,
+                    boxscore: state.data.boxscores.get(game_id).cloned(),
+                    loading: state.data.loading.contains(&LoadingKey::Boxscore(*game_id)),
+                };
+                BoxscorePanel.view(&props, &())
+            }
+            Panel::TeamDetail { .. } | Panel::PlayerDetail { .. } => {
+                // TODO: Implement other panels
+                Element::None
+            }
+        }
+    }
+
+    /// Render Scores tab content
+    fn render_scores_tab(&self, state: &AppState) -> Element {
+        let props = ScoresTabProps {
+            game_date: state.ui.scores.game_date.clone(),
+            selected_index: state.ui.scores.selected_date_index,
+            schedule: state.data.schedule.clone(),
+            game_info: state.data.game_info.clone(),
+            period_scores: state.data.period_scores.clone(),
+            box_selection_active: state.ui.scores.box_selection_active,
+            selected_game_index: state.ui.scores.selected_game_index,
+            focused: state.navigation.content_focused,
+        };
+        ScoresTab.view(&props, &())
+    }
+
+    /// Render Standings tab content
+    fn render_standings_tab(&self, state: &AppState) -> Element {
+        let props = StandingsTabProps {
+            view: state.ui.standings.view.clone(),
+            team_mode: state.ui.standings.team_mode,
+            selected_column: state.ui.standings.selected_column,
+            selected_row: state.ui.standings.selected_row,
+            standings: state.data.standings.clone(),
+            panel_stack: state.navigation.panel_stack.clone(),
+            focused: state.navigation.content_focused,
+        };
+        StandingsTab.view(&props, &())
+    }
+
+    /// Render Settings tab content
+    fn render_settings_tab(&self, _state: &AppState) -> Element {
+        SettingsTab.view(&(), &())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tui::framework::state::AppState;
+
+    #[test]
+    fn test_app_renders_with_default_state() {
+        let app = App;
+        let state = AppState::default();
+
+        let element = app.view(&state, &());
+
+        // Should render a vertical container with 2 children (TabbedPanel + StatusBar)
+        match element {
+            Element::Container {
+                children, layout, ..
+            } => {
+                assert_eq!(children.len(), 2);
+                match layout {
+                    crate::tui::framework::component::ContainerLayout::Vertical(constraints) => {
+                        assert_eq!(constraints.len(), 2);
+                    }
+                    _ => panic!("Expected vertical layout"),
+                }
+            }
+            _ => panic!("Expected container element"),
+        }
+    }
+}

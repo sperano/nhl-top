@@ -202,16 +202,9 @@ fn resolve_log_config<'a>(cli: &'a Cli, config: &'a config::Config) -> (&'a str,
 
 /// Run TUI mode
 async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
-    // Check if experimental mode is enabled
-    if std::env::var("NHL_EXPERIMENTAL").is_ok() {
-        tracing::info!("Running in experimental React-like mode");
-        let client = Arc::new(create_client());
-        tui::run_experimental(client, config).await
-    } else {
-        // Old TUI mode removed - experimental is now the only mode
-        eprintln!("Legacy TUI has been removed. Please use NHL_EXPERIMENTAL=1");
-        std::process::exit(1);
-    }
+    tracing::info!("Running in experimental React-like mode");
+    let client = Arc::new(create_client());
+    tui::run_experimental(client, config).await
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler
