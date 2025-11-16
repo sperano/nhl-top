@@ -2,7 +2,6 @@ use nhl::types::{SharedData, SharedDataHandle, NHL_LEAGUE_ABBREV};
 use nhl::tui;
 use nhl::commands;
 use nhl::config;
-use nhl::cache;
 
 use nhl_api::Client;
 use clap::{Parser, Subcommand, ValueEnum};

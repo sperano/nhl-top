@@ -63,7 +63,6 @@ pub enum NavigationCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
     #[test]
     fn test_navigation_command_variants() {

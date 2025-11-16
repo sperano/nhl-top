@@ -255,7 +255,7 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::action::{ScoresAction, Tab};
+    use crate::tui::framework::action::{Tab};
     use crate::tui::testing::create_client;
 
     fn create_test_data_effects() -> Arc<DataEffects> {

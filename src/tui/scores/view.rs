@@ -1,6 +1,6 @@
 use super::State;
 use crate::config::DisplayConfig;
-use crate::tui::widgets::{Container, GameBox, GameGrid, GameState, RenderableWidget};
+use crate::tui::widgets::{GameBox, GameGrid, GameState, RenderableWidget};
 use crate::commands::scores_format::PeriodScores;
 use ratatui::{
     layout::Rect,

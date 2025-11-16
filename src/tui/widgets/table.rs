@@ -586,10 +586,6 @@ mod tests {
         value: i32,
     }
 
-    fn test_config() -> DisplayConfig {
-        DisplayConfig::default()
-    }
-
     fn test_table() -> FocusableTable<TestRow> {
         let rows = vec![
             TestRow { name: "Row 1".to_string(), value: 10 },

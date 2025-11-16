@@ -142,19 +142,3 @@ pub fn section_player_count(boxscore: &Boxscore, section: PlayerSection) -> usiz
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_extract_players_from_boxscore() {
-        // This test requires a real boxscore structure
-        // For now, we'll skip it and test with integration tests
-    }
-
-    #[test]
-    fn test_section_player_count() {
-        // This test requires a real boxscore structure
-        // For now, we'll skip it and test with integration tests
-    }
-}

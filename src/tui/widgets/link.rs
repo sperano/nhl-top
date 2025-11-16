@@ -217,11 +217,6 @@ mod tests {
     use super::*;
     use crate::config::DisplayConfig;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use ratatui::{buffer::Buffer, layout::Rect};
-
-    fn test_config() -> DisplayConfig {
-        DisplayConfig::default()
-    }
 
     #[test]
     fn test_link_creation() {
