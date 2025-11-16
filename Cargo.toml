@@ -9,7 +9,6 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0"
-async-trait = "0.1"
 chrono = "0.4.42"
 nhl_api = { path = "../nhl-api"  }
 tokio = { version = "1", features = ["full"] }
@@ -22,7 +21,6 @@ toml = "0.8"
 futures = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-thiserror = "1.0"
 cached = { version = "0.49", features = ["async"] }
 unicode-width = "0.1"
 

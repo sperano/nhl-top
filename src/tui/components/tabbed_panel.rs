@@ -103,6 +103,7 @@ impl TabbedPanel {
 #[derive(Clone)]
 struct TabLabel {
     title: String,
+    #[allow(dead_code)]
     key: String,
     disabled: bool,
     active: bool,

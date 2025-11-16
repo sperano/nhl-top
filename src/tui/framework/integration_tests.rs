@@ -86,5 +86,4 @@ mod tests {
         assert_eq!(count, 2);
         assert_eq!(runtime.state().navigation.current_tab, Tab::Settings);
     }
-
-3}
+}

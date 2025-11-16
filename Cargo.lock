@@ -1095,7 +1095,6 @@ name = "nhl"
 version = "0.2.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "cached",
  "chrono",
  "clap",
@@ -1104,7 +1103,6 @@ dependencies = [
  "nhl_api",
  "ratatui",
  "serde",
- "thiserror",
  "tokio",
  "toml",
  "tracing",

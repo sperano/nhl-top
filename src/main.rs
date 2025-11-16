@@ -1,4 +1,3 @@
-use nhl::types::{SharedData, SharedDataHandle, NHL_LEAGUE_ABBREV};
 use nhl::tui;
 use nhl::commands;
 use nhl::config;
@@ -6,15 +5,8 @@ use nhl::config;
 use nhl_api::Client;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::sync::Arc;
-use std::collections::HashMap;
-use tokio::sync::{RwLock, mpsc};
-use std::time::SystemTime;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
-
-// Channel Constants
-/// Buffer size for manual refresh trigger channel
-const REFRESH_CHANNEL_BUFFER_SIZE: usize = 10;
 
 // Default Configuration Constants
 /// Default log level when not specified

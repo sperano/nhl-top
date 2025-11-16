@@ -5,7 +5,7 @@ use crate::tui::framework::{
 };
 //use crate::tui::widgets::SettingsListWidget;
 
-use super::{TabbedPanel, TabbedPanelProps, TabItem};
+use super::{TabbedPanel, TabbedPanelProps};
 
 /// Props for SettingsTab component
 #[derive(Clone)]

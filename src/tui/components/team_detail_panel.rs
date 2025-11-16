@@ -174,9 +174,11 @@ impl RenderableWidget for TeamDetailPanelWidget {
         // Render skaters table if visible
         if skaters_visible {
             let skaters_height = skaters_table.preferred_height().unwrap_or(0);
-            let skaters_area = Rect::new(x, y, area.width.saturating_sub(4), skaters_height);
+            let available_height = area.height.saturating_sub(y).saturating_sub(2); // Reserve space for border
+            let clamped_height = skaters_height.min(available_height);
+            let skaters_area = Rect::new(x, y, area.width.saturating_sub(4), clamped_height);
             skaters_table.render(skaters_area, buf, config);
-            y += skaters_height + 1;
+            y += clamped_height + 1;
         }
 
         // Create goalies table
@@ -234,7 +236,9 @@ impl RenderableWidget for TeamDetailPanelWidget {
         // Render goalies table if visible
         if goalies_visible {
             let goalies_height = goalies_table.preferred_height().unwrap_or(0);
-            let goalies_area = Rect::new(x, y, area.width.saturating_sub(4), goalies_height);
+            let available_height = area.height.saturating_sub(y).saturating_sub(2); // Reserve space for border
+            let clamped_height = goalies_height.min(available_height);
+            let goalies_area = Rect::new(x, y, area.width.saturating_sub(4), clamped_height);
             goalies_table.render(goalies_area, buf, config);
         }
 
@@ -256,5 +260,209 @@ impl RenderableWidget for TeamDetailPanelWidget {
             scroll_offset: self.scroll_offset,
             selected_index: self.selected_index,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nhl_api::{ClubGoalieStats, ClubSkaterStats, LocalizedString};
+    use ratatui::{buffer::Buffer, layout::Rect};
+
+    fn create_test_skater(
+        player_id: i64,
+        first_name: &str,
+        last_name: &str,
+        position: &str,
+        gp: i32,
+        goals: i32,
+        assists: i32,
+        points: i32,
+    ) -> ClubSkaterStats {
+        ClubSkaterStats {
+            player_id,
+            headshot: String::new(),
+            first_name: LocalizedString {
+                default: first_name.to_string(),
+            },
+            last_name: LocalizedString {
+                default: last_name.to_string(),
+            },
+            position_code: position.to_string(),
+            games_played: gp,
+            goals,
+            assists,
+            points,
+            plus_minus: 5,
+            penalty_minutes: 10,
+            power_play_goals: 2,
+            shorthanded_goals: 0,
+            game_winning_goals: 1,
+            overtime_goals: 0,
+            shots: 50,
+            shooting_pctg: 0.15,
+            avg_time_on_ice_per_game: 18.5,
+            avg_shifts_per_game: 22.0,
+            faceoff_win_pctg: 0.52,
+        }
+    }
+
+    fn create_test_goalie(
+        player_id: i64,
+        first_name: &str,
+        last_name: &str,
+        gp: i32,
+        wins: i32,
+    ) -> ClubGoalieStats {
+        ClubGoalieStats {
+            player_id,
+            headshot: String::new(),
+            first_name: LocalizedString {
+                default: first_name.to_string(),
+            },
+            last_name: LocalizedString {
+                default: last_name.to_string(),
+            },
+            games_played: gp,
+            games_started: gp,
+            wins,
+            losses: 5,
+            overtime_losses: 2,
+            goals_against_average: 2.50,
+            save_percentage: 0.915,
+            shots_against: 500,
+            saves: 457,
+            goals_against: 43,
+            shutouts: 2,
+            goals: 0,
+            assists: 1,
+            points: 1,
+            penalty_minutes: 0,
+            time_on_ice: 1500,
+        }
+    }
+
+    fn create_test_standing() -> Standing {
+        Standing {
+            conference_abbrev: Some("Eastern".to_string()),
+            conference_name: Some("Eastern".to_string()),
+            division_abbrev: "Atlantic".to_string(),
+            division_name: "Atlantic".to_string(),
+            team_name: LocalizedString {
+                default: "Test Team".to_string(),
+            },
+            team_common_name: LocalizedString {
+                default: "Test".to_string(),
+            },
+            team_abbrev: LocalizedString {
+                default: "TST".to_string(),
+            },
+            team_logo: String::new(),
+            wins: 10,
+            losses: 5,
+            ot_losses: 2,
+            points: 22,
+        }
+    }
+
+    /// Regression test for buffer overflow when rendering tables with limited height.
+    /// This test ensures that when the available area is smaller than the preferred height
+    /// of the tables, the rendering doesn't panic with "index outside of buffer".
+    ///
+    /// Bug: Previously, the code would create Rects with heights that extended beyond
+    /// the available buffer area, causing a panic when attempting to write at coordinates
+    /// outside the buffer bounds.
+    ///
+    /// Fix: Added clamping logic to ensure table heights don't exceed available space.
+    #[test]
+    fn test_rendering_with_limited_height_does_not_panic() {
+        // Create many skaters and goalies to ensure the preferred height exceeds available height
+        let mut skaters = vec![];
+        for i in 0..30 {
+            skaters.push(create_test_skater(
+                i,
+                "Test",
+                &format!("Player{}", i),
+                "C",
+                20,
+                10,
+                15,
+                25,
+            ));
+        }
+
+        let mut goalies = vec![];
+        for i in 0..5 {
+            goalies.push(create_test_goalie(i + 100, "Test", &format!("Goalie{}", i), 15, 8));
+        }
+
+        let club_stats = ClubStats {
+            season: "20242025".to_string(),
+            game_type: 2,
+            skaters,
+            goalies,
+        };
+
+        let standing = create_test_standing();
+
+        let widget = TeamDetailPanelWidget {
+            team_abbrev: "TST".to_string(),
+            standing: Some(standing),
+            club_stats: Some(club_stats),
+            loading: false,
+            scroll_offset: 0,
+            selected_index: None,
+        };
+
+        // Create a small area that is definitely smaller than the preferred height of the tables
+        // This simulates the crash scenario where y=42 was out of bounds for height=42
+        let area = Rect::new(0, 0, 80, 20);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        // This should NOT panic even though the preferred height of the tables
+        // is much larger than the available area
+        widget.render(area, &mut buf, &config);
+
+        // Verify the buffer was written to without panicking
+        // We don't need to check exact content, just that rendering completed successfully
+        assert_eq!(*buf.area(), area);
+    }
+
+    /// Test that rendering with exactly the boundary height doesn't panic.
+    /// This is another edge case where the last row of the table would be at
+    /// exactly y = height, which would cause an index out of bounds.
+    #[test]
+    fn test_rendering_at_exact_boundary_height() {
+        let skaters = vec![create_test_skater(1, "John", "Doe", "C", 20, 10, 15, 25)];
+        let goalies = vec![create_test_goalie(2, "Jane", "Smith", 15, 8)];
+
+        let club_stats = ClubStats {
+            season: "20242025".to_string(),
+            game_type: 2,
+            skaters,
+            goalies,
+        };
+
+        let standing = create_test_standing();
+
+        let widget = TeamDetailPanelWidget {
+            team_abbrev: "TST".to_string(),
+            standing: Some(standing),
+            club_stats: Some(club_stats),
+            loading: false,
+            scroll_offset: 0,
+            selected_index: None,
+        };
+
+        // Use a height that's close to what the widget wants to render
+        // to test the boundary condition
+        let area = Rect::new(0, 0, 80, 15);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &config);
+
+        assert_eq!(*buf.area(), area);
     }
 }
