@@ -362,7 +362,7 @@ mod tests {
     async fn test_build_returns_component_tree() {
         let state = AppState::default();
         let data_effects = create_test_data_effects();
-        let runtime = Runtime::new(state, data_effects);
+        Runtime::new(state, data_effects);
 
         // build() should return the App component tree
         //let element = runtime.build();

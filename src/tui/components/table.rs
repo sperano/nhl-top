@@ -862,7 +862,7 @@ mod tests {
             ColumnDef::new("Text2", 10, Alignment::Left, |_: &TestRow| {
                 CellValue::Text("B".to_string())
             }),
-            ColumnDef::new("Link2", 10, Alignment::Left, |r: &TestRow| {
+            ColumnDef::new("Link2", 10, Alignment::Left, |_: &TestRow| {
                 CellValue::TeamLink {
                     display: "Team".to_string(),
                     team_abbrev: "TOR".to_string(),
@@ -1030,10 +1030,9 @@ mod tests {
         let widget = TableWidget::from_data(columns, rows).with_header("Player Stats");
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_framework_widget(&widget, 50, height, &config);
+        render_framework_widget(&widget, 50, height, &config);
 
         // Just verify it renders without panicking
-        // The buffer should contain player names, team name, and values
         assert_eq!(height, 7); // header(2) + col_header(1) + separator(1) + 3 rows
     }
 

@@ -5,9 +5,7 @@
 // Module declarations
 mod common;
 mod scores;
-mod standings;
 mod settings;
-pub mod navigation;
 pub mod widgets;
 mod context;
 pub mod framework;

@@ -132,9 +132,8 @@ mod tests {
     use super::*;
     use ratatui::{
         buffer::Buffer,
-        style::{Color, Style},
         text::Text,
-        widgets::{Block, Borders, Paragraph, Widget},
+        widgets::{Paragraph, Widget},
     };
 
     /// Test widget that renders "TEST" in the center

@@ -163,7 +163,7 @@ impl RenderableWidget for GameBox {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
+    use crate::tui::testing::assert_buffer;
     use crate::tui::widgets::testing::*;
 
     #[test]

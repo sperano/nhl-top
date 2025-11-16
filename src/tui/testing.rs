@@ -185,6 +185,7 @@ mod tests {
         let client1 = create_client();
         let client2 = Arc::clone(&client1);
         assert_eq!(Arc::strong_count(&client1), 2);
+        drop(client2); // Ensure client2 is used
     }
 
     #[test]

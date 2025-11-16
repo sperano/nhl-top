@@ -384,7 +384,7 @@ impl ScoreTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
+    use crate::tui::testing::assert_buffer;
     use crate::tui::widgets::testing::*;
 
     #[test]
@@ -669,42 +669,36 @@ mod tests {
 
         // Regular game: 5 columns (empty, 1, 2, 3, T)
         let buf1 = render_widget_with_config(&widget_no_ot_so, 37, 6, &config);
-        let actual1 = buffer_lines(&buf1);
-        let expected1 = vec![
+        assert_buffer(&buf1, &[
             "╭─────┬────┬────┬────┬────╮          ",
             "│     │ 1  │ 2  │ 3  │ T  │          ",
             "├─────┼────┼────┼────┼────┤          ",
             "│  A  │ -  │ -  │ -  │ -  │          ",
             "│  B  │ -  │ -  │ -  │ -  │          ",
             "╰─────┴────┴────┴────┴────╯          ",
-        ];
-        assert_eq!(actual1, expected1);
+        ]);
 
         // With OT: 6 columns
         let buf2 = render_widget_with_config(&widget_with_ot, 37, 6, &config);
-        let actual2 = buffer_lines(&buf2);
-        let expected2 = vec![
+        assert_buffer(&buf2, &[
             "╭─────┬────┬────┬────┬────┬────╮     ",
             "│     │ 1  │ 2  │ 3  │ OT │ T  │     ",
             "├─────┼────┼────┼────┼────┼────┤     ",
             "│  A  │ -  │ -  │ -  │ -  │ -  │     ",
             "│  B  │ -  │ -  │ -  │ -  │ -  │     ",
             "╰─────┴────┴────┴────┴────┴────╯     ",
-        ];
-        assert_eq!(actual2, expected2);
+        ]);
 
         // With both: 7 columns
         let buf3 = render_widget_with_config(&widget_with_both, 37, 6, &config);
-        let actual3 = buffer_lines(&buf3);
-        let expected3 = vec![
+        assert_buffer(&buf3, &[
             "╭─────┬────┬────┬────┬────┬────┬────╮",
             "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
             "├─────┼────┼────┼────┼────┼────┼────┤",
             "│  A  │ -  │ -  │ -  │ -  │ -  │ -  │",
             "│  B  │ -  │ -  │ -  │ -  │ -  │ -  │",
             "╰─────┴────┴────┴────┴────┴────┴────╯",
-        ];
-        assert_eq!(actual3, expected3);
+        ]);
     }
 
     #[test]

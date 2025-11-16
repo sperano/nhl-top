@@ -8,13 +8,7 @@
 pub mod testing;
 
 // Focus management system
-pub mod focus;
-pub mod container;
-pub mod list;
-pub mod table;
-
-pub use container::{Container, FocusPosition};
-pub use table::{FocusableTable, ColumnDef, Alignment, TableStyle, HighlightMode};
+//pub mod focus;
 
 // Small reusable widgets
 pub mod settings;
@@ -41,7 +35,6 @@ pub use action_bar::{ActionBar, Action};
 // Dummy types for old TUI compatibility (dead code)
 // Note: This is a simplified version that allows struct literal construction without description field
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code)]
 pub struct KeyHint {
     #[allow(dead_code)]
     pub key: String,
@@ -53,14 +46,12 @@ pub struct KeyHint {
 
 // Allow construction with just key, action, style (description field removed for simplicity)
 impl KeyHint {
-    #[allow(dead_code)]
     pub fn new(key: String, action: String, style: KeyHintStyle) -> Self {
         Self { key, action, style }
     }
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-#[allow(dead_code)]
 pub enum KeyHintStyle {
     #[default]
     Normal,

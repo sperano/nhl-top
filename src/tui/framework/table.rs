@@ -241,6 +241,7 @@ mod tests {
         #[derive(Clone)]
         struct TestRow {
             name: String,
+            #[allow(dead_code)]
             value: i32,
         }
 

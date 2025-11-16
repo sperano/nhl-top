@@ -10,10 +10,8 @@ mod tests {
     use crate::tui::framework::{
         action::{Action, Tab},
         effects::DataEffects,
-        renderer::Renderer,
         runtime::Runtime,
         state::AppState,
-        Element,
     };
     use crate::tui::testing::create_client;
 
