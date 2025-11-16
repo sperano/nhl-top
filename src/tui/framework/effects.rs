@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use nhl_api::{Client, GameDate, GameId};
+use nhl_api::{Client, GameDate};
 
+use crate::cache;
 use super::action::Action;
 use super::component::Effect;
 use super::state::{AppState};
@@ -46,29 +47,29 @@ impl DataEffects {
         Effect::Batch(effects)
     }
 
-    /// Fetch current league standings
+    /// Fetch current league standings (with caching)
     pub fn fetch_standings(&self) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = client.current_league_standings().await;
+            let result = cache::fetch_standings_cached(&client).await;
             Action::StandingsLoaded(result.map_err(|e| e.to_string()))
         }))
     }
 
-    /// Fetch daily schedule for a specific date
+    /// Fetch daily schedule for a specific date (with caching)
     pub fn fetch_schedule(&self, date: GameDate) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = client.daily_schedule(Some(date)).await;
+            let result = cache::fetch_schedule_cached(&client, date).await;
             Action::ScheduleLoaded(result.map_err(|e| e.to_string()))
         }))
     }
 
-    /// Fetch game details for a specific game
+    /// Fetch game details for a specific game (with caching)
     pub fn fetch_game_details(&self, game_id: i64) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = client.landing(game_id).await;
+            let result = cache::fetch_game_cached(&client, game_id).await;
             Action::GameDetailsLoaded(game_id, result.map_err(|e| e.to_string()))
         }))
     }
@@ -76,12 +77,12 @@ impl DataEffects {
     /// Fetch team roster stats for a specific team (current season, regular season)
     ///
     /// This method dynamically determines the current season by fetching available seasons
-    /// and selecting the most recent one that has regular season data.
+    /// and selecting the most recent one that has regular season data (with caching).
     pub fn fetch_team_roster_stats(&self, team_abbrev: String) -> Effect {
         let client = self.client.clone();
         let abbrev = team_abbrev.clone();
         Effect::Async(Box::pin(async move {
-            // First, get available seasons for this team
+            // First, get available seasons for this team (not cached - small data)
             let seasons_result = client.club_stats_season(&abbrev).await;
 
             let result = match seasons_result {
@@ -94,8 +95,8 @@ impl DataEffects {
 
                     match current_season {
                         Some(season_info) => {
-                            // Fetch stats for the current season
-                            client.club_stats(&abbrev, season_info.season, REGULAR_SEASON).await
+                            // Fetch stats for the current season (with caching)
+                            cache::fetch_club_stats_cached(&client, &abbrev, season_info.season).await
                         }
                         None => {
                             Err(nhl_api::NHLApiError::ApiError {
@@ -122,11 +123,11 @@ impl DataEffects {
         }))
     }
 
-    /// Fetch boxscore for a specific game
+    /// Fetch boxscore for a specific game (with caching)
     pub fn fetch_boxscore(&self, game_id: i64) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = client.boxscore(GameId::new(game_id)).await;
+            let result = cache::fetch_boxscore_cached(&client, game_id).await;
             Action::BoxscoreLoaded(game_id, result.map_err(|e| e.to_string()))
         }))
     }
@@ -211,5 +212,71 @@ mod tests {
         } else {
             panic!("Expected Batch effect");
         }
+    }
+
+    #[tokio::test]
+    #[ignore] // Integration test - requires network access
+    async fn test_cache_integration_standings() {
+        use crate::cache;
+
+        // Clear cache before test
+        cache::clear_all_caches().await;
+
+        let client = crate::tui::testing::create_client();
+        let effects = DataEffects::new(client);
+
+        // First fetch - should hit the API and cache
+        let effect1 = effects.fetch_standings();
+        if let Effect::Async(future) = effect1 {
+            let _action = future.await;
+        }
+
+        // Verify cache has entry
+        let stats = cache::cache_stats().await;
+        assert_eq!(stats.standings_entries, 1);
+
+        // Second fetch - should hit the cache
+        let effect2 = effects.fetch_standings();
+        if let Effect::Async(future) = effect2 {
+            let _action = future.await;
+        }
+
+        // Cache should still have 1 entry
+        let stats = cache::cache_stats().await;
+        assert_eq!(stats.standings_entries, 1);
+    }
+
+    #[tokio::test]
+    #[ignore] // Integration test - requires network access
+    async fn test_cache_integration_schedule() {
+        use crate::cache;
+
+        // Clear cache before test
+        cache::clear_all_caches().await;
+
+        let client = crate::tui::testing::create_client();
+        let effects = DataEffects::new(client);
+
+        let date = GameDate::Now;
+
+        // First fetch - should hit the API and cache
+        let effect1 = effects.fetch_schedule(date.clone());
+        if let Effect::Async(future) = effect1 {
+            let _action = future.await;
+        }
+
+        // Verify cache has entry
+        let stats = cache::cache_stats().await;
+        assert_eq!(stats.schedule_entries, 1);
+
+        // Second fetch - should hit the cache
+        let effect2 = effects.fetch_schedule(date);
+        if let Effect::Async(future) = effect2 {
+            let _action = future.await;
+        }
+
+        // Cache should still have 1 entry
+        let stats = cache::cache_stats().await;
+        assert_eq!(stats.schedule_entries, 1);
     }
 }

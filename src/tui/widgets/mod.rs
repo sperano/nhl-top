@@ -17,8 +17,6 @@ pub use container::{Container, FocusPosition};
 pub use table::{FocusableTable, ColumnDef, Alignment, TableStyle, HighlightMode};
 
 // Small reusable widgets
-// pub mod section_header;
-// pub mod horizontal_separator;
 pub mod settings;
 
 // Widget implementations
@@ -37,26 +35,8 @@ pub use game_grid::GameGrid;
 pub mod settings_list;
 pub use settings_list::SettingsListWidget;
 
-// pub mod career_stats_table;
-// pub use career_stats_table::CareerStatsTable;
-
-// pub mod player_bio_card;
-// pub use player_bio_card::PlayerBioCard;
-
-// pub mod game_skater_stats_table;
-// pub use game_skater_stats_table::GameSkaterStatsTable;
-//
-// pub mod game_goalie_stats_table;
-// pub use game_goalie_stats_table::GameGoalieStatsTable;
-
-// pub mod team_stats_panel;
-// pub use team_stats_panel::TeamStatsPanel;
-//
 pub mod action_bar;
 pub use action_bar::{ActionBar, Action};
-//
-// pub mod command_palette;
-// pub use command_palette::{CommandPalette, SearchResult};
 
 // Dummy types for old TUI compatibility (dead code)
 // Note: This is a simplified version that allows struct literal construction without description field
@@ -87,12 +67,6 @@ pub enum KeyHintStyle {
     Important,
     Subtle,
 }
-
-// pub mod team_detail;
-// pub use team_detail::TeamDetail;
-//
-// pub mod player_detail;
-// pub use player_detail::PlayerDetail;
 
 pub mod scroll_rendering;
 pub use scroll_rendering::{render_scrollable_widget, render_scrollable_widgets};
