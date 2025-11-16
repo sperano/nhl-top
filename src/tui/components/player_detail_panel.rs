@@ -175,6 +175,8 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             })
             .unwrap_or_default();
 
+        // TODO: This sorting should be done in nhl_api's player_landing() call
+        // to ensure consistent ordering across all consumers
         // Sort by season descending (latest first)
         season_stats.sort_by(|a, b| b.season.cmp(&a.season));
 

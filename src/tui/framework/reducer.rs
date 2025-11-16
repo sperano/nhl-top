@@ -449,6 +449,9 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                         if let Some(selected_index) = panel_state.selected_index {
                             if let Some(player) = state.data.player_data.get(player_id) {
                                 if let Some(seasons) = &player.season_totals {
+                                    // TODO: This sorting should be done in nhl_api's player_landing() call
+                                    // to ensure consistent ordering across all consumers
+
                                     // Filter to NHL regular season only and sort by season descending (latest first)
                                     let mut nhl_seasons: Vec<_> = seasons.iter()
                                         .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
