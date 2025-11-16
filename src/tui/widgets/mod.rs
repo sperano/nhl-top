@@ -10,20 +10,15 @@ pub mod testing;
 // Focus management system
 pub mod focus;
 pub mod container;
-pub mod link;
 pub mod list;
 pub mod table;
-pub mod breadcrumb_focusable;
 
 pub use container::{Container, FocusPosition};
-pub use link::{Link, LinkBuilder, LinkStyle};
-pub use list::{List, ListStyle};
 pub use table::{FocusableTable, ColumnDef, Alignment, TableStyle, HighlightMode};
-pub use breadcrumb_focusable::{BreadcrumbWidget, BreadcrumbSegment, BreadcrumbStyle};
 
 // Small reusable widgets
-pub mod section_header;
-pub mod horizontal_separator;
+// pub mod section_header;
+// pub mod horizontal_separator;
 pub mod settings;
 
 // Widget implementations
@@ -39,41 +34,29 @@ pub use game_box::{GameBox, GameState};
 pub mod game_grid;
 pub use game_grid::GameGrid;
 
-pub mod standings_table;
-pub use standings_table::StandingsTable;
-
 pub mod settings_list;
 pub use settings_list::SettingsListWidget;
 
-pub mod roster_stats_table;
-pub use roster_stats_table::RosterStatsTable;
+// pub mod career_stats_table;
+// pub use career_stats_table::CareerStatsTable;
 
-pub mod goalie_stats_table;
-pub use goalie_stats_table::GoalieStatsTable;
+// pub mod player_bio_card;
+// pub use player_bio_card::PlayerBioCard;
 
-pub mod career_stats_table;
-pub use career_stats_table::CareerStatsTable;
+// pub mod game_skater_stats_table;
+// pub use game_skater_stats_table::GameSkaterStatsTable;
+//
+// pub mod game_goalie_stats_table;
+// pub use game_goalie_stats_table::GameGoalieStatsTable;
 
-pub mod player_bio_card;
-pub use player_bio_card::PlayerBioCard;
-
-pub mod game_skater_stats_table;
-pub use game_skater_stats_table::GameSkaterStatsTable;
-
-pub mod game_goalie_stats_table;
-pub use game_goalie_stats_table::GameGoalieStatsTable;
-
-pub mod team_stats_panel;
-pub use team_stats_panel::TeamStatsPanel;
-
+// pub mod team_stats_panel;
+// pub use team_stats_panel::TeamStatsPanel;
+//
 pub mod action_bar;
 pub use action_bar::{ActionBar, Action};
-
-pub mod breadcrumb;
-pub use breadcrumb::Breadcrumb;
-
-pub mod command_palette;
-pub use command_palette::{CommandPalette, SearchResult};
+//
+// pub mod command_palette;
+// pub use command_palette::{CommandPalette, SearchResult};
 
 // Dummy types for old TUI compatibility (dead code)
 // Note: This is a simplified version that allows struct literal construction without description field
@@ -105,11 +88,11 @@ pub enum KeyHintStyle {
     Subtle,
 }
 
-pub mod team_detail;
-pub use team_detail::TeamDetail;
-
-pub mod player_detail;
-pub use player_detail::PlayerDetail;
+// pub mod team_detail;
+// pub use team_detail::TeamDetail;
+//
+// pub mod player_detail;
+// pub use player_detail::PlayerDetail;
 
 pub mod scroll_rendering;
 pub use scroll_rendering::{render_scrollable_widget, render_scrollable_widgets};

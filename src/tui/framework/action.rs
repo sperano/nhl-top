@@ -1,4 +1,4 @@
-use nhl_api::{Boxscore, DailySchedule, GameDate, GameMatchup, Standing};
+use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, Standing};
 
 /// Global actions - like Redux actions
 ///
@@ -32,7 +32,7 @@ pub enum Action {
     ScheduleLoaded(Result<DailySchedule, String>),
     GameDetailsLoaded(i64, Result<GameMatchup, String>),
     BoxscoreLoaded(i64, Result<Boxscore, String>),
-    TeamRosterLoaded(String, Result<Roster, String>),
+    TeamRosterStatsLoaded(String, Result<ClubStats, String>),
     PlayerStatsLoaded(i64, Result<PlayerStats, String>),
 
     // UI actions
@@ -40,6 +40,11 @@ pub enum Action {
     ScrollDown(usize),
     FocusNext,
     FocusPrevious,
+
+    // Panel-specific actions
+    PanelSelectNext,     // Move selection down in current panel
+    PanelSelectPrevious, // Move selection up in current panel
+    PanelSelectItem,     // Activate/enter selected item in panel
 
     // Component-specific actions (nested)
     ScoresAction(ScoresAction),
@@ -115,12 +120,7 @@ pub enum SettingsAction {
     UpdateConfig(Box<crate::config::Config>),
 }
 
-// Placeholder types for future implementation
-#[derive(Debug, Clone)]
-pub struct Roster {
-    pub team_abbrev: String,
-}
-
+// Placeholder type for future implementation
 #[derive(Debug, Clone)]
 pub struct PlayerStats {
     pub player_id: i64,

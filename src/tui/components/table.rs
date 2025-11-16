@@ -297,7 +297,7 @@ impl TableWidget {
     }
 
     /// Set the selection with Option values
-    fn with_selection_opt(mut self, row: Option<usize>, col: Option<usize>) -> Self {
+    pub fn with_selection_opt(mut self, row: Option<usize>, col: Option<usize>) -> Self {
         self.selected_row = row;
         self.selected_col = col;
         self

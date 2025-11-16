@@ -3,7 +3,7 @@ use crate::tui::framework::{
     component::{Component, Element},
     state::SettingsCategory,
 };
-use crate::tui::widgets::SettingsListWidget;
+//use crate::tui::widgets::SettingsListWidget;
 
 use super::{TabbedPanel, TabbedPanelProps, TabItem};
 
@@ -35,21 +35,21 @@ impl SettingsTab {
     fn render_category_tabs(&self, props: &SettingsTabProps) -> Element {
         // Create tabs for each category
         let tabs = vec![
-            TabItem::new(
-                "logging".to_string(),
-                "Logging".to_string(),
-                self.render_settings_list(SettingsCategory::Logging, props),
-            ),
-            TabItem::new(
-                "display".to_string(),
-                "Display".to_string(),
-                self.render_settings_list(SettingsCategory::Display, props),
-            ),
-            TabItem::new(
-                "data".to_string(),
-                "Data".to_string(),
-                self.render_settings_list(SettingsCategory::Data, props),
-            ),
+            // TabItem::new(
+            //     "logging".to_string(),
+            //     "Logging".to_string(),
+            //     self.render_settings_list(SettingsCategory::Logging, props),
+            // ),
+            // TabItem::new(
+            //     "display".to_string(),
+            //     "Display".to_string(),
+            //     self.render_settings_list(SettingsCategory::Display, props),
+            // ),
+            // TabItem::new(
+            //     "data".to_string(),
+            //     "Data".to_string(),
+            //     self.render_settings_list(SettingsCategory::Data, props),
+            // ),
         ];
 
         // Active key based on selected category
@@ -74,22 +74,22 @@ impl SettingsTab {
         }
     }
 
-    /// Render the settings list for a category
-    fn render_settings_list(&self, category: SettingsCategory, props: &SettingsTabProps) -> Element {
-        let selected_index = if props.settings_mode && category == props.selected_category {
-            Some(props.selected_setting_index)
-        } else {
-            None
-        };
-
-        Element::Widget(Box::new(SettingsListWidget::new(
-            category,
-            props.config.clone(),
-            2, // Left margin
-            selected_index,
-            props.settings_mode,
-        )))
-    }
+    // /// Render the settings list for a category
+    // fn render_settings_list(&self, category: SettingsCategory, props: &SettingsTabProps) -> Element {
+    //     let selected_index = if props.settings_mode && category == props.selected_category {
+    //         Some(props.selected_setting_index)
+    //     } else {
+    //         None
+    //     };
+    //
+    //     // Element::Widget(Box::new(SettingsListWidget::new(
+    //     //     category,
+    //     //     props.config.clone(),
+    //     //     2, // Left margin
+    //     //     selected_index,
+    //     //     props.settings_mode,
+    //     // )))
+    // }
 }
 
 #[cfg(test)]

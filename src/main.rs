@@ -100,9 +100,6 @@ enum Commands {
     Franchises,
     /// Display current configuration
     Config,
-    /// Interactive widget system demo (development feature only)
-    #[cfg(feature = "development")]
-    Demo,
 }
 
 fn create_client() -> Client {
@@ -206,8 +203,6 @@ async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
 async fn execute_command(client: &Client, command: Commands, config: &config::Config) -> anyhow::Result<()> {
     match command {
         Commands::Config => unreachable!("Config command should be handled before execute_command"),
-        #[cfg(feature = "development")]
-        Commands::Demo => unreachable!("Demo command should be handled before execute_command"),
         Commands::Standings { season, date, by } => {
             let group_by = by.to_standings_groupby();
             commands::standings::run(client, season, date, group_by, config).await
@@ -252,17 +247,6 @@ async fn main() {
     // Handle Config command separately (doesn't need a client)
     if let Commands::Config = command {
         handle_config_command();
-        return;
-    }
-
-    // Handle Demo command separately (development feature only, doesn't need a client)
-    #[cfg(feature = "development")]
-    if let Commands::Demo = command {
-        if let Err(e) = commands::demo::run().await {
-            eprintln!("Error running demo: {}", e);
-            tracing::error!("Demo failed: {:#}", e);
-            std::process::exit(1);
-        }
         return;
     }
 

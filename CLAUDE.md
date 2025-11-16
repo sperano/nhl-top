@@ -528,3 +528,4 @@ bar";
 - mod_experinmental is gone, everything moved in mod.rs
 - from now on, what you call "Production", I want you to call it "legacy". What you call experimental, i want you to call it "current"
 - use the stuff in tui::testing when writing tests
+- remember all this as THE LEGACY NAVIGATION WAY.

@@ -2,7 +2,7 @@ mod state;
 mod view;
 mod handler;
 
-pub use state::State;
+//pub use state::State;
 
 use ratatui::style::Color;
 use crate::config::Config;

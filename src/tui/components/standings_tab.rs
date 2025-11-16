@@ -41,9 +41,11 @@ impl Component for StandingsTab {
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
         // If in panel view, render the panel instead
         if !props.panel_stack.is_empty() {
+            tracing::debug!("RENDER: Panel stack has {} items, rendering panel", props.panel_stack.len());
             return self.render_panel(props);
         }
 
+        tracing::trace!("RENDER: No panels, rendering standings view");
         // Use TabbedPanel for view selection
         self.render_view_tabs(props)
     }
@@ -556,9 +558,28 @@ impl StandingsTab {
         }
     }
 
-    fn render_panel(&self, _props: &StandingsTabProps) -> Element {
-        // Placeholder for panel rendering
-        Element::Widget(Box::new(PanelWidget))
+    fn render_panel(&self, props: &StandingsTabProps) -> Element {
+        // Get the current panel info
+        let panel_info = if let Some(panel_state) = props.panel_stack.last() {
+            let msg = match &panel_state.panel {
+                super::super::framework::action::Panel::TeamDetail { abbrev } => {
+                    format!("Team Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", abbrev)
+                }
+                super::super::framework::action::Panel::PlayerDetail { player_id } => {
+                    format!("Player Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", player_id)
+                }
+                super::super::framework::action::Panel::Boxscore { game_id } => {
+                    format!("Boxscore: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", game_id)
+                }
+            };
+            tracing::debug!("RENDER: Rendering panel with message: {}", msg);
+            msg
+        } else {
+            tracing::warn!("RENDER: render_panel called but panel_stack is empty!");
+            "No panel".to_string()
+        };
+
+        Element::Widget(Box::new(PanelWidget { message: panel_info }))
     }
 }
 
@@ -582,17 +603,21 @@ impl RenderableWidget for LoadingWidget {
 }
 
 /// Panel widget placeholder
-struct PanelWidget;
+struct PanelWidget {
+    message: String,
+}
 
 impl RenderableWidget for PanelWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
-        let widget = Paragraph::new("Panel view (not implemented)")
-            .block(Block::default().borders(Borders::NONE));
+        let widget = Paragraph::new(self.message.as_str())
+            .block(Block::default().borders(Borders::ALL).title("Panel View"));
         ratatui::widgets::Widget::render(widget, area, buf);
     }
 
     fn clone_box(&self) -> Box<dyn RenderableWidget> {
-        Box::new(PanelWidget)
+        Box::new(PanelWidget {
+            message: self.message.clone(),
+        })
     }
 }
 

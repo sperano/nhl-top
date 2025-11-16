@@ -6,7 +6,7 @@
 
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
-use crate::tui::widgets::{RenderableWidget, RosterStatsTable};
+use crate::tui::widgets::RenderableWidget;
 use std::collections::HashMap;
 
 /// Widget for displaying team detail
@@ -107,19 +107,20 @@ impl<'a> RenderableWidget for TeamDetail<'a> {
                     }
                 }).collect();
 
-                let roster_table = RosterStatsTable::new(&players, Some("Team Roster"), self.selected_player_index, 0);
-                let roster_height = roster_table.preferred_height().unwrap_or(20);
+                // TODO: Re-implement with new TableWidget component
+                // let roster_table = RosterStatsTable::new(&players, Some("Team Roster"), self.selected_player_index, 0);
+                // let roster_height = roster_table.preferred_height().unwrap_or(20);
 
-                if y < area.bottom() {
-                    let widget_area = Rect::new(
-                        area.x,
-                        y,
-                        area.width.min(60),
-                        roster_height.min(area.bottom().saturating_sub(y)),
-                    );
-                    roster_table.render(widget_area, buf, config);
-                }
-                y += roster_height;
+                // if y < area.bottom() {
+                //     let widget_area = Rect::new(
+                //         area.x,
+                //         y,
+                //         area.width.min(60),
+                //         roster_height.min(area.bottom().saturating_sub(y)),
+                //     );
+                //     roster_table.render(widget_area, buf, config);
+                // }
+                // y += roster_height;
             } else {
                 if y < area.bottom() {
                     buf.set_string(area.x, y, "  No player data available", Style::default());
@@ -165,8 +166,9 @@ impl<'a> RenderableWidget for TeamDetail<'a> {
         // Add roster height
         if let Some(stats) = self.club_stats.get(self.team_abbrev) {
             if !stats.skaters.is_empty() {
-                let roster_table = RosterStatsTable::new(&[], Some("Team Roster"), None, 0);
-                height += roster_table.preferred_height().unwrap_or(20);
+                // TODO: Re-implement with new TableWidget component
+                // let roster_table = RosterStatsTable::new(&[], Some("Team Roster"), None, 0);
+                // height += roster_table.preferred_height().unwrap_or(20);
                 height += stats.skaters.len() as u16;
             } else {
                 height += 1;

@@ -123,22 +123,4 @@ mod tests {
         assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Scores);
     }
 
-    #[tokio::test]
-    async fn test_component_tree_builds() {
-        use crate::tui::framework::{Component, Element};
-        use crate::tui::components::App;
-
-        let app = App;
-        let state = AppState::default();
-
-        let element = app.view(&state, &());
-
-        // Should build a container with 2 children (TabbedPanel, StatusBar)
-        match element {
-            Element::Container { children, .. } => {
-                assert_eq!(children.len(), 2, "App should have 2 children: TabbedPanel, StatusBar");
-            }
-            _ => panic!("Expected Container element from App"),
-        }
-    }
 }

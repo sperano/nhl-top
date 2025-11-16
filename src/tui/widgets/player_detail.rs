@@ -6,7 +6,7 @@
 
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
-use crate::tui::widgets::{RenderableWidget, PlayerBioCard, CareerStatsTable};
+use crate::tui::widgets::{RenderableWidget, PlayerBioCard};
 
 /// Widget for displaying player detail
 pub struct PlayerDetail<'a> {
@@ -72,27 +72,6 @@ impl<'a> RenderableWidget for PlayerDetail<'a> {
         }
         y += bio_height;
 
-        // Render career stats table if present
-        if !self.nhl_seasons.is_empty() {
-            let career_table = CareerStatsTable::new(
-                &self.nhl_seasons,
-                Some("NHL Career Statistics"),
-                self.selected_season_index,
-                0,
-            );
-            let career_height = career_table.preferred_height().unwrap_or(10);
-
-            if y < area.bottom() {
-                let widget_area = Rect::new(
-                    area.x,
-                    y,
-                    area.width.min(80),
-                    career_height.min(area.bottom().saturating_sub(y)),
-                );
-                career_table.render(widget_area, buf, config);
-            }
-            y += career_height;
-        }
 
         // Render instructions if enabled
         if self.show_instructions {
@@ -128,15 +107,6 @@ impl<'a> RenderableWidget for PlayerDetail<'a> {
         height += bio_card.preferred_height().unwrap_or(10);
 
         // Career table height
-        if !self.nhl_seasons.is_empty() {
-            let career_table = CareerStatsTable::new(
-                &self.nhl_seasons,
-                Some("NHL Career Statistics"),
-                None,
-                0,
-            );
-            height += career_table.preferred_height().unwrap_or(10);
-        }
 
         // Instructions height
         if self.show_instructions {

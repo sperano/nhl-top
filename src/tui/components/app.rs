@@ -1,24 +1,27 @@
 use crate::tui::framework::component::{vertical, Component, Constraint, Element};
 use crate::tui::framework::state::{AppState, LoadingKey};
-
+//
 use super::{
     boxscore_panel::BoxscorePanelProps, scores_tab::ScoresTabProps,
-    settings_tab::SettingsTabProps, standings_tab::StandingsTabProps, BoxscorePanel, ScoresTab,
+    settings_tab::SettingsTabProps, standings_tab::StandingsTabProps,
+    team_detail_panel::TeamDetailPanelProps, BoxscorePanel, ScoresTab,
     SettingsTab, StandingsTab, StatusBar, TabbedPanel, TabbedPanelProps, TabItem,
+    TeamDetailPanel,
 };
-
+//
 /// Root App component
 ///
 /// This is the top-level component that renders the entire application.
 /// It uses the global AppState as props and delegates rendering to child components.
 pub struct App;
-
+//
 impl Component for App {
     type Props = AppState;
     type State = ();
     type Message = ();
-
+//
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
+        tracing::trace!("APP: App.view() called with panel_stack.len={}", props.navigation.panel_stack.len());
         vertical(
             [
                 Constraint::Min(0),    // TabbedPanel (tabs + content)
@@ -31,17 +34,12 @@ impl Component for App {
         )
     }
 }
-
+//
 impl App {
     /// Render main navigation tabs using TabbedPanel
     fn render_main_tabs(&self, state: &AppState) -> Element {
         use crate::tui::framework::action::Tab;
-
-        // If there's a panel open, render it instead of tabs
-        if let Some(panel_state) = state.navigation.panel_stack.last() {
-            return self.render_panel(state, panel_state);
-        }
-
+//
         // Convert Tab enum to string key
         let active_key = match state.navigation.current_tab {
             Tab::Scores => "scores",
@@ -51,27 +49,46 @@ impl App {
             Tab::Settings => "settings",
             Tab::Browser => "browser",
         };
-
+//
+        // Determine content for active tab - if panel is open, show panel instead
+        let (scores_content, standings_content, settings_content) = if let Some(panel_state) = state.navigation.panel_stack.last() {
+            // Panel is open - render it in the active tab's content area
+            let panel_element = self.render_panel(state, panel_state);
+            match state.navigation.current_tab {
+                Tab::Scores => (panel_element, Element::None, Element::None),
+                Tab::Standings => (Element::None, panel_element, Element::None),
+                Tab::Settings => (Element::None, Element::None, panel_element),
+                _ => (Element::None, Element::None, Element::None),
+            }
+        } else {
+            // No panel - render normal tab content
+            (
+                self.render_scores_tab(state),
+                self.render_standings_tab(state),
+                self.render_settings_tab(state),
+            )
+        };
+//
         // Build tabs with their content
         let tabs = vec![
-            TabItem::new("scores", "Scores", self.render_scores_tab(state)),
-            TabItem::new("standings", "Standings", self.render_standings_tab(state)),
+            TabItem::new("scores", "Scores", scores_content),
+            TabItem::new("standings", "Standings", standings_content),
             TabItem::new("stats", "Stats", Element::None), // TODO
             TabItem::new("players", "Players", Element::None), // TODO
-            TabItem::new("settings", "Settings", self.render_settings_tab(state)),
+            TabItem::new("settings", "Settings", settings_content),
             TabItem::new("browser", "Browser", Element::None), // TODO
         ];
-
+//
         TabbedPanel.view(
             &TabbedPanelProps {
                 active_key: active_key.into(),
                 tabs,
-                focused: !state.navigation.content_focused,
+                focused: !state.navigation.content_focused && state.navigation.panel_stack.is_empty(),
             },
             &(),
         )
     }
-
+//
     /// Render a panel overlay
     fn render_panel(
         &self,
@@ -79,7 +96,7 @@ impl App {
         panel_state: &crate::tui::framework::state::PanelState,
     ) -> Element {
         use crate::tui::framework::action::Panel;
-
+//
         match &panel_state.panel {
             Panel::Boxscore { game_id } => {
                 let props = BoxscorePanelProps {
@@ -89,13 +106,64 @@ impl App {
                 };
                 BoxscorePanel.view(&props, &())
             }
-            Panel::TeamDetail { .. } | Panel::PlayerDetail { .. } => {
-                // TODO: Implement other panels
-                Element::None
+            Panel::TeamDetail { abbrev } => {
+                // Find the standing for this team
+                let standing = state
+                    .data
+                    .standings
+                    .as_ref()
+                    .and_then(|standings| {
+                        standings
+                            .iter()
+                            .find(|s| s.team_abbrev.default == *abbrev)
+                            .cloned()
+                    });
+//
+                let props = TeamDetailPanelProps {
+                    team_abbrev: abbrev.clone(),
+                    standing,
+                    club_stats: state.data.team_roster_stats.get(abbrev).cloned(),
+                    loading: state.data.loading.contains(&LoadingKey::TeamRosterStats(abbrev.clone())),
+                    scroll_offset: panel_state.scroll_offset,
+                    selected_index: panel_state.selected_index,
+                };
+                TeamDetailPanel.view(&props, &())
+            }
+            Panel::PlayerDetail { player_id } => {
+                // Placeholder for player detail panel
+                use ratatui::{buffer::Buffer, layout::Rect, widgets::{Block, Borders, Paragraph}};
+                use crate::tui::framework::component::RenderableWidget;
+                use crate::config::DisplayConfig;
+//
+                struct PlayerPanelPlaceholder {
+                    player_id: i64,
+                }
+//
+                impl RenderableWidget for PlayerPanelPlaceholder {
+                    fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
+                        let text = format!(
+                            "Player Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back",
+                            self.player_id
+                        );
+                        let widget = Paragraph::new(text)
+                            .block(Block::default().borders(Borders::ALL).title("Player Panel"));
+                        ratatui::widgets::Widget::render(widget, area, buf);
+                    }
+//
+                    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+                        Box::new(PlayerPanelPlaceholder {
+                            player_id: self.player_id,
+                        })
+                    }
+                }
+//
+                Element::Widget(Box::new(PlayerPanelPlaceholder {
+                    player_id: *player_id,
+                }))
             }
         }
     }
-
+//
     /// Render Scores tab content
     fn render_scores_tab(&self, state: &AppState) -> Element {
         let props = ScoresTabProps {
@@ -110,9 +178,13 @@ impl App {
         };
         ScoresTab.view(&props, &())
     }
-
+//
     /// Render Standings tab content
     fn render_standings_tab(&self, state: &AppState) -> Element {
+        tracing::debug!(
+            "APP: Building StandingsTab with panel_stack.len = {}",
+            state.navigation.panel_stack.len()
+        );
         let props = StandingsTabProps {
             view: state.ui.standings.view.clone(),
             browse_mode: state.ui.standings.browse_mode,
@@ -125,7 +197,7 @@ impl App {
         };
         StandingsTab.view(&props, &())
     }
-
+//
     /// Render Settings tab content
     fn render_settings_tab(&self, state: &AppState) -> Element {
         let props = SettingsTabProps {
@@ -138,19 +210,19 @@ impl App {
         SettingsTab.view(&props, &())
     }
 }
-
+//
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tui::framework::state::AppState;
-
+//
     #[test]
     fn test_app_renders_with_default_state() {
         let app = App;
         let state = AppState::default();
-
+//
         let element = app.view(&state, &());
-
+//
         // Should render a vertical container with 2 children (TabbedPanel + StatusBar)
         match element {
             Element::Container {

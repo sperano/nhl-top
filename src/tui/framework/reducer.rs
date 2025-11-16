@@ -98,6 +98,7 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
             new_state.navigation.panel_stack.push(PanelState {
                 panel,
                 scroll_offset: 0,
+                selected_index: Some(0),
             });
             trace!("  Panel stack depth: {}", new_state.navigation.panel_stack.len());
             (new_state, Effect::None)
@@ -224,29 +225,29 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
             (new_state, Effect::None)
         }
 
-        Action::TeamRosterLoaded(team_abbrev, Ok(roster)) => {
+        Action::TeamRosterStatsLoaded(team_abbrev, Ok(stats)) => {
             let mut new_state = state.clone();
             new_state
                 .data
-                .team_roster
-                .insert(team_abbrev.clone(), roster);
+                .team_roster_stats
+                .insert(team_abbrev.clone(), stats);
             new_state
                 .data
                 .loading
-                .remove(&LoadingKey::TeamRoster(team_abbrev));
+                .remove(&LoadingKey::TeamRosterStats(team_abbrev));
             (new_state, Effect::None)
         }
 
-        Action::TeamRosterLoaded(team_abbrev, Err(e)) => {
+        Action::TeamRosterStatsLoaded(team_abbrev, Err(e)) => {
             let mut new_state = state.clone();
             new_state
                 .data
                 .loading
-                .remove(&LoadingKey::TeamRoster(team_abbrev.clone()));
+                .remove(&LoadingKey::TeamRosterStats(team_abbrev.clone()));
             new_state
                 .data
                 .errors
-                .insert(format!("roster_{}", team_abbrev), e);
+                .insert(format!("team_roster_stats_{}", team_abbrev), e);
             (new_state, Effect::None)
         }
 
@@ -303,6 +304,120 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                 }
             }
             (new_state, Effect::None)
+        }
+
+        Action::PanelSelectNext => {
+            let mut new_state = state.clone();
+            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
+                // Get total item count based on panel type
+                let total_items = match &panel_state.panel {
+                    super::action::Panel::TeamDetail { abbrev } => {
+                        new_state.data.team_roster_stats.get(abbrev)
+                            .map(|stats| stats.skaters.len() + stats.goalies.len())
+                            .unwrap_or(0)
+                    }
+                    super::action::Panel::Boxscore { .. } => 0, // No selection in boxscore
+                    super::action::Panel::PlayerDetail { .. } => 0, // No selection in player detail
+                };
+
+                if total_items > 0 {
+                    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
+                        if let Some(current_index) = panel.selected_index {
+                            // Wrap around to 0 if at the end
+                            let next_index = if current_index + 1 >= total_items {
+                                0
+                            } else {
+                                current_index + 1
+                            };
+                            panel.selected_index = Some(next_index);
+
+                            // Auto-scroll to keep selection visible
+                            if next_index > panel.scroll_offset + 10 {
+                                panel.scroll_offset = next_index.saturating_sub(10);
+                            } else if next_index < panel.scroll_offset {
+                                panel.scroll_offset = next_index;
+                            }
+                        }
+                    }
+                }
+            }
+            (new_state, Effect::None)
+        }
+
+        Action::PanelSelectPrevious => {
+            let mut new_state = state.clone();
+            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
+                // Get total item count based on panel type
+                let total_items = match &panel_state.panel {
+                    super::action::Panel::TeamDetail { abbrev } => {
+                        new_state.data.team_roster_stats.get(abbrev)
+                            .map(|stats| stats.skaters.len() + stats.goalies.len())
+                            .unwrap_or(0)
+                    }
+                    super::action::Panel::Boxscore { .. } => 0, // No selection in boxscore
+                    super::action::Panel::PlayerDetail { .. } => 0, // No selection in player detail
+                };
+
+                if total_items > 0 {
+                    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
+                        if let Some(current_index) = panel.selected_index {
+                            // Wrap around to end if at the beginning
+                            let prev_index = if current_index == 0 {
+                                total_items - 1
+                            } else {
+                                current_index - 1
+                            };
+                            panel.selected_index = Some(prev_index);
+
+                            // Auto-scroll to keep selection visible
+                            if prev_index < panel.scroll_offset {
+                                panel.scroll_offset = prev_index;
+                            } else if prev_index > panel.scroll_offset + 10 {
+                                panel.scroll_offset = prev_index.saturating_sub(10);
+                            }
+                        }
+                    }
+                }
+            }
+            (new_state, Effect::None)
+        }
+
+        Action::PanelSelectItem => {
+            // Handle selection based on panel type
+            if let Some(panel_state) = state.navigation.panel_stack.last() {
+                match &panel_state.panel {
+                    super::action::Panel::TeamDetail { abbrev } => {
+                        // Get the selected player and navigate to player detail
+                        if let Some(selected_index) = panel_state.selected_index {
+                            if let Some(stats) = state.data.team_roster_stats.get(abbrev) {
+                                // Get all players (skaters + goalies)
+                                let total_skaters = stats.skaters.len();
+
+                                let player_id = if selected_index < total_skaters {
+                                    // Selected a skater
+                                    stats.skaters.get(selected_index).map(|s| s.player_id)
+                                } else {
+                                    // Selected a goalie
+                                    let goalie_index = selected_index - total_skaters;
+                                    stats.goalies.get(goalie_index).map(|g| g.player_id)
+                                };
+
+                                if let Some(player_id) = player_id {
+                                    let mut new_state = state.clone();
+                                    new_state.navigation.panel_stack.push(PanelState {
+                                        panel: super::action::Panel::PlayerDetail { player_id },
+                                        scroll_offset: 0,
+                                        selected_index: None,
+                                    });
+                                    return (new_state, Effect::None);
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            (state, Effect::None)
         }
 
         // Delegate to sub-reducers
@@ -391,6 +506,7 @@ fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {
                         new_state.navigation.panel_stack.push(PanelState {
                             panel: super::action::Panel::Boxscore { game_id },
                             scroll_offset: 0,
+                            selected_index: None, // Boxscore panels don't have selection
                         });
 
                         return (new_state, Effect::None);
@@ -409,6 +525,7 @@ fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {
             new_state.navigation.panel_stack.push(PanelState {
                 panel: super::action::Panel::Boxscore { game_id },
                 scroll_offset: 0,
+                selected_index: None, // Boxscore panels don't have selection
             });
 
             (new_state, Effect::None)
@@ -564,7 +681,49 @@ fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effe
         }
 
         StandingsAction::SelectTeam => {
-            // TODO: Implement team selection (push panel?)
+            // Build layout map from standings data (same logic as renderer)
+            if let Some(ref standings) = state.data.standings {
+                let layout = build_standings_layout(
+                    standings,
+                    state.ui.standings.view,
+                    state.system.config.display_standings_western_first,
+                );
+
+                // Lookup team at selected position
+                if let Some(col) = layout.get(state.ui.standings.selected_column) {
+                    if let Some(team_abbrev) = col.get(state.ui.standings.selected_row) {
+                        debug!(
+                            "STANDINGS: Selected team: {} (row={}, col={})",
+                            team_abbrev,
+                            state.ui.standings.selected_row,
+                            state.ui.standings.selected_column
+                        );
+
+                        // Push TeamDetail panel onto navigation stack
+                        let panel = super::action::Panel::TeamDetail {
+                            abbrev: team_abbrev.clone(),
+                        };
+
+                        let mut new_state = state.clone();
+                        new_state.navigation.panel_stack.push(PanelState {
+                            panel,
+                            scroll_offset: 0,
+                            selected_index: Some(0), // Start with first player selected
+                        });
+
+                        debug!("STANDINGS: Pushed TeamDetail panel for {}", team_abbrev);
+
+                        return (new_state, Effect::None);
+                    } else {
+                        debug!(
+                            "STANDINGS: No team at position (row={}, col={})",
+                            state.ui.standings.selected_row,
+                            state.ui.standings.selected_column
+                        );
+                    }
+                }
+            }
+
             (state, Effect::None)
         }
 
@@ -1512,5 +1671,369 @@ fn count_teams_in_wildcard_column(
         if column == 0 { western_count } else { eastern_count }
     } else {
         if column == 0 { eastern_count } else { western_count }
+    }
+}
+
+/// Build standings layout: layout[column][row] = team_abbrev
+///
+/// This mirrors the rendering logic in StandingsTab component.
+/// The layout represents what is actually displayed on screen,
+/// making selection lookup a simple array access.
+fn build_standings_layout(
+    standings: &[nhl_api::Standing],
+    view: GroupBy,
+    western_first: bool,
+) -> Vec<Vec<String>> {
+    use std::collections::BTreeMap;
+
+    match view {
+        GroupBy::League => {
+            // Single column, sorted by points
+            let mut sorted = standings.to_vec();
+            sorted.sort_by(|a, b| b.points.cmp(&a.points));
+            vec![sorted.iter().map(|s| s.team_abbrev.default.clone()).collect()]
+        }
+
+        GroupBy::Conference => {
+            // Two columns: Eastern, Western
+            let mut grouped: BTreeMap<String, Vec<nhl_api::Standing>> = BTreeMap::new();
+            for standing in standings {
+                let conf = standing.conference_name.clone().unwrap_or_else(|| "Unknown".to_string());
+                grouped.entry(conf).or_default().push(standing.clone());
+            }
+
+            for teams in grouped.values_mut() {
+                teams.sort_by(|a, b| b.points.cmp(&a.points));
+            }
+
+            let groups: Vec<_> = grouped.into_iter().collect();
+            if groups.len() != 2 {
+                return Vec::new();
+            }
+
+            let eastern: Vec<String> = groups[0].1.iter().map(|s| s.team_abbrev.default.clone()).collect();
+            let western: Vec<String> = groups[1].1.iter().map(|s| s.team_abbrev.default.clone()).collect();
+
+            if western_first {
+                vec![western, eastern]
+            } else {
+                vec![eastern, western]
+            }
+        }
+
+        GroupBy::Division => {
+            // Two columns: Eastern divisions, Western divisions
+            let mut grouped: BTreeMap<String, Vec<nhl_api::Standing>> = BTreeMap::new();
+            for standing in standings {
+                grouped.entry(standing.division_name.clone()).or_default().push(standing.clone());
+            }
+
+            for teams in grouped.values_mut() {
+                teams.sort_by(|a, b| b.points.cmp(&a.points));
+            }
+
+            let mut eastern_divs = Vec::new();
+            let mut western_divs = Vec::new();
+
+            for (div_name, teams) in grouped {
+                if div_name == "Atlantic" || div_name == "Metropolitan" {
+                    eastern_divs.push((div_name, teams));
+                } else if div_name == "Central" || div_name == "Pacific" {
+                    western_divs.push((div_name, teams));
+                }
+            }
+
+            eastern_divs.sort_by(|a, b| a.0.cmp(&b.0));
+            western_divs.sort_by(|a, b| a.0.cmp(&b.0));
+
+            let eastern: Vec<String> = eastern_divs
+                .into_iter()
+                .flat_map(|(_, teams)| teams)
+                .map(|s| s.team_abbrev.default.clone())
+                .collect();
+
+            let western: Vec<String> = western_divs
+                .into_iter()
+                .flat_map(|(_, teams)| teams)
+                .map(|s| s.team_abbrev.default.clone())
+                .collect();
+
+            if western_first {
+                vec![western, eastern]
+            } else {
+                vec![eastern, western]
+            }
+        }
+
+        GroupBy::Wildcard => {
+            // Two columns: Eastern (top 3 + wildcards), Western (top 3 + wildcards)
+            let mut grouped: BTreeMap<String, Vec<nhl_api::Standing>> = BTreeMap::new();
+            for standing in standings {
+                grouped.entry(standing.division_name.clone()).or_default().push(standing.clone());
+            }
+
+            for teams in grouped.values_mut() {
+                teams.sort_by(|a, b| b.points.cmp(&a.points));
+            }
+
+            let atlantic = grouped.get("Atlantic").cloned().unwrap_or_default();
+            let metropolitan = grouped.get("Metropolitan").cloned().unwrap_or_default();
+            let central = grouped.get("Central").cloned().unwrap_or_default();
+            let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
+
+            let eastern: Vec<String> = {
+                let mut teams = Vec::new();
+                teams.extend(atlantic.iter().take(3).cloned());
+                teams.extend(metropolitan.iter().take(3).cloned());
+                let mut wildcards: Vec<_> = atlantic.iter().skip(3).chain(metropolitan.iter().skip(3)).cloned().collect();
+                wildcards.sort_by(|a, b| b.points.cmp(&a.points));
+                teams.extend(wildcards);
+                teams.iter().map(|s| s.team_abbrev.default.clone()).collect()
+            };
+
+            let western: Vec<String> = {
+                let mut teams = Vec::new();
+                teams.extend(central.iter().take(3).cloned());
+                teams.extend(pacific.iter().take(3).cloned());
+                let mut wildcards: Vec<_> = central.iter().skip(3).chain(pacific.iter().skip(3)).cloned().collect();
+                wildcards.sort_by(|a, b| b.points.cmp(&a.points));
+                teams.extend(wildcards);
+                teams.iter().map(|s| s.team_abbrev.default.clone()).collect()
+            };
+
+            if western_first {
+                vec![western, eastern]
+            } else {
+                vec![eastern, western]
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod standings_layout_tests {
+    use super::*;
+    use nhl_api::LocalizedString;
+
+    fn make_standing(abbrev: &str, division: &str, conference: &str, points: i32) -> nhl_api::Standing {
+        nhl_api::Standing {
+            conference_abbrev: Some(conference.to_string()),
+            conference_name: Some(conference.to_string()),
+            division_abbrev: division.to_string(),
+            division_name: division.to_string(),
+            team_name: LocalizedString { default: format!("Team {}", abbrev) },
+            team_common_name: LocalizedString { default: abbrev.to_string() },
+            team_abbrev: LocalizedString { default: abbrev.to_string() },
+            team_logo: String::new(),
+            wins: 0,
+            losses: 0,
+            ot_losses: 0,
+            points,
+        }
+    }
+
+    #[test]
+    fn test_league_layout_single_column_sorted_by_points() {
+        let standings = vec![
+            make_standing("TOR", "Atlantic", "Eastern", 95),
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+            make_standing("COL", "Central", "Western", 98),
+        ];
+
+        let layout = build_standings_layout(&standings, GroupBy::League, false);
+
+        assert_eq!(layout.len(), 1, "League view should have 1 column");
+        assert_eq!(layout[0], vec!["BOS", "COL", "TOR"], "Teams should be sorted by points descending");
+    }
+
+    #[test]
+    fn test_conference_layout_eastern_first() {
+        let standings = vec![
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+            make_standing("TOR", "Atlantic", "Eastern", 95),
+            make_standing("COL", "Central", "Western", 98),
+            make_standing("DAL", "Central", "Western", 97),
+        ];
+
+        let layout = build_standings_layout(&standings, GroupBy::Conference, false);
+
+        assert_eq!(layout.len(), 2, "Conference view should have 2 columns");
+        assert_eq!(layout[0], vec!["BOS", "TOR"], "Column 0 should be Eastern (sorted by points)");
+        assert_eq!(layout[1], vec!["COL", "DAL"], "Column 1 should be Western (sorted by points)");
+    }
+
+    #[test]
+    fn test_conference_layout_western_first() {
+        let standings = vec![
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+            make_standing("TOR", "Atlantic", "Eastern", 95),
+            make_standing("COL", "Central", "Western", 98),
+            make_standing("DAL", "Central", "Western", 97),
+        ];
+
+        let layout = build_standings_layout(&standings, GroupBy::Conference, true);
+
+        assert_eq!(layout.len(), 2, "Conference view should have 2 columns");
+        assert_eq!(layout[0], vec!["COL", "DAL"], "Column 0 should be Western when western_first=true");
+        assert_eq!(layout[1], vec!["BOS", "TOR"], "Column 1 should be Eastern when western_first=true");
+    }
+
+    #[test]
+    fn test_division_layout_eastern_first() {
+        let standings = vec![
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+            make_standing("TOR", "Atlantic", "Eastern", 95),
+            make_standing("NYR", "Metropolitan", "Eastern", 93),
+            make_standing("COL", "Central", "Western", 98),
+            make_standing("DAL", "Central", "Western", 97),
+            make_standing("VGK", "Pacific", "Western", 96),
+        ];
+
+        let layout = build_standings_layout(&standings, GroupBy::Division, false);
+
+        assert_eq!(layout.len(), 2, "Division view should have 2 columns");
+        // Eastern divisions: Atlantic, then Metropolitan (alphabetical)
+        assert_eq!(layout[0], vec!["BOS", "TOR", "NYR"], "Column 0 should have Eastern divisions");
+        // Western divisions: Central, then Pacific (alphabetical)
+        assert_eq!(layout[1], vec!["COL", "DAL", "VGK"], "Column 1 should have Western divisions");
+    }
+
+    #[test]
+    fn test_wildcard_layout_structure() {
+        // Create a realistic wildcard scenario
+        let standings = vec![
+            // Atlantic division
+            make_standing("BOS", "Atlantic", "Eastern", 110),
+            make_standing("TOR", "Atlantic", "Eastern", 105),
+            make_standing("TBL", "Atlantic", "Eastern", 100),
+            make_standing("BUF", "Atlantic", "Eastern", 85), // Wildcard
+            make_standing("OTT", "Atlantic", "Eastern", 80), // Wildcard
+            // Metropolitan division
+            make_standing("NYR", "Metropolitan", "Eastern", 108),
+            make_standing("CAR", "Metropolitan", "Eastern", 103),
+            make_standing("NJD", "Metropolitan", "Eastern", 98),
+            make_standing("NYI", "Metropolitan", "Eastern", 90), // Wildcard
+            make_standing("PHI", "Metropolitan", "Eastern", 82), // Wildcard
+            // Central division
+            make_standing("COL", "Central", "Western", 112),
+            make_standing("DAL", "Central", "Western", 107),
+            make_standing("WPG", "Central", "Western", 102),
+            make_standing("NSH", "Central", "Western", 88), // Wildcard
+            make_standing("MIN", "Central", "Western", 84), // Wildcard
+            // Pacific division
+            make_standing("VGK", "Pacific", "Western", 109),
+            make_standing("EDM", "Pacific", "Western", 104),
+            make_standing("LAK", "Pacific", "Western", 99),
+            make_standing("SEA", "Pacific", "Western", 87), // Wildcard
+            make_standing("CGY", "Pacific", "Western", 81), // Wildcard
+        ];
+
+        let layout = build_standings_layout(&standings, GroupBy::Wildcard, false);
+
+        assert_eq!(layout.len(), 2, "Wildcard view should have 2 columns");
+
+        // Eastern column: Atlantic top 3, Metro top 3, then wildcards sorted by points
+        assert_eq!(layout[0][0], "BOS", "First should be Atlantic #1");
+        assert_eq!(layout[0][1], "TOR", "Second should be Atlantic #2");
+        assert_eq!(layout[0][2], "TBL", "Third should be Atlantic #3");
+        assert_eq!(layout[0][3], "NYR", "Fourth should be Metro #1");
+        assert_eq!(layout[0][4], "CAR", "Fifth should be Metro #2");
+        assert_eq!(layout[0][5], "NJD", "Sixth should be Metro #3");
+        // Wildcards: NYI(90), BUF(85), PHI(82), OTT(80)
+        assert_eq!(layout[0][6], "NYI", "First wildcard should be NYI (90 pts)");
+        assert_eq!(layout[0][7], "BUF", "Second wildcard should be BUF (85 pts)");
+
+        // Western column: Central top 3, Pacific top 3, then wildcards sorted by points
+        assert_eq!(layout[1][0], "COL", "First should be Central #1");
+        assert_eq!(layout[1][3], "VGK", "Fourth should be Pacific #1");
+        // Wildcards: NSH(88), SEA(87), MIN(84), CGY(81)
+        assert_eq!(layout[1][6], "NSH", "First wildcard should be NSH (88 pts)");
+        assert_eq!(layout[1][7], "SEA", "Second wildcard should be SEA (87 pts)");
+    }
+
+    #[test]
+    fn test_lookup_team_at_position() {
+        let standings = vec![
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+            make_standing("TOR", "Atlantic", "Eastern", 95),
+            make_standing("COL", "Central", "Western", 98),
+        ];
+
+        let layout = build_standings_layout(&standings, GroupBy::League, false);
+
+        // Test successful lookup
+        assert_eq!(layout.get(0).and_then(|col| col.get(0)), Some(&"BOS".to_string()));
+        assert_eq!(layout.get(0).and_then(|col| col.get(1)), Some(&"COL".to_string()));
+        assert_eq!(layout.get(0).and_then(|col| col.get(2)), Some(&"TOR".to_string()));
+
+        // Test out of bounds
+        assert_eq!(layout.get(0).and_then(|col| col.get(3)), None, "Row 3 should be out of bounds");
+        assert_eq!(layout.get(1).and_then(|col| col.get(0)), None, "Column 1 should be out of bounds");
+    }
+
+    #[test]
+    fn test_select_team_pushes_panel() {
+        use super::super::action::{Panel, StandingsAction};
+
+        // Setup state with standings data
+        let mut state = AppState::default();
+        state.data.standings = Some(vec![
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+            make_standing("TOR", "Atlantic", "Eastern", 95),
+            make_standing("COL", "Central", "Western", 98),
+        ]);
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 1; // COL (second in sorted order)
+        state.ui.standings.selected_column = 0;
+
+        // Initially no panels
+        assert_eq!(state.navigation.panel_stack.len(), 0);
+
+        // Dispatch SelectTeam action
+        let (new_state, _effect) = reduce_standings(state, StandingsAction::SelectTeam);
+
+        // Should have pushed a TeamDetail panel
+        assert_eq!(new_state.navigation.panel_stack.len(), 1);
+
+        let panel = &new_state.navigation.panel_stack[0].panel;
+        match panel {
+            Panel::TeamDetail { abbrev } => {
+                assert_eq!(abbrev, "COL", "Should push panel for COL (row 1 in sorted standings)");
+            }
+            _ => panic!("Expected TeamDetail panel, got {:?}", panel),
+        }
+    }
+
+    #[test]
+    fn test_select_team_with_no_standings_does_nothing() {
+        use super::super::action::StandingsAction;
+
+        let mut state = AppState::default();
+        state.data.standings = None; // No standings data
+        state.ui.standings.selected_row = 0;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _effect) = reduce_standings(state, StandingsAction::SelectTeam);
+
+        // Should not push any panel
+        assert_eq!(new_state.navigation.panel_stack.len(), 0);
+    }
+
+    #[test]
+    fn test_select_team_out_of_bounds_does_nothing() {
+        use super::super::action::StandingsAction;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(vec![
+            make_standing("BOS", "Atlantic", "Eastern", 100),
+        ]);
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 5; // Out of bounds
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _effect) = reduce_standings(state, StandingsAction::SelectTeam);
+
+        // Should not push any panel
+        assert_eq!(new_state.navigation.panel_stack.len(), 0);
     }
 }

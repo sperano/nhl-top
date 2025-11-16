@@ -7,18 +7,16 @@ mod common;
 mod scores;
 mod standings;
 mod settings;
-mod app;
 pub mod navigation;
 pub mod widgets;
 mod context;
-pub mod command_palette;
 pub mod framework;
 pub mod components;
 
 #[cfg(test)]
 pub mod testing;
 
-pub use context::{NavigationContextProvider, BreadcrumbProvider};
+//pub use context::{NavigationContextProvider, BreadcrumbProvider};
 
 use std::io;
 use std::sync::Arc;
@@ -101,12 +99,18 @@ pub async fn run(
 
     // Main loop
     loop {
+        tracing::trace!("LOOP: Start of main loop iteration");
+
         // Process any actions from effects FIRST (so data loads trigger re-render)
         let actions_processed = runtime.process_actions();
+        tracing::trace!("LOOP: Processed {} actions", actions_processed);
 
         // Render
+        tracing::trace!("LOOP: Starting terminal.draw()");
         terminal.draw(|f| {
+            tracing::trace!("DRAW: Inside terminal.draw callback");
             let area = f.size();
+            tracing::trace!("DRAW: Got terminal area: {:?}", area);
 
             // Update boxes_per_row for game grid navigation
             // GameBox dimensions: 37 wide + 2 margin = 39 per box
@@ -116,12 +120,16 @@ pub async fn run(
 
             // Dispatch action to update boxes_per_row if it changed
             let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
+            tracing::trace!("DRAW: boxes_per_row check: current={}, calculated={}", current_boxes_per_row, boxes_per_row);
             if boxes_per_row != current_boxes_per_row {
+                tracing::trace!("DRAW: Dispatching UpdateBoxesPerRow");
                 runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(boxes_per_row)));
             }
 
+            tracing::trace!("DRAW: About to call runtime.build()");
             // Build virtual tree from current state
             let element = runtime.build();
+            tracing::trace!("DRAW: runtime.build() completed");
 
             // Render virtual tree to ratatui buffer
             let config = &runtime.state().system.config.display;
@@ -183,9 +191,16 @@ pub async fn run(
                 // Dispatch action if we have one
                 if let Some(act) = action {
                     runtime.dispatch(act);
+
+                    // Trigger immediate re-render to show state changes
+                    if !should_quit {
+                        tracing::debug!("ACTION: Continuing loop for immediate re-render");
+                        continue;
+                    }
                 }
 
                 if should_quit {
+                    tracing::debug!("ACTION: Quitting application");
                     break;
                 }
             }

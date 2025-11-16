@@ -73,6 +73,25 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
         return None;
     }
 
+    // Panel navigation - handle Up/Down/Enter when a panel is open
+    if !state.navigation.panel_stack.is_empty() {
+        match key.code {
+            KeyCode::Up => {
+                debug!("KEY: Up pressed in panel - moving selection up");
+                return Some(Action::PanelSelectPrevious);
+            }
+            KeyCode::Down => {
+                debug!("KEY: Down pressed in panel - moving selection down");
+                return Some(Action::PanelSelectNext);
+            }
+            KeyCode::Enter => {
+                debug!("KEY: Enter pressed in panel - selecting item");
+                return Some(Action::PanelSelectItem);
+            }
+            _ => {}
+        }
+    }
+
     // Number keys for direct tab switching
     match key.code {
         KeyCode::Char('1') => return Some(Action::NavigateTab(Tab::Scores)),
@@ -301,6 +320,7 @@ mod tests {
         state.navigation.panel_stack.push(super::super::state::PanelState {
             panel: super::super::action::Panel::Boxscore { game_id: 123 },
             scroll_offset: 0,
+            selected_index: None,
         });
 
         let action = key_to_action(make_key(KeyCode::Esc), &state);

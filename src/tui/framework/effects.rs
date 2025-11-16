@@ -6,6 +6,9 @@ use super::action::Action;
 use super::component::Effect;
 use super::state::{AppState};
 
+/// Regular season game type identifier
+const REGULAR_SEASON: i32 = 2;
+
 /// Effect handler for data fetching operations
 ///
 /// This handles all async data fetching from the NHL API.
@@ -70,14 +73,42 @@ impl DataEffects {
         }))
     }
 
-    /// Fetch team roster for a specific team
-    pub fn fetch_team_roster(&self, team_abbrev: String) -> Effect {
+    /// Fetch team roster stats for a specific team (current season, regular season)
+    ///
+    /// This method dynamically determines the current season by fetching available seasons
+    /// and selecting the most recent one that has regular season data.
+    pub fn fetch_team_roster_stats(&self, team_abbrev: String) -> Effect {
+        let client = self.client.clone();
         let abbrev = team_abbrev.clone();
         Effect::Async(Box::pin(async move {
-            // TODO: Implement roster fetching when available in nhl_api
-            // For now, return a placeholder
-            let result = Ok(super::action::Roster { team_abbrev });
-            Action::TeamRosterLoaded(abbrev, result)
+            // First, get available seasons for this team
+            let seasons_result = client.club_stats_season(&abbrev).await;
+
+            let result = match seasons_result {
+                Ok(seasons) => {
+                    // Find the most recent season that has regular season data (game_type = 2)
+                    let current_season = seasons
+                        .iter()
+                        .filter(|s| s.game_types.contains(&REGULAR_SEASON))
+                        .max_by_key(|s| s.season);
+
+                    match current_season {
+                        Some(season_info) => {
+                            // Fetch stats for the current season
+                            client.club_stats(&abbrev, season_info.season, REGULAR_SEASON).await
+                        }
+                        None => {
+                            Err(nhl_api::NHLApiError::ApiError {
+                                message: "No regular season data available for team".to_string(),
+                                status_code: 404,
+                            })
+                        }
+                    }
+                }
+                Err(e) => Err(e),
+            };
+
+            Action::TeamRosterStatsLoaded(team_abbrev, result.map_err(|e| e.to_string()))
         }))
     }
 

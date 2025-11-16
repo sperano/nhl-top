@@ -2,6 +2,7 @@ pub mod action;
 pub mod keys;
 pub mod component;
 pub mod effects;
+pub mod navigation;
 pub mod reducer;
 pub mod renderer;
 pub mod runtime;

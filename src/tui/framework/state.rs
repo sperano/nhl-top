@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 
-use nhl_api::{Boxscore, DailySchedule, GameDate, GameMatchup, Standing};
+use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, Standing};
 
 use crate::commands::scores_format::PeriodScores;
 use crate::commands::standings::GroupBy;
 use crate::config::Config;
 
-use super::action::{Panel, PlayerStats, Roster, Tab};
+use super::action::{Panel, PlayerStats, Tab};
 
 /// Root application state - single source of truth
 ///
@@ -62,6 +62,9 @@ impl Default for NavigationState {
 pub struct PanelState {
     pub panel: Panel,
     pub scroll_offset: usize,
+    /// Selected item index within the panel (None = no selection)
+    /// Used for navigating lists (players, games, etc.) within panels
+    pub selected_index: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +75,7 @@ pub struct DataState {
     pub game_info: HashMap<i64, GameMatchup>,
     pub period_scores: HashMap<i64, PeriodScores>,
     pub boxscores: HashMap<i64, Boxscore>,
-    pub team_roster: HashMap<String, Roster>,
+    pub team_roster_stats: HashMap<String, ClubStats>,
     pub player_stats: HashMap<i64, PlayerStats>,
 
     // Loading states
@@ -90,7 +93,7 @@ impl Default for DataState {
             game_info: HashMap::new(),
             period_scores: HashMap::new(),
             boxscores: HashMap::new(),
-            team_roster: HashMap::new(),
+            team_roster_stats: HashMap::new(),
             player_stats: HashMap::new(),
             loading: HashSet::new(),
             errors: HashMap::new(),
@@ -104,7 +107,7 @@ pub enum LoadingKey {
     Schedule(String), // GameDate formatted as string
     GameDetails(i64),
     Boxscore(i64),
-    TeamRoster(String),
+    TeamRosterStats(String), // Team abbreviation
     PlayerStats(i64),
 }
 
@@ -153,6 +156,9 @@ pub struct StandingsUiState {
     pub selected_column: usize,
     pub selected_row: usize,
     pub scroll_offset: usize,
+    /// Cached layout: layout[column][row] = team_abbrev
+    /// Rebuilt when standings data changes or view changes
+    pub layout: Vec<Vec<String>>,
 }
 
 impl Default for StandingsUiState {
@@ -163,6 +169,7 @@ impl Default for StandingsUiState {
             selected_column: 0,
             selected_row: 0,
             scroll_offset: 0,
+            layout: Vec::new(),
         }
     }
 }
