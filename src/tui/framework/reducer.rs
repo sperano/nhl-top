@@ -449,10 +449,11 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                         if let Some(selected_index) = panel_state.selected_index {
                             if let Some(player) = state.data.player_data.get(player_id) {
                                 if let Some(seasons) = &player.season_totals {
-                                    // Filter to NHL regular season only
-                                    let nhl_seasons: Vec<_> = seasons.iter()
+                                    // Filter to NHL regular season only and sort by season descending (latest first)
+                                    let mut nhl_seasons: Vec<_> = seasons.iter()
                                         .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
                                         .collect();
+                                    nhl_seasons.sort_by(|a, b| b.season.cmp(&a.season));
 
                                     if let Some(season) = nhl_seasons.get(selected_index) {
                                         // Extract team abbreviation from common name
