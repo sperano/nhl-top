@@ -193,26 +193,27 @@ impl RenderableWidget for Breadcrumb {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     #[test]
     fn test_breadcrumb_empty() {
         let widget = Breadcrumb::new(vec![]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "                                                                                ",
-        ], 80);
+            "",
+        ]);
     }
 
     #[test]
     fn test_breadcrumb_single_item() {
         let widget = Breadcrumb::new(vec!["Standings".to_string()]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "▸ Standings                                                                    ",
-        ], 80);
+            "▸ Standings",
+        ]);
     }
 
     #[test]
@@ -222,11 +223,11 @@ mod tests {
             "Division".to_string(),
             "Maple Leafs".to_string(),
         ]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "▸ Standings ▸ Division ▸ Maple Leafs                                            ",
-        ], 80);
+            "▸ Standings ▸ Division ▸ Maple Leafs",
+        ]);
     }
 
     #[test]
@@ -237,11 +238,11 @@ mod tests {
         ])
         .with_separator(" > ");
 
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "▸ A > B                                                                         ",
-        ], 80);
+            "▸ A > B",
+        ]);
     }
 
     #[test]
@@ -249,11 +250,11 @@ mod tests {
         let widget = Breadcrumb::new(vec!["Standings".to_string()])
             .with_icon(None);
 
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "Standings                                                                       ",
-        ], 80);
+            "Standings",
+        ]);
     }
 
     #[test]
@@ -261,11 +262,11 @@ mod tests {
         let widget = Breadcrumb::new(vec!["Home".to_string()])
             .with_icon(Some("🏠 ".to_string()));
 
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "🏠 Home                                                                         ",
-        ], 80);
+            "🏠 Home",
+        ]);
     }
 
     #[test]
@@ -280,7 +281,7 @@ mod tests {
 
         assert_buffer(&buf, &[
             "▸ ... ▸ Last",
-        ], 20);
+        ]);
     }
 
     #[test]
@@ -316,7 +317,7 @@ mod tests {
         let buf = render_widget(&widget, 2, 1);
         assert_buffer(&buf, &[
             "",
-        ], 2);
+        ]);
     }
 
     #[test]

@@ -168,6 +168,7 @@ impl<'a> RenderableWidget for CareerStatsTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
     use nhl_api::LocalizedString;
 
@@ -205,10 +206,10 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Season     Team                   GP    G    A   PTS      ",
-            "  ────────────────────────────────────────────────────      ",
-            "                                                            ",
-        ], 60);
+            "  Season     Team                   GP    G    A   PTS",
+            "  ────────────────────────────────────────────────────",
+            "",
+        ]);
     }
 
     #[test]
@@ -224,12 +225,12 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Season     Team                   GP    G    A   PTS      ",
-            "  ────────────────────────────────────────────────────      ",
-            "  2023-2024  Toronto Maple Leafs    81   69   38   107      ",
-            "  2022-2023  Toronto Maple Leafs    78   40   46    86      ",
-            "                                                            ",
-        ], 60);
+            "  Season     Team                   GP    G    A   PTS",
+            "  ────────────────────────────────────────────────────",
+            "  2023-2024  Toronto Maple Leafs    81   69   38   107",
+            "  2022-2023  Toronto Maple Leafs    78   40   46    86",
+            "",
+        ]);
     }
 
     #[test]
@@ -250,14 +251,14 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  NHL Career Statistics                                     ",
-            "  ═════════════════════                                     ",
-            "  Season     Team                   GP    G    A   PTS      ",
-            "  ────────────────────────────────────────────────────      ",
-            "  2023-2024  Toronto Maple Leafs    81   69   38   107      ",
-            "                                                            ",
-            "                                                            ",
-        ], 60);
+            "  NHL Career Statistics",
+            "  ═════════════════════",
+            "  Season     Team                   GP    G    A   PTS",
+            "  ────────────────────────────────────────────────────",
+            "  2023-2024  Toronto Maple Leafs    81   69   38   107",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -274,13 +275,13 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Season     Team                   GP    G    A   PTS      ",
-            "  ────────────────────────────────────────────────────      ",
-            "  2024-2025  Toronto Maple Leafs    30   25   20    45      ",
-            "  2023-2024  Toronto Maple Leafs    81   69   38   107      ",
-            "  2022-2023  Toronto Maple Leafs    78   40   46    86      ",
-            "                                                            ",
-        ], 60);
+            "  Season     Team                   GP    G    A   PTS",
+            "  ────────────────────────────────────────────────────",
+            "  2024-2025  Toronto Maple Leafs    30   25   20    45",
+            "  2023-2024  Toronto Maple Leafs    81   69   38   107",
+            "  2022-2023  Toronto Maple Leafs    78   40   46    86",
+            "",
+        ]);
     }
 
     #[test]
@@ -330,11 +331,11 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Season     Team                   GP    G    A   PTS      ",
-            "  ────────────────────────────────────────────────────      ",
-            "  2023-2024  Team A                 82   50   50   100      ",
-            "                                                            ",
-        ], 60);
+            "  Season     Team                   GP    G    A   PTS",
+            "  ────────────────────────────────────────────────────",
+            "  2023-2024  Team A                 82   50   50   100",
+            "",
+        ]);
     }
 
     #[test]
@@ -351,10 +352,10 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Season     Team                   GP    G    A   PTS      ",
-            "  ────────────────────────────────────────────────────      ",
-            "  2023-2024  Team A                 10    0    0     0      ",
-            "                                                            ",
-        ], 60);
+            "  Season     Team                   GP    G    A   PTS",
+            "  ────────────────────────────────────────────────────",
+            "  2023-2024  Team A                 10    0    0     0",
+            "",
+        ]);
     }
 }

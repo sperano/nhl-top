@@ -3,8 +3,8 @@ use crate::tui::framework::state::{AppState, LoadingKey};
 
 use super::{
     boxscore_panel::BoxscorePanelProps, scores_tab::ScoresTabProps,
-    standings_tab::StandingsTabProps, BoxscorePanel, ScoresTab, SettingsTab, StandingsTab,
-    StatusBar, TabbedPanel, TabbedPanelProps, TabItem,
+    settings_tab::SettingsTabProps, standings_tab::StandingsTabProps, BoxscorePanel, ScoresTab,
+    SettingsTab, StandingsTab, StatusBar, TabbedPanel, TabbedPanelProps, TabItem,
 };
 
 /// Root App component
@@ -115,19 +115,27 @@ impl App {
     fn render_standings_tab(&self, state: &AppState) -> Element {
         let props = StandingsTabProps {
             view: state.ui.standings.view.clone(),
-            team_mode: state.ui.standings.team_mode,
+            browse_mode: state.ui.standings.browse_mode,
             selected_column: state.ui.standings.selected_column,
             selected_row: state.ui.standings.selected_row,
             standings: state.data.standings.clone(),
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,
+            config: state.system.config.clone(),
         };
         StandingsTab.view(&props, &())
     }
 
     /// Render Settings tab content
-    fn render_settings_tab(&self, _state: &AppState) -> Element {
-        SettingsTab.view(&(), &())
+    fn render_settings_tab(&self, state: &AppState) -> Element {
+        let props = SettingsTabProps {
+            config: state.system.config.clone(),
+            selected_category: state.ui.settings.selected_category,
+            selected_setting_index: state.ui.settings.selected_setting_index,
+            settings_mode: state.ui.settings.settings_mode,
+            focused: state.navigation.content_focused,
+        };
+        SettingsTab.view(&props, &())
     }
 }
 

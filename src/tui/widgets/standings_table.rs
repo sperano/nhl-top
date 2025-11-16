@@ -204,6 +204,7 @@ impl<'a> RenderableWidget for StandingsTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     fn create_test_team(name: &str, _gp: i32, w: i32, l: i32, ot: i32, pts: i32) -> nhl_api::Standing {
@@ -240,7 +241,7 @@ mod tests {
         assert_buffer(&buf, &[
             "  Team                       GP   W   L  OT  PTS",
             "  ──────────────────────────────────────────────",
-        ], 48);
+        ]);
     }
 
     #[test]
@@ -262,7 +263,7 @@ mod tests {
             "  Toronto Maple Leafs        10   6   3   1   13",
             "  Montreal Canadiens         10   5   4   1   11",
             "  Boston Bruins              10   4   5   1    9",
-        ], 48);
+        ]);
     }
 
     #[test]
@@ -284,13 +285,13 @@ mod tests {
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
         assert_buffer(&buf, &[
-            "  Atlantic Division                             ",
-            "  ═════════════════                             ",
+            "  Atlantic Division",
+            "  ═════════════════",
             "  Team                       GP   W   L  OT  PTS",
             "  ──────────────────────────────────────────────",
             "  Toronto Maple Leafs        10   6   3   1   13",
-            "                                                ",
-        ], 48);
+            "",
+        ]);
     }
 
     #[test]
@@ -312,7 +313,7 @@ mod tests {
             "  Toronto Maple Leafs        10   6   3   1   13",
             "  Montreal Canadiens         10   5   4   1   11",
             "  Boston Bruins              10   4   5   1    9",
-        ], 48);
+        ]);
     }
 
     #[test]
@@ -335,7 +336,7 @@ mod tests {
             "  Montreal Canadiens         10   5   4   1   11",
             "  ──────────────────────────────────────────────",
             "  Boston Bruins              10   4   5   1    9",
-        ], 48);
+        ]);
     }
 
     #[test]

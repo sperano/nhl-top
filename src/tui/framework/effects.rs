@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_fetch_standings_returns_async_effect() {
-        let client = Arc::new(Client::new().unwrap());
+        let client = crate::tui::testing::create_client();
         let effects = DataEffects::new(client);
 
         let effect = effects.fetch_standings();
@@ -133,7 +133,7 @@ mod tests {
 
     #[test]
     fn test_fetch_schedule_returns_async_effect() {
-        let client = Arc::new(Client::new().unwrap());
+        let client = crate::tui::testing::create_client();
         let effects = DataEffects::new(client);
 
         let date = GameDate::default();
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_fetch_game_details_returns_async_effect() {
-        let client = Arc::new(Client::new().unwrap());
+        let client = crate::tui::testing::create_client();
         let effects = DataEffects::new(client);
 
         let effect = effects.fetch_game_details(2024020001);
@@ -156,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_handle_refresh_returns_batch_effect() {
-        let client = Arc::new(Client::new().unwrap());
+        let client = crate::tui::testing::create_client();
         let effects = DataEffects::new(client);
         let state = create_test_state();
 
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_handle_refresh_includes_standings_and_schedule() {
-        let client = Arc::new(Client::new().unwrap());
+        let client = crate::tui::testing::create_client();
         let effects = DataEffects::new(client);
         let state = create_test_state();
 

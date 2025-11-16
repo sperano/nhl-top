@@ -24,8 +24,6 @@ target
 # Added by cargo
 
 /target
-CLAUDE.md
-.claude
 nhl.log
 tarpaulin-report.html
 .prompts

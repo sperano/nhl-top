@@ -152,6 +152,7 @@ impl<'a> RenderableWidget for GameSkaterStatsTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
     use nhl_api::LocalizedString;
 
@@ -196,11 +197,11 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Forwards                                              ",
-            "──────────────                                              ",
-            "#   Name                 Pos    G   A   P  +/-    TOI       ",
-            "                                                            ",
-        ], 60);
+            "TOR - Forwards",
+            "──────────────",
+            "#   Name                 Pos    G   A   P  +/-    TOI",
+            "",
+        ]);
     }
 
     #[test]
@@ -217,14 +218,14 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Forwards                                              ",
-            "──────────────                                              ",
-            "#   Name                 Pos    G   A   P  +/-    TOI       ",
-            "34  Auston Matthews      C      2   1   3    1  20:15       ",
-            "16  Mitch Marner         RW     0   3   3    2  19:42       ",
-            "88  William Nylander     RW     1   1   2    0  18:30       ",
-            "                                                            ",
-        ], 60);
+            "TOR - Forwards",
+            "──────────────",
+            "#   Name                 Pos    G   A   P  +/-    TOI",
+            "34  Auston Matthews      C      2   1   3    1  20:15",
+            "16  Mitch Marner         RW     0   3   3    2  19:42",
+            "88  William Nylander     RW     1   1   2    0  18:30",
+            "",
+        ]);
     }
 
     #[test]
@@ -240,13 +241,13 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Defense                                               ",
-            "─────────────                                               ",
-            "#   Name                 Pos    G   A   P  +/-    TOI       ",
-            "44  Morgan Rielly        D      0   2   2   -1  22:45       ",
-            "22  Jake McCabe          D      0   0   0    0  19:15       ",
-            "                                                            ",
-        ], 60);
+            "TOR - Defense",
+            "─────────────",
+            "#   Name                 Pos    G   A   P  +/-    TOI",
+            "44  Morgan Rielly        D      0   2   2   -1  22:45",
+            "22  Jake McCabe          D      0   0   0    0  19:15",
+            "",
+        ]);
     }
 
     #[test]
@@ -290,11 +291,11 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Forwards                                              ",
-            "──────────────                                              ",
-            "#   Name                 Pos    G   A   P  +/-    TOI       ",
-            "34  Test Player          C      2   3   5   -2  20:15       ",
-            "                                                            ",
-        ], 60);
+            "TOR - Forwards",
+            "──────────────",
+            "#   Name                 Pos    G   A   P  +/-    TOI",
+            "34  Test Player          C      2   3   5   -2  20:15",
+            "",
+        ]);
     }
 }

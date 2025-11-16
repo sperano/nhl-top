@@ -245,6 +245,7 @@ mod tests {
     use crate::config::DisplayConfig;
     use crate::formatting::BoxChars;
     use ratatui::{buffer::Buffer, layout::Rect, style::Color};
+    use crate::tui::testing::{RENDER_WIDTH, assert_buffer};
 
     // Helper functions for testing framework widgets
 
@@ -309,31 +310,6 @@ mod tests {
         }
 
         result
-    }
-
-    fn assert_buffer(buf: &Buffer, expected: &[&str], width: usize) {
-        let area = buf.area();
-
-        assert_eq!(
-            area.width as usize, width,
-            "Buffer width mismatch: expected {}, got {}",
-            width, area.width
-        );
-
-        assert_eq!(
-            area.height as usize, expected.len(),
-            "Buffer height mismatch: expected {}, got {}",
-            expected.len(), area.height
-        );
-
-        for (y, expected_line) in expected.iter().enumerate() {
-            let actual_line = buffer_line(buf, y);
-            assert_eq!(
-                &actual_line, expected_line,
-                "Line {} mismatch:\nExpected: '{}'\nActual:   '{}'",
-                y, expected_line, actual_line
-            );
-        }
     }
 
     #[test]
@@ -467,12 +443,12 @@ mod tests {
             focused: true,
         };
 
-        let buf = render_widget(&widget, 80, 2);
+        let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
         assert_buffer(&buf, &[
-            "Home │ Profile │ Settings                                                       ",
+            "Home │ Profile │ Settings",
             "─────┴─────────┴────────────────────────────────────────────────────────────────",
-        ], 80);
+        ]);
     }
 
     #[test]
@@ -495,12 +471,12 @@ mod tests {
             focused: true,
         };
 
-        let buf = render_widget(&widget, 60, 2);
+        let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
         assert_buffer(&buf, &[
-            "Tab 1 │ Tab 2                                               ",
-            "──────┴─────────────────────────────────────────────────────",
-        ], 60);
+            "Tab 1 │ Tab 2",
+            "──────┴─────────────────────────────────────────────────────────────────────────",
+        ]);
     }
 
     #[test]
@@ -517,12 +493,11 @@ mod tests {
             focused: true,
         };
 
-        let buf = render_widget(&widget, 50, 2);
-
+        let buf = render_widget(&widget, RENDER_WIDTH, 2);
         assert_buffer(&buf, &[
-            "Only Tab                                          ",
-            "──────────────────────────────────────────────────",
-        ], 50);
+            "Only Tab",
+            "────────────────────────────────────────────────────────────────────────────────",
+        ]);
     }
 
     #[test]
@@ -532,7 +507,7 @@ mod tests {
             focused: true,
         };
 
-        let buf = render_widget(&widget, 40, 2);
+        let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
         // Empty widget should render nothing
         let line1 = buffer_line(&buf, 0);
@@ -562,12 +537,12 @@ mod tests {
         };
 
         let config = test_config_ascii();
-        let buf = render_widget_with_config(&widget, 50, 2, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, 2, &config);
 
         assert_buffer(&buf, &[
-            "Tab A | Tab B                                     ",
-            "--------------------------------------------------",
-        ], 50);
+            "Tab A | Tab B",
+            "--------------------------------------------------------------------------------",
+        ]);
     }
 
     #[test]
@@ -597,7 +572,7 @@ mod tests {
         };
 
         let config = test_config();
-        let buf = render_widget_with_config(&widget, 80, 2, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, 2, &config);
 
         let line0 = buffer_line(&buf, 0);
         let line1 = buffer_line(&buf, 1);
@@ -635,7 +610,7 @@ mod tests {
             focused: true,
         };
 
-        let buf = render_widget(&widget, 40, 0);
+        let buf = render_widget(&widget, RENDER_WIDTH, 0);
 
         // Should not panic with zero height
         assert_eq!(buf.area.height, 0);
@@ -655,7 +630,7 @@ mod tests {
             focused: true,
         };
 
-        let buf = render_widget(&widget, 40, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         // Should not render anything if height < 2
         let line = buffer_line(&buf, 0);
@@ -684,7 +659,7 @@ mod tests {
             focused: false,
         };
 
-        let buf = render_widget(&widget, 60, 2);
+        let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
         // When unfocused, all text should use DarkGray
         // Check that the separators and inactive tabs use DarkGray
@@ -723,7 +698,7 @@ mod tests {
             focused: false,
         };
 
-        let buf = render_widget(&widget, 40, 2);
+        let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
         // Check separator line uses DarkGray
         let horizontal_cell = &buf[(0, 1)]; // First horizontal line character
@@ -772,8 +747,8 @@ mod tests {
             focused: false,
         };
 
-        let buf_focused = render_widget(&widget_focused, 40, 2);
-        let buf_unfocused = render_widget(&widget_unfocused, 40, 2);
+        let buf_focused = render_widget(&widget_focused, RENDER_WIDTH, 2);
+        let buf_unfocused = render_widget(&widget_unfocused, RENDER_WIDTH, 2);
 
         // "Disabled" starts at position 10 (after "Active │ ")
         let disabled_cell_focused = &buf_focused[(10, 0)];

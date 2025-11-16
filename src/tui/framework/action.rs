@@ -44,6 +44,7 @@ pub enum Action {
     // Component-specific actions (nested)
     ScoresAction(ScoresAction),
     StandingsAction(StandingsAction),
+    SettingsAction(SettingsAction),
 
     // System actions
     Quit,
@@ -93,12 +94,25 @@ pub enum StandingsAction {
     CycleViewRight,
     SelectTeam,
     SelectTeamByPosition(usize, usize), // column, row
-    EnterTeamMode,
-    ExitTeamMode,
+    EnterBrowseMode,
+    ExitBrowseMode,
     MoveSelectionUp,
     MoveSelectionDown,
     MoveSelectionLeft,
     MoveSelectionRight,
+}
+
+/// Tab-specific actions for Settings
+#[derive(Debug, Clone)]
+pub enum SettingsAction {
+    NavigateCategoryLeft,
+    NavigateCategoryRight,
+    EnterSettingsMode,
+    ExitSettingsMode,
+    MoveSelectionUp,
+    MoveSelectionDown,
+    ToggleBoolean(String), // Setting key to toggle
+    UpdateConfig(Box<crate::config::Config>),
 }
 
 // Placeholder types for future implementation

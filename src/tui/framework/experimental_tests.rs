@@ -6,12 +6,12 @@
 mod tests {
     use crate::tui::framework::{Action, Runtime, DataEffects, AppState};
     use crate::tui::framework::keys::key_to_action;
+    use crate::tui::testing::create_client;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use nhl_api::Client;
     use std::sync::Arc;
 
     fn create_test_runtime() -> Runtime {
-        let client = Arc::new(Client::new().unwrap());
+        let client = create_client();
         let data_effects = Arc::new(DataEffects::new(client));
         Runtime::new(AppState::default(), data_effects)
     }

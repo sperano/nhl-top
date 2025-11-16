@@ -6,6 +6,7 @@ pub mod reducer;
 pub mod renderer;
 pub mod runtime;
 pub mod state;
+pub mod table;
 
 #[cfg(test)]
 mod integration_tests;
@@ -20,3 +21,4 @@ pub use reducer::reduce;
 pub use renderer::Renderer;
 pub use runtime::Runtime;
 pub use state::AppState;
+pub use table::{Alignment, CellValue, ColumnDef};

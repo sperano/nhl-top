@@ -7,6 +7,7 @@ pub mod standings_tab;
 pub mod settings_tab;
 pub mod boxscore_panel;
 pub mod tabbed_panel;
+pub mod table;
 
 pub use app::App;
 pub use status_bar::StatusBar;
@@ -15,3 +16,4 @@ pub use standings_tab::StandingsTab;
 pub use settings_tab::SettingsTab;
 pub use boxscore_panel::{BoxscorePanel, BoxscorePanelProps};
 pub use tabbed_panel::{TabbedPanel, TabbedPanelProps, TabItem};
+pub use table::{Table, TableProps, TableWidget};

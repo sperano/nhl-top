@@ -157,6 +157,7 @@ impl<'a> RenderableWidget for GoalieStatsTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     fn create_test_goalie(name: &str, gp: i32, gaa: &str, sv_pct: &str, so: i32) -> GoalieStat {
@@ -180,8 +181,8 @@ mod tests {
         assert_buffer(&buf, &[
             "  Goaltender                  GP    GAA    SV%     S",
             "  ──────────────────────────────────────────────────",
-            "                                                    ",
-        ], 52);
+            "",
+        ]);
     }
 
     #[test]
@@ -198,13 +199,13 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Goaltender                  GP    GAA    SV%     SO       ",
-            "  ──────────────────────────────────────────────────        ",
-            "  Ilya Samsonov               35   2.89   .903      2       ",
-            "  Joseph Woll                 23   2.52   .915      1       ",
-            "  Martin Jones                10   3.45   .881      0       ",
-            "                                                            ",
-        ], 60);
+            "  Goaltender                  GP    GAA    SV%     SO",
+            "  ──────────────────────────────────────────────────",
+            "  Ilya Samsonov               35   2.89   .903      2",
+            "  Joseph Woll                 23   2.52   .915      1",
+            "  Martin Jones                10   3.45   .881      0",
+            "",
+        ]);
     }
 
     #[test]
@@ -225,14 +226,14 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Goaltender Statistics                                     ",
-            "  ═════════════════════                                     ",
-            "  Goaltender                  GP    GAA    SV%     SO       ",
-            "  ──────────────────────────────────────────────────        ",
-            "  Ilya Samsonov               35   2.89   .903      2       ",
-            "                                                            ",
-            "                                                            ",
-        ], 60);
+            "  Goaltender Statistics",
+            "  ═════════════════════",
+            "  Goaltender                  GP    GAA    SV%     SO",
+            "  ──────────────────────────────────────────────────",
+            "  Ilya Samsonov               35   2.89   .903      2",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -249,13 +250,13 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Goaltender                  GP    GAA    SV%     SO       ",
-            "  ──────────────────────────────────────────────────        ",
-            "  Ilya Samsonov               35   2.89   .903      2       ",
-            "  Joseph Woll                 23   2.52   .915      1       ",
-            "  Martin Jones                10   3.45   .881      0       ",
-            "                                                            ",
-        ], 60);
+            "  Goaltender                  GP    GAA    SV%     SO",
+            "  ──────────────────────────────────────────────────",
+            "  Ilya Samsonov               35   2.89   .903      2",
+            "  Joseph Woll                 23   2.52   .915      1",
+            "  Martin Jones                10   3.45   .881      0",
+            "",
+        ]);
     }
 
     #[test]
@@ -305,10 +306,10 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "  Goaltender                  GP    GAA    SV%     SO       ",
-            "  ──────────────────────────────────────────────────        ",
-            "  A                            1   2.00   .900      5       ",
-            "                                                            ",
-        ], 60);
+            "  Goaltender                  GP    GAA    SV%     SO",
+            "  ──────────────────────────────────────────────────",
+            "  A                            1   2.00   .900      5",
+            "",
+        ]);
     }
 }

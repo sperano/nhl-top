@@ -6,8 +6,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use tracing::{debug, trace};
 
-use super::action::{Action, ScoresAction, StandingsAction, Tab};
-use super::state::AppState;
+use super::action::{Action, ScoresAction, SettingsAction, StandingsAction, Tab};
+use super::state::{AppState, SettingsCategory};
 
 /// Convert a KeyEvent into an Action based on current application state
 ///
@@ -50,10 +50,16 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
             return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
         }
 
-        // Priority 3: If in team mode on Standings tab, exit to view subtabs
-        if state.ui.standings.team_mode {
-            debug!("KEY: ESC pressed in team mode - exiting to view subtabs");
-            return Some(Action::StandingsAction(StandingsAction::ExitTeamMode));
+        // Priority 3: If in browse mode on Standings tab, exit to view subtabs
+        if state.ui.standings.browse_mode {
+            debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
+            return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
+        }
+
+        // Priority 3.5: If in settings mode on Settings tab, exit to category subtabs
+        if state.ui.settings.settings_mode {
+            debug!("KEY: ESC pressed in settings mode - exiting to category subtabs");
+            return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
         }
 
         // Priority 4: If content is focused, return to tab bar
@@ -99,9 +105,19 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
             if state.ui.scores.box_selection_active {
                 // In box selection - Up navigates within grid
                 return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp));
-            } else if state.ui.standings.team_mode {
-                // In team selection - Up navigates teams
+            } else if state.ui.standings.browse_mode {
+                // In browse mode - Up navigates teams
                 return Some(Action::StandingsAction(StandingsAction::MoveSelectionUp));
+            } else if state.ui.settings.settings_mode {
+                // In settings navigation - Up navigates settings (unless at top)
+                if state.ui.settings.selected_setting_index == 0 {
+                    // At top - return to category tabs
+                    debug!("KEY: Up pressed at top of settings - returning to category tabs");
+                    return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
+                } else {
+                    // Navigate settings
+                    return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp));
+                }
             } else {
                 // Not in nested mode - Up returns to tab bar
                 debug!("KEY: Up pressed in content - returning to tab bar");
@@ -150,21 +166,78 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                 }
             }
             Tab::Standings => {
-                // On Standings tab: arrows navigate views (Division/Conference/League)
-                match key.code {
-                    KeyCode::Left => {
-                        return Some(Action::StandingsAction(StandingsAction::CycleViewLeft))
+                // On Standings tab: check if in browse mode
+                if state.ui.standings.browse_mode {
+                    // Browse mode - navigate teams and columns
+                    match key.code {
+                        KeyCode::Down => {
+                            return Some(Action::StandingsAction(StandingsAction::MoveSelectionDown))
+                        }
+                        KeyCode::Left => {
+                            // In Conference view, left/right switch between conferences
+                            return Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft))
+                        }
+                        KeyCode::Right => {
+                            return Some(Action::StandingsAction(StandingsAction::MoveSelectionRight))
+                        }
+                        KeyCode::Enter => {
+                            return Some(Action::StandingsAction(StandingsAction::SelectTeam))
+                        }
+                        _ => {}
                     }
-                    KeyCode::Right => {
-                        return Some(Action::StandingsAction(StandingsAction::CycleViewRight))
+                } else {
+                    // View selection mode - arrows navigate views (Division/Conference/League)
+                    match key.code {
+                        KeyCode::Left => {
+                            return Some(Action::StandingsAction(StandingsAction::CycleViewLeft))
+                        }
+                        KeyCode::Right => {
+                            return Some(Action::StandingsAction(StandingsAction::CycleViewRight))
+                        }
+                        KeyCode::Down => {
+                            return Some(Action::StandingsAction(StandingsAction::EnterBrowseMode))
+                        }
+                        _ => {}
                     }
-                    KeyCode::Down => {
-                        return Some(Action::StandingsAction(StandingsAction::EnterTeamMode))
+                }
+            }
+            Tab::Settings => {
+                // Check if in settings navigation mode
+                if state.ui.settings.settings_mode {
+                    // In settings navigation mode - arrows navigate settings, Enter toggles
+                    match key.code {
+                        KeyCode::Up => {
+                            return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp))
+                        }
+                        KeyCode::Down => {
+                            return Some(Action::SettingsAction(SettingsAction::MoveSelectionDown))
+                        }
+                        KeyCode::Enter => {
+                            // Get the setting key for the selected index
+                            let setting_key = get_setting_key_for_index(
+                                state.ui.settings.selected_category,
+                                state.ui.settings.selected_setting_index,
+                            );
+                            if let Some(key) = setting_key {
+                                return Some(Action::SettingsAction(SettingsAction::ToggleBoolean(key)));
+                            }
+                        }
+                        _ => {}
                     }
-                    KeyCode::Enter => {
-                        return Some(Action::StandingsAction(StandingsAction::SelectTeam))
+                } else {
+                    // In category navigation mode - arrows navigate categories, Down enters settings
+                    match key.code {
+                        KeyCode::Left => {
+                            return Some(Action::SettingsAction(SettingsAction::NavigateCategoryLeft))
+                        }
+                        KeyCode::Right => {
+                            return Some(Action::SettingsAction(SettingsAction::NavigateCategoryRight))
+                        }
+                        KeyCode::Down => {
+                            return Some(Action::SettingsAction(SettingsAction::EnterSettingsMode))
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
             _ => {
@@ -176,10 +249,33 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
     None
 }
 
+/// Get the setting key for a given category and index (for boolean toggling)
+fn get_setting_key_for_index(category: SettingsCategory, index: usize) -> Option<String> {
+    match category {
+        SettingsCategory::Logging => None, // No boolean settings in Logging
+        SettingsCategory::Display => {
+            // Display category: index 0 = use_unicode, index 4 = show_action_bar
+            match index {
+                0 => Some("use_unicode".to_string()),
+                4 => Some("show_action_bar".to_string()),
+                _ => None,
+            }
+        }
+        SettingsCategory::Data => {
+            // Data category: index 1 = western_teams_first
+            match index {
+                1 => Some("western_teams_first".to_string()),
+                _ => None,
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crate::commands::standings::GroupBy;
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
@@ -250,15 +346,103 @@ mod tests {
     }
 
     #[test]
-    fn test_esc_exits_team_mode() {
+    fn test_esc_exits_browse_mode() {
         let mut state = AppState::default();
-        state.ui.standings.team_mode = true;
+        state.ui.standings.browse_mode = true;
         state.navigation.content_focused = true;
 
         let action = key_to_action(make_key(KeyCode::Esc), &state);
         assert!(matches!(
             action,
-            Some(Action::StandingsAction(StandingsAction::ExitTeamMode))
+            Some(Action::StandingsAction(StandingsAction::ExitBrowseMode))
+        ));
+    }
+
+    #[test]
+    fn test_standings_browse_mode_down_arrow() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = true;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::MoveSelectionDown))
+        ));
+    }
+
+    #[test]
+    fn test_standings_browse_mode_up_arrow() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = true;
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::MoveSelectionUp))
+        ));
+    }
+
+    #[test]
+    fn test_standings_browse_mode_left_arrow_moves_selection() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = true;
+        state.ui.standings.view = GroupBy::Conference; // Conference view has multiple columns
+
+        let action = key_to_action(make_key(KeyCode::Left), &state);
+        // Left arrow should move selection in Conference view
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft))
+        ));
+    }
+
+    #[test]
+    fn test_standings_browse_mode_right_arrow_moves_selection() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = true;
+        state.ui.standings.view = GroupBy::Conference; // Conference view has multiple columns
+
+        let action = key_to_action(make_key(KeyCode::Right), &state);
+        // Right arrow should move selection in Conference view
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::MoveSelectionRight))
+        ));
+    }
+
+    #[test]
+    fn test_standings_view_mode_left_cycles_view() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = false;
+
+        let action = key_to_action(make_key(KeyCode::Left), &state);
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::CycleViewLeft))
+        ));
+    }
+
+    #[test]
+    fn test_standings_view_mode_down_enters_browse_mode() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = false;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::EnterBrowseMode))
         ));
     }
 }

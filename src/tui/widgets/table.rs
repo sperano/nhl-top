@@ -469,9 +469,19 @@ impl<T> super::RenderableWidget for FocusableTable<T> {
 
         // Render header if present
         if let Some(ref header_text) = self.header {
-            // TODO: Render section header
-            buf.set_string(x, y, header_text, Style::default().add_modifier(Modifier::BOLD));
-            y += 1;
+            use crate::formatting::format_header;
+
+            // Render section header with double-line separator
+            let header_formatted = format_header(header_text, true, config);
+            for line in header_formatted.lines() {
+                if y >= area.bottom() {
+                    return;
+                }
+                if !line.is_empty() {
+                    buf.set_string(x, y, line, Style::default().fg(config.division_header_fg));
+                }
+                y += 1;
+            }
             if y >= area.bottom() {
                 return;
             }
@@ -531,7 +541,8 @@ impl<T> super::RenderableWidget for FocusableTable<T> {
     }
 
     fn preferred_height(&self) -> Option<u16> {
-        let header_height = if self.header.is_some() { 1 } else { 0 };
+        // Section header renders 2 lines: text + separator
+        let header_height = if self.header.is_some() { 2 } else { 0 };
         let col_header_height = if !self.columns.is_empty() { 1 } else { 0 };
         let rows_height = self.rows.len() as u16;
         Some(header_height + col_header_height + rows_height)

@@ -72,6 +72,12 @@ impl Runtime {
         // Handle RefreshData action specially - generate data fetch effects
         let effect = if matches!(action, Action::RefreshData) {
             debug!("ACTION: RefreshData - generating fetch effects");
+
+            // First, run the reducer to update last_refresh timestamp
+            let (new_state, _reducer_effect) = reduce(self.state.clone(), action.clone());
+            self.state = new_state;
+
+            // Then generate data fetch effects
             self.data_effects.handle_refresh(&self.state)
         } else {
             // Run the reducer to get new state and any effects
@@ -250,10 +256,10 @@ impl Runtime {
 mod tests {
     use super::*;
     use crate::tui::framework::action::{ScoresAction, Tab};
-    use nhl_api::Client;
+    use crate::tui::testing::create_client;
 
     fn create_test_data_effects() -> Arc<DataEffects> {
-        let client = Arc::new(Client::new().unwrap());
+        let client = create_client();
         Arc::new(DataEffects::new(client))
     }
 

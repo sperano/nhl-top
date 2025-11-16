@@ -295,6 +295,7 @@ fn format_assists_row(goal: &nhl_api::GoalSummary, widths: &ScoringColumnWidths,
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     fn create_test_goal(
@@ -361,21 +362,21 @@ mod tests {
     #[test]
     fn test_scoring_table_empty() {
         let widget = ScoringTable::new(vec![]);
-        let buf = render_widget(&widget, 80, 10);
+        let buf = render_widget(&widget, RENDER_WIDTH, 10);
 
         // Empty scoring should render nothing
         assert_buffer(&buf, &[
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -411,14 +412,14 @@ mod tests {
 
         // Verify output matches expected format
         assert_buffer(&buf, &[
-            "1st Period                                                    ",
-            "                                                              ",
+            "1st Period",
+            "",
             "╭─────┬─────────────────────────────────┬─────┬───────┬──────╮",
             "│ OTT │ M. Amadio (4)                   │ 1-0 │ 5:42  │ Snap │",
             "│     │ S. Pinto (5), C. Giroux (7)     │ OTT │       │      │",
             "╰─────┴─────────────────────────────────┴─────┴───────┴──────╯",
-            "                                                              ",
-        ], 62);
+            "",
+        ]);
     }
 
     #[test]
@@ -433,20 +434,20 @@ mod tests {
         };
 
         let widget = ScoringTable::new(vec![period]);
-        let buf = render_widget(&widget, 80, 10);
+        let buf = render_widget(&widget, RENDER_WIDTH, 10);
 
         assert_buffer(&buf, &[
-            "1st Period                                                                      ",
-            "                                                                                ",
-            "No Goals                                                                        ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "1st Period",
+            "",
+            "No Goals",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -473,30 +474,30 @@ mod tests {
         };
 
         let widget = ScoringTable::new(vec![period1, period2]);
-        let buf = render_widget(&widget, 80, 20);
+        let buf = render_widget(&widget, RENDER_WIDTH, 20);
 
         assert_buffer(&buf, &[
-            "1st Period                                                                      ",
-            "                                                                                ",
-            "╭─────┬────────────────────┬─────┬───────┬───────╮                              ",
-            "│ BOS │ M. Geekie (10)     │ 9-1 │ 01:22 │ Poke  │                              ",
-            "│     │ A. Peeke (3)       │ BOS │       │       │                              ",
-            "╰─────┴────────────────────┴─────┴───────┴───────╯                              ",
-            "                                                                                ",
-            "2nd Period                                                                      ",
-            "                                                                                ",
-            "╭─────┬────────────────────┬─────┬───────┬───────╮                              ",
-            "│ MTL │ N. Suzuki (15)     │ 9-2 │ 12:34 │ Wrist │                              ",
-            "│     │ Unassisted         │ MTL │       │       │                              ",
-            "╰─────┴────────────────────┴─────┴───────┴───────╯                              ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "1st Period",
+            "",
+            "╭─────┬────────────────────┬─────┬───────┬───────╮",
+            "│ BOS │ M. Geekie (10)     │ 9-1 │ 01:22 │ Poke  │",
+            "│     │ A. Peeke (3)       │ BOS │       │       │",
+            "╰─────┴────────────────────┴─────┴───────┴───────╯",
+            "",
+            "2nd Period",
+            "",
+            "╭─────┬────────────────────┬─────┬───────┬───────╮",
+            "│ MTL │ N. Suzuki (15)     │ 9-2 │ 12:34 │ Wrist │",
+            "│     │ Unassisted         │ MTL │       │       │",
+            "╰─────┴────────────────────┴─────┴───────┴───────╯",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -513,20 +514,20 @@ mod tests {
         };
 
         let widget = ScoringTable::new(vec![period]);
-        let buf = render_widget(&widget, 80, 10);
+        let buf = render_widget(&widget, RENDER_WIDTH, 10);
 
         assert_buffer(&buf, &[
-            "Overtime                                                                        ",
-            "                                                                                ",
-            "╭─────┬──────────────────────┬─────┬───────┬──────╮                             ",
-            "│ TOR │ A. Matthews (30)     │ 3-2 │ 2:15  │ Snap │                             ",
-            "│     │ W. Nylander (25)     │ TOR │       │      │                             ",
-            "╰─────┴──────────────────────┴─────┴───────┴──────╯                             ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "Overtime",
+            "",
+            "╭─────┬──────────────────────┬─────┬───────┬──────╮",
+            "│ TOR │ A. Matthews (30)     │ 3-2 │ 2:15  │ Snap │",
+            "│     │ W. Nylander (25)     │ TOR │       │      │",
+            "╰─────┴──────────────────────┴─────┴───────┴──────╯",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -543,20 +544,20 @@ mod tests {
         };
 
         let widget = ScoringTable::new(vec![period]);
-        let buf = render_widget(&widget, 80, 10);
+        let buf = render_widget(&widget, RENDER_WIDTH, 10);
 
         assert_buffer(&buf, &[
-            "1st Period                                                                      ",
-            "                                                                                ",
-            "╭─────┬────────────────────┬─────┬───────┬───────╮                              ",
-            "│ MTL │ N. Suzuki (15)     │ 1-0 │ 10:00 │ Wrist │                              ",
-            "│     │ Unassisted         │ MTL │       │       │                              ",
-            "╰─────┴────────────────────┴─────┴───────┴───────╯                              ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "1st Period",
+            "",
+            "╭─────┬────────────────────┬─────┬───────┬───────╮",
+            "│ MTL │ N. Suzuki (15)     │ 1-0 │ 10:00 │ Wrist │",
+            "│     │ Unassisted         │ MTL │       │       │",
+            "╰─────┴────────────────────┴─────┴───────┴───────╯",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]

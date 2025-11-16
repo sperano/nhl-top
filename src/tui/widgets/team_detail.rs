@@ -187,6 +187,7 @@ impl<'a> RenderableWidget for TeamDetail<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
     use std::collections::HashMap;
 
@@ -206,25 +207,25 @@ mod tests {
             &club_stats,
         );
 
-        let buf = render_widget(&widget, 80, 16);
+        let buf = render_widget(&widget, RENDER_WIDTH, 16);
         assert_buffer(&buf, &[
-            "Team: Toronto Maple Leafs (TOR)                                                 ",
-            "                                                                                ",
-            "Conference: Eastern                                                             ",
-            "Division: Atlantic                                                              ",
-            "                                                                                ",
-            "Games Played: 50                                                                ",
-            "Wins: 30                                                                        ",
-            "Losses: 15                                                                      ",
-            "OT Losses: 5                                                                    ",
-            "Points: 65                                                                      ",
-            "                                                                                ",
-            "                                                                                ",
-            "  Loading players...                                                            ",
-            "                                                                                ",
-            "Press ESC to go back                                                            ",
-            "                                                                                ",
-        ], 80);
+            "Team: Toronto Maple Leafs (TOR)",
+            "",
+            "Conference: Eastern",
+            "Division: Atlantic",
+            "",
+            "Games Played: 50",
+            "Wins: 30",
+            "Losses: 15",
+            "OT Losses: 5",
+            "Points: 65",
+            "",
+            "",
+            "  Loading players...",
+            "",
+            "Press ESC to go back",
+            "",
+        ]);
     }
 
     #[test]
@@ -252,25 +253,25 @@ mod tests {
             &club_stats,
         );
 
-        let buf = render_widget(&widget, 80, 16);
+        let buf = render_widget(&widget, RENDER_WIDTH, 16);
         assert_buffer(&buf, &[
-            "Team: Toronto Maple Leafs (TOR)                                                 ",
-            "                                                                                ",
-            "Conference: Eastern                                                             ",
-            "Division: Atlantic                                                              ",
-            "                                                                                ",
-            "Games Played: 50                                                                ",
-            "Wins: 30                                                                        ",
-            "Losses: 15                                                                      ",
-            "OT Losses: 5                                                                    ",
-            "Points: 65                                                                      ",
-            "                                                                                ",
-            "                                                                                ",
-            "  No player data available                                                      ",
-            "                                                                                ",
-            "Press ESC to go back                                                            ",
-            "                                                                                ",
-        ], 80);
+            "Team: Toronto Maple Leafs (TOR)",
+            "",
+            "Conference: Eastern",
+            "Division: Atlantic",
+            "",
+            "Games Played: 50",
+            "Wins: 30",
+            "Losses: 15",
+            "OT Losses: 5",
+            "Points: 65",
+            "",
+            "",
+            "  No player data available",
+            "",
+            "Press ESC to go back",
+            "",
+        ]);
     }
 
 
@@ -290,22 +291,22 @@ mod tests {
             &club_stats,
         ).with_instructions(false);
 
-        let buf = render_widget(&widget, 80, 13);
+        let buf = render_widget(&widget, RENDER_WIDTH, 13);
         assert_buffer(&buf, &[
-            "Team: Toronto Maple Leafs (TOR)                                                 ",
-            "                                                                                ",
-            "Conference: Eastern                                                             ",
-            "Division: Atlantic                                                              ",
-            "                                                                                ",
-            "Games Played: 50                                                                ",
-            "Wins: 30                                                                        ",
-            "Losses: 15                                                                      ",
-            "OT Losses: 5                                                                    ",
-            "Points: 65                                                                      ",
-            "                                                                                ",
-            "                                                                                ",
-            "  Loading players...                                                            ",
-        ], 80);
+            "Team: Toronto Maple Leafs (TOR)",
+            "",
+            "Conference: Eastern",
+            "Division: Atlantic",
+            "",
+            "Games Played: 50",
+            "Wins: 30",
+            "Losses: 15",
+            "OT Losses: 5",
+            "Points: 65",
+            "",
+            "",
+            "  Loading players...",
+        ]);
     }
 
     #[test]

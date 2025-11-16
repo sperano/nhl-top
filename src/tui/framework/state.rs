@@ -149,7 +149,7 @@ impl Default for ScoresUiState {
 #[derive(Debug, Clone)]
 pub struct StandingsUiState {
     pub view: GroupBy,
-    pub team_mode: bool,
+    pub browse_mode: bool,
     pub selected_column: usize,
     pub selected_row: usize,
     pub scroll_offset: usize,
@@ -158,8 +158,8 @@ pub struct StandingsUiState {
 impl Default for StandingsUiState {
     fn default() -> Self {
         Self {
-            view: GroupBy::Division,
-            team_mode: false,
+            view: GroupBy::Wildcard,
+            browse_mode: false,
             selected_column: 0,
             selected_row: 0,
             scroll_offset: 0,
@@ -167,9 +167,34 @@ impl Default for StandingsUiState {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsCategory {
+    Logging,
+    Display,
+    Data,
+}
+
+impl Default for SettingsCategory {
+    fn default() -> Self {
+        Self::Logging
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SettingsUiState {
-    // Placeholder for future settings UI state
+    pub selected_category: SettingsCategory,
+    pub selected_setting_index: usize,
+    pub settings_mode: bool, // true = navigating settings, false = navigating categories
+}
+
+impl Default for SettingsUiState {
+    fn default() -> Self {
+        Self {
+            selected_category: SettingsCategory::default(),
+            selected_setting_index: 0,
+            settings_mode: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

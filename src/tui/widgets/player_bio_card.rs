@@ -162,6 +162,7 @@ impl<'a> RenderableWidget for PlayerBioCard<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
     use nhl_api::LocalizedString;
 
@@ -208,17 +209,17 @@ mod tests {
         let widget = PlayerBioCard::new(&player, None, 0);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_widget_with_config(&widget, 80, height, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, height, &config);
 
         assert_buffer(&buf, &[
-            "  Position:      C                                                              ",
-            "  Number:        #34                                                            ",
-            "  Height:        6'3\"                                                           ",
-            "  Weight:        200 lbs                                                        ",
-            "  Birthplace:    Toronto, ON, CAN                                               ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "  Position:      C",
+            "  Number:        #34",
+            "  Height:        6'3\"",
+            "  Weight:        200 lbs",
+            "  Birthplace:    Toronto, ON, CAN",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -227,19 +228,19 @@ mod tests {
         let widget = PlayerBioCard::new(&player, Some("Player Information"), 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_widget_with_config(&widget, 80, height, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, height, &config);
 
         assert_buffer(&buf, &[
-            "  Player Information                                                            ",
-            "  ──────────────────                                                            ",
-            "    Position:      D                                                            ",
-            "    Number:        #2                                                           ",
-            "    Height:        6'0\"                                                         ",
-            "    Weight:        190 lbs                                                      ",
-            "    Birthplace:    Boston, MA, USA                                              ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "  Player Information",
+            "  ──────────────────",
+            "    Position:      D",
+            "    Number:        #2",
+            "    Height:        6'0\"",
+            "    Weight:        190 lbs",
+            "    Birthplace:    Boston, MA, USA",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -248,16 +249,16 @@ mod tests {
         let widget = PlayerBioCard::new(&player, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_widget_with_config(&widget, 80, height, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, height, &config);
 
         assert_buffer(&buf, &[
-            "    Position:      G                                                            ",
-            "    Height:        6'1\"                                                         ",
-            "    Weight:        185 lbs                                                      ",
-            "    Birthplace:    Montreal, QC, CAN                                            ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "    Position:      G",
+            "    Height:        6'1\"",
+            "    Weight:        185 lbs",
+            "    Birthplace:    Montreal, QC, CAN",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -267,17 +268,17 @@ mod tests {
         let widget = PlayerBioCard::new(&player, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_widget_with_config(&widget, 80, height, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, height, &config);
 
         assert_buffer(&buf, &[
-            "    Position:      LW                                                           ",
-            "    Number:        #12                                                          ",
-            "    Height:        5'10\"                                                        ",
-            "    Weight:        175 lbs                                                      ",
-            "    Birthplace:    Stockholm, SWE                                               ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "    Position:      LW",
+            "    Number:        #12",
+            "    Height:        5'10\"",
+            "    Weight:        175 lbs",
+            "    Birthplace:    Stockholm, SWE",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -286,16 +287,16 @@ mod tests {
         let widget = PlayerBioCard::new(&player, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_widget_with_config(&widget, 80, height, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, height, &config);
 
         assert_buffer(&buf, &[
-            "    Position:      RW                                                           ",
-            "    Number:        #9                                                           ",
-            "    Height:        6'2\"                                                         ",
-            "    Weight:        210 lbs                                                      ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "    Position:      RW",
+            "    Number:        #9",
+            "    Height:        6'2\"",
+            "    Weight:        210 lbs",
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -326,14 +327,14 @@ mod tests {
         let widget = PlayerBioCard::new(&player, None, 2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
-        let buf = render_widget_with_config(&widget, 80, height, &config);
+        let buf = render_widget_with_config(&widget, RENDER_WIDTH, height, &config);
 
         assert_buffer(&buf, &[
-            "    Position:      C                                                            ",
-            "    Height:        6'3\"                                                         ",
-            "    Weight:        200 lbs                                                      ",
-            "                                                                                ",
-            "                                                                                ",
-        ], 80);
+            "    Position:      C",
+            "    Height:        6'3\"",
+            "    Weight:        200 lbs",
+            "",
+            "",
+        ]);
     }
 }

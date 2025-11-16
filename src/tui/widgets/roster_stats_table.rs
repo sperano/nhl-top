@@ -157,6 +157,7 @@ impl<'a> RenderableWidget for RosterStatsTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     fn create_test_player(name: &str, gp: i32, g: i32, a: i32, pts: i32) -> PlayerStat {
@@ -180,8 +181,8 @@ mod tests {
         assert_buffer(&buf, &[
             "  Player                      GP    G    A   PTS",
             "  ──────────────────────────────────────────────",
-            "                                                ",
-        ], 48);
+            "",
+        ]);
     }
 
     #[test]
@@ -203,8 +204,8 @@ mod tests {
             "  Auston Matthews             58   42   31    73",
             "  Mitchell Marner             58   18   48    66",
             "  William Nylander            56   28   35    63",
-            "                                                ",
-        ], 48);
+            "",
+        ]);
     }
 
     #[test]
@@ -225,14 +226,14 @@ mod tests {
         let buf = render_widget_with_config(&widget, 48, height, &config);
 
         assert_buffer(&buf, &[
-            "  Player Statistics                             ",
-            "  ═════════════════                             ",
+            "  Player Statistics",
+            "  ═════════════════",
             "  Player                      GP    G    A   PTS",
             "  ──────────────────────────────────────────────",
             "  Auston Matthews             58   42   31    73",
-            "                                                ",
-            "                                                ",
-        ], 48);
+            "",
+            "",
+        ]);
     }
 
     #[test]
@@ -254,8 +255,8 @@ mod tests {
             "  Auston Matthews             58   42   31    73",
             "  Mitchell Marner             58   18   48    66",
             "  William Nylander            56   28   35    63",
-            "                                                ",
-        ], 48);
+            "",
+        ]);
     }
 
     #[test]
@@ -308,7 +309,7 @@ mod tests {
             "  Player                      GP    G    A   PTS",
             "  ──────────────────────────────────────────────",
             "  A                            1    2    3     5",
-            "                                                ",
-        ], 48);
+            "",
+        ]);
     }
 }

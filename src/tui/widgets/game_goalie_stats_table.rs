@@ -142,6 +142,7 @@ impl<'a> RenderableWidget for GameGoalieStatsTable<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
     use nhl_api::LocalizedString;
 
@@ -185,11 +186,11 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Goalies                                               ",
-            "─────────────                                               ",
-            "#   Name                   SA  Saves     GA    SV%          ",
-            "                                                            ",
-        ], 60);
+            "TOR - Goalies",
+            "─────────────",
+            "#   Name                   SA  Saves     GA    SV%",
+            "",
+        ]);
     }
 
     #[test]
@@ -205,13 +206,13 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Goalies                                               ",
-            "─────────────                                               ",
-            "#   Name                   SA  Saves     GA    SV%          ",
-            "35  Joseph Woll            30     28      2  0.933          ",
-            "60  Matt Murray            15     13      2  0.867          ",
-            "                                                            ",
-        ], 60);
+            "TOR - Goalies",
+            "─────────────",
+            "#   Name                   SA  Saves     GA    SV%",
+            "35  Joseph Woll            30     28      2  0.933",
+            "60  Matt Murray            15     13      2  0.867",
+            "",
+        ]);
     }
 
     #[test]
@@ -254,12 +255,12 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Goalies                                               ",
-            "─────────────                                               ",
-            "#   Name                   SA  Saves     GA    SV%          ",
-            "35  Test Goalie            32     29      3  0.906          ",
-            "                                                            ",
-        ], 60);
+            "TOR - Goalies",
+            "─────────────",
+            "#   Name                   SA  Saves     GA    SV%",
+            "35  Test Goalie            32     29      3  0.906",
+            "",
+        ]);
     }
 
     #[test]
@@ -274,11 +275,11 @@ mod tests {
         let buf = render_widget_with_config(&widget, 60, height, &config);
 
         assert_buffer(&buf, &[
-            "TOR - Goalies                                               ",
-            "─────────────                                               ",
-            "#   Name                   SA  Saves     GA    SV%          ",
-            "35  Test Goalie             0      0      0      -          ",
-            "                                                            ",
-        ], 60);
+            "TOR - Goalies",
+            "─────────────",
+            "#   Name                   SA  Saves     GA    SV%",
+            "35  Test Goalie             0      0      0      -",
+            "",
+        ]);
     }
 }

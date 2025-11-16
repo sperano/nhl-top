@@ -129,6 +129,7 @@ impl RenderableWidget for StatusBarWidget {
 mod tests {
     use super::*;
     use crate::config::Config;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use ratatui::buffer::Buffer;
 
     #[test]
@@ -143,26 +144,19 @@ mod tests {
 
         match element {
             Element::Widget(widget) => {
-                let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
-                widget.render(Rect::new(0, 0, 80, 2), &mut buf, &DisplayConfig::default());
-
-                let line2: String = buf
-                    .content()
-                    .iter()
-                    .skip(80)
-                    .take(80)
-                    .map(|cell| cell.symbol())
-                    .collect();
-
-                assert!(line2.contains("Loading..."));
-                assert!(line2.contains("│"));
+                let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+                widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+                assert_buffer(&buf, &[
+                    "────────────────────────────────────────────────────────────────────┬───────────",
+                    "                                                                    │ Loading...",
+                ]);
             }
             _ => panic!("Expected widget element"),
         }
     }
 
     #[test]
-    fn test_status_bar_renders_countdown() {
+    fn test_status_bar_renders() {
         let status_bar = StatusBar;
         let system_state = SystemState {
             last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
@@ -173,80 +167,12 @@ mod tests {
 
         match element {
             Element::Widget(widget) => {
-                let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
-                widget.render(Rect::new(0, 0, 80, 2), &mut buf, &DisplayConfig::default());
-
-                let line2: String = buf
-                    .content()
-                    .iter()
-                    .skip(80)
-                    .take(80)
-                    .map(|cell| cell.symbol())
-                    .collect();
-
-                assert!(line2.contains("Refresh in"));
-            }
-            _ => panic!("Expected widget element"),
-        }
-    }
-
-    /// Helper function to assert buffer contents match expected lines
-    fn assert_buffer(buf: &Buffer, expected: &[&str], width: usize) {
-        let area = buf.area();
-
-        assert_eq!(
-            area.width as usize, width,
-            "Buffer width mismatch: expected {}, got {}",
-            width, area.width
-        );
-
-        assert_eq!(
-            area.height as usize, expected.len(),
-            "Buffer height mismatch: expected {}, got {}",
-            expected.len(), area.height
-        );
-
-        for (y, expected_line) in expected.iter().enumerate() {
-            let actual_line: String = (0..area.width)
-                .map(|x| buf.get(x, y as u16).symbol())
-                .collect();
-
-            assert_eq!(
-                expected_line.chars().count(), width,
-                "Expected line {} has wrong character count: expected {}, got {}",
-                y, width, expected_line.chars().count()
-            );
-
-            assert_eq!(
-                &actual_line, expected_line,
-                "Line {} mismatch:\nExpected: {:?}\nActual:   {:?}",
-                y, expected_line, actual_line
-            );
-        }
-    }
-
-    #[test]
-    fn test_status_bar_renders_2_lines_with_assert_buffer() {
-        let status_bar = StatusBar;
-        let system_state = SystemState {
-            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
-            config: Config::default(),
-        };
-
-        let element = status_bar.view(&system_state, &());
-
-        match element {
-            Element::Widget(widget) => {
-                let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
-                widget.render(Rect::new(0, 0, 80, 2), &mut buf, &DisplayConfig::default());
-
-                // Test that StatusBar renders 2 lines: separator + content
-                // Line 0: horizontal separator with ┬ connector at position where vertical bar will be
-                // Line 1: left content (empty) + padding + │ + right content (refresh countdown)
+                let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+                widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
                 assert_buffer(&buf, &[
                     "────────────────────────────────────────────────────────────────┬───────────────",
                     "                                                                │ Refresh in 55s",
-                ], 80);
+                ]);
             }
             _ => panic!("Expected widget element"),
         }

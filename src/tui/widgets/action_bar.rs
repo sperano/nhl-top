@@ -155,16 +155,17 @@ impl RenderableWidget for ActionBar {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     #[test]
     fn test_action_bar_empty() {
         let widget = ActionBar::new(vec![]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "                                                                                ",
-        ], 80);
+            "",
+        ]);
     }
 
     #[test]
@@ -172,11 +173,11 @@ mod tests {
         let widget = ActionBar::new(vec![
             Action::new("Enter", "View Team"),
         ]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "                           Actions: [Enter] View Team                           ",
-        ], 80);
+            "                           Actions: [Enter] View Team",
+        ]);
     }
 
     #[test]
@@ -186,11 +187,11 @@ mod tests {
             Action::new("G", "Game Log"),
             Action::new("T", "Team Page"),
         ]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "         Actions: [Enter] View Team │ [G] Game Log │ [T] Team Page              ",
-        ], 80);
+            "         Actions: [Enter] View Team │ [G] Game Log │ [T] Team Page",
+        ]);
     }
 
     #[test]
@@ -199,11 +200,11 @@ mod tests {
             Action::new("Enter", "View Team"),
             Action::disabled("G", "Game Log"),
         ]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "                  Actions: [Enter] View Team │ [G] Game Log                     ",
-        ], 80);
+            "                  Actions: [Enter] View Team │ [G] Game Log",
+        ]);
     }
 
     #[test]
@@ -236,11 +237,11 @@ mod tests {
         let widget = ActionBar::new(vec![
             Action::new("A", "Test"),
         ]);
-        let buf = render_widget(&widget, 80, 1);
+        let buf = render_widget(&widget, RENDER_WIDTH, 1);
 
         assert_buffer(&buf, &[
-            "                               Actions: [A] Test                                ",
-        ], 80);
+            "                               Actions: [A] Test",
+        ]);
     }
 
     #[test]

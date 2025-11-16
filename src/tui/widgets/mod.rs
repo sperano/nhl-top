@@ -42,6 +42,9 @@ pub use game_grid::GameGrid;
 pub mod standings_table;
 pub use standings_table::StandingsTable;
 
+pub mod settings_list;
+pub use settings_list::SettingsListWidget;
+
 pub mod roster_stats_table;
 pub use roster_stats_table::RosterStatsTable;
 

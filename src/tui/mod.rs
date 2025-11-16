@@ -15,6 +15,9 @@ pub mod command_palette;
 pub mod framework;
 pub mod components;
 
+#[cfg(test)]
+pub mod testing;
+
 pub use context::{NavigationContextProvider, BreadcrumbProvider};
 
 use std::io;

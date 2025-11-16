@@ -7,8 +7,6 @@
 mod tests {
     use std::sync::Arc;
 
-    use nhl_api::Client;
-
     use crate::tui::framework::{
         action::{Action, Tab},
         effects::DataEffects,
@@ -17,9 +15,10 @@ mod tests {
         state::AppState,
         Element,
     };
+    use crate::tui::testing::create_client;
 
     fn create_test_runtime() -> Runtime {
-        let client = Arc::new(Client::new().unwrap());
+        let client = create_client();
         let data_effects = Arc::new(DataEffects::new(client));
         let state = AppState::default();
         Runtime::new(state, data_effects)

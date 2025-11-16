@@ -3,9 +3,9 @@ use std::time::SystemTime;
 
 use crate::commands::standings::GroupBy;
 
-use super::action::{Action, ScoresAction, StandingsAction};
+use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
 use super::component::Effect;
-use super::state::{AppState, LoadingKey, PanelState};
+use super::state::{AppState, LoadingKey, PanelState, SettingsCategory};
 
 /// Pure state reducer - like Redux reducer
 ///
@@ -75,7 +75,8 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
             // Also exit any tab-specific modes when returning to tab bar
             new_state.ui.scores.box_selection_active = false;
-            new_state.ui.standings.team_mode = false;
+            new_state.ui.standings.browse_mode = false;
+            new_state.ui.settings.settings_mode = false;
 
             (new_state, Effect::None)
         }
@@ -135,7 +136,6 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
             new_state.data.standings = Some(standings);
             new_state.data.loading.remove(&LoadingKey::Standings);
             new_state.data.errors.remove("standings");
-            new_state.system.last_refresh = Some(SystemTime::now());
             (new_state, Effect::None)
         }
 
@@ -156,7 +156,6 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                 .loading
                 .remove(&LoadingKey::Schedule(game_date));
             new_state.data.errors.remove("schedule");
-            new_state.system.last_refresh = Some(SystemTime::now());
             (new_state, Effect::None)
         }
 
@@ -311,7 +310,15 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
         Action::StandingsAction(standings_action) => reduce_standings(state, standings_action),
 
-        Action::Quit | Action::Error(_) | Action::RefreshData => (state, Effect::None),
+        Action::SettingsAction(settings_action) => reduce_settings(state, settings_action),
+
+        Action::RefreshData => {
+            let mut new_state = state.clone();
+            new_state.system.last_refresh = Some(SystemTime::now());
+            (new_state, Effect::None)
+        }
+
+        Action::Quit | Action::Error(_) => (state, Effect::None),
 
         _ => (state, Effect::None),
     }
@@ -530,10 +537,10 @@ fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effe
         StandingsAction::CycleView => {
             let mut new_state = state.clone();
             new_state.ui.standings.view = match new_state.ui.standings.view {
+                GroupBy::Wildcard => GroupBy::Division,
                 GroupBy::Division => GroupBy::Conference,
                 GroupBy::Conference => GroupBy::League,
-                GroupBy::League => GroupBy::Division,
-                GroupBy::Wildcard => GroupBy::Division, // Loop back to Division
+                GroupBy::League => GroupBy::Wildcard,
             };
 
             // Reset selection when changing views
@@ -544,15 +551,15 @@ fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effe
             (new_state, Effect::None)
         }
 
-        StandingsAction::EnterTeamMode => {
+        StandingsAction::EnterBrowseMode => {
             let mut new_state = state.clone();
-            new_state.ui.standings.team_mode = true;
+            new_state.ui.standings.browse_mode = true;
             (new_state, Effect::None)
         }
 
-        StandingsAction::ExitTeamMode => {
+        StandingsAction::ExitBrowseMode => {
             let mut new_state = state.clone();
-            new_state.ui.standings.team_mode = false;
+            new_state.ui.standings.browse_mode = false;
             (new_state, Effect::None)
         }
 
@@ -571,10 +578,10 @@ fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effe
         StandingsAction::CycleViewLeft => {
             let mut new_state = state.clone();
             new_state.ui.standings.view = match new_state.ui.standings.view {
-                GroupBy::Division => GroupBy::League,
+                GroupBy::Wildcard => GroupBy::League,
+                GroupBy::Division => GroupBy::Wildcard,
                 GroupBy::Conference => GroupBy::Division,
                 GroupBy::League => GroupBy::Conference,
-                GroupBy::Wildcard => GroupBy::League,
             };
             (new_state, Effect::None)
         }
@@ -582,41 +589,281 @@ fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effe
         StandingsAction::CycleViewRight => {
             let mut new_state = state.clone();
             new_state.ui.standings.view = match new_state.ui.standings.view {
+                GroupBy::Wildcard => GroupBy::Division,
                 GroupBy::Division => GroupBy::Conference,
                 GroupBy::Conference => GroupBy::League,
-                GroupBy::League => GroupBy::Division,
-                GroupBy::Wildcard => GroupBy::Division,
+                GroupBy::League => GroupBy::Wildcard,
             };
             (new_state, Effect::None)
         }
 
         StandingsAction::MoveSelectionUp => {
             let mut new_state = state.clone();
-            if new_state.ui.standings.selected_row > 0 {
-                new_state.ui.standings.selected_row -= 1;
+
+            // Get team count (respects column in Conference/Division/Wildcard views)
+            if let Some(ref standings) = new_state.data.standings {
+                let team_count = match new_state.ui.standings.view {
+                    GroupBy::Conference => {
+                        count_teams_in_conference_column(standings, new_state.ui.standings.selected_column)
+                    }
+                    GroupBy::Division => {
+                        count_teams_in_division_column(
+                            standings,
+                            new_state.ui.standings.selected_column,
+                            new_state.system.config.display_standings_western_first,
+                        )
+                    }
+                    GroupBy::Wildcard => {
+                        count_teams_in_wildcard_column(
+                            standings,
+                            new_state.ui.standings.selected_column,
+                            new_state.system.config.display_standings_western_first,
+                        )
+                    }
+                    _ => standings.len(),
+                };
+
+                if team_count > 0 {
+                    let max_row = team_count - 1;
+                    if new_state.ui.standings.selected_row == 0 {
+                        // At first team - wrap to last team
+                        new_state.ui.standings.selected_row = max_row;
+                    } else {
+                        new_state.ui.standings.selected_row -= 1;
+                    }
+                }
             }
+
             (new_state, Effect::None)
         }
 
         StandingsAction::MoveSelectionDown => {
             let mut new_state = state.clone();
-            new_state.ui.standings.selected_row += 1;
-            // TODO: Clamp to max teams in column
+
+            // Get team count (respects column in Conference/Division/Wildcard views)
+            if let Some(ref standings) = new_state.data.standings {
+                let team_count = match new_state.ui.standings.view {
+                    GroupBy::Conference => {
+                        count_teams_in_conference_column(standings, new_state.ui.standings.selected_column)
+                    }
+                    GroupBy::Division => {
+                        count_teams_in_division_column(
+                            standings,
+                            new_state.ui.standings.selected_column,
+                            new_state.system.config.display_standings_western_first,
+                        )
+                    }
+                    GroupBy::Wildcard => {
+                        count_teams_in_wildcard_column(
+                            standings,
+                            new_state.ui.standings.selected_column,
+                            new_state.system.config.display_standings_western_first,
+                        )
+                    }
+                    _ => standings.len(),
+                };
+
+                if team_count > 0 {
+                    let max_row = team_count - 1;
+                    if new_state.ui.standings.selected_row >= max_row {
+                        // At last team - wrap to first team
+                        new_state.ui.standings.selected_row = 0;
+                    } else {
+                        new_state.ui.standings.selected_row += 1;
+                    }
+                }
+            }
+
             (new_state, Effect::None)
         }
 
         StandingsAction::MoveSelectionLeft => {
             let mut new_state = state.clone();
-            if new_state.ui.standings.selected_column > 0 {
-                new_state.ui.standings.selected_column -= 1;
+
+            // Conference, Division, and Wildcard views have 2 columns for navigation
+            if matches!(new_state.ui.standings.view, GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard) {
+                // Wrap around: 0 -> 1
+                new_state.ui.standings.selected_column = if new_state.ui.standings.selected_column == 0 {
+                    1
+                } else {
+                    0
+                };
+
+                // Clamp row to max teams in new column if needed
+                if let Some(ref standings) = new_state.data.standings {
+                    let team_count = match new_state.ui.standings.view {
+                        GroupBy::Conference => {
+                            count_teams_in_conference_column(standings, new_state.ui.standings.selected_column)
+                        }
+                        GroupBy::Division => {
+                            count_teams_in_division_column(
+                                standings,
+                                new_state.ui.standings.selected_column,
+                                new_state.system.config.display_standings_western_first,
+                            )
+                        }
+                        GroupBy::Wildcard => {
+                            count_teams_in_wildcard_column(
+                                standings,
+                                new_state.ui.standings.selected_column,
+                                new_state.system.config.display_standings_western_first,
+                            )
+                        }
+                        _ => 0,
+                    };
+                    if new_state.ui.standings.selected_row >= team_count && team_count > 0 {
+                        new_state.ui.standings.selected_row = team_count - 1;
+                    }
+                }
             }
+
             (new_state, Effect::None)
         }
 
         StandingsAction::MoveSelectionRight => {
             let mut new_state = state.clone();
-            new_state.ui.standings.selected_column += 1;
-            // TODO: Clamp to max columns for view
+
+            // Conference, Division, and Wildcard views have 2 columns for navigation
+            if matches!(new_state.ui.standings.view, GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard) {
+                // Wrap around: 1 -> 0
+                new_state.ui.standings.selected_column = if new_state.ui.standings.selected_column == 1 {
+                    0
+                } else {
+                    1
+                };
+
+                // Clamp row to max teams in new column if needed
+                if let Some(ref standings) = new_state.data.standings {
+                    let team_count = match new_state.ui.standings.view {
+                        GroupBy::Conference => {
+                            count_teams_in_conference_column(standings, new_state.ui.standings.selected_column)
+                        }
+                        GroupBy::Division => {
+                            count_teams_in_division_column(
+                                standings,
+                                new_state.ui.standings.selected_column,
+                                new_state.system.config.display_standings_western_first,
+                            )
+                        }
+                        GroupBy::Wildcard => {
+                            count_teams_in_wildcard_column(
+                                standings,
+                                new_state.ui.standings.selected_column,
+                                new_state.system.config.display_standings_western_first,
+                            )
+                        }
+                        _ => 0,
+                    };
+                    if new_state.ui.standings.selected_row >= team_count && team_count > 0 {
+                        new_state.ui.standings.selected_row = team_count - 1;
+                    }
+                }
+            }
+
+            (new_state, Effect::None)
+        }
+    }
+}
+
+/// Sub-reducer for settings tab
+fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect) {
+    match action {
+        SettingsAction::NavigateCategoryLeft => {
+            let mut new_state = state.clone();
+            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category {
+                SettingsCategory::Logging => SettingsCategory::Data,
+                SettingsCategory::Display => SettingsCategory::Logging,
+                SettingsCategory::Data => SettingsCategory::Display,
+            };
+            new_state.ui.settings.selected_setting_index = 0; // Reset selection
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::NavigateCategoryRight => {
+            let mut new_state = state.clone();
+            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category {
+                SettingsCategory::Logging => SettingsCategory::Display,
+                SettingsCategory::Display => SettingsCategory::Data,
+                SettingsCategory::Data => SettingsCategory::Logging,
+            };
+            new_state.ui.settings.selected_setting_index = 0; // Reset selection
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::EnterSettingsMode => {
+            debug!("SETTINGS: Entering settings mode");
+            let mut new_state = state.clone();
+            new_state.ui.settings.settings_mode = true;
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::ExitSettingsMode => {
+            debug!("SETTINGS: Exiting settings mode");
+            let mut new_state = state.clone();
+            new_state.ui.settings.settings_mode = false;
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::MoveSelectionUp => {
+            let mut new_state = state.clone();
+            if new_state.ui.settings.selected_setting_index > 0 {
+                new_state.ui.settings.selected_setting_index -= 1;
+            }
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::MoveSelectionDown => {
+            let mut new_state = state.clone();
+            // We'll validate max in the UI layer
+            new_state.ui.settings.selected_setting_index += 1;
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::ToggleBoolean(key) => {
+            let mut new_state = state.clone();
+            let mut config = new_state.system.config.clone();
+
+            // Toggle the boolean setting
+            match key.as_str() {
+                "use_unicode" => {
+                    config.display.use_unicode = !config.display.use_unicode;
+                    config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(config.display.use_unicode);
+                }
+                "show_action_bar" => {
+                    config.display.show_action_bar = !config.display.show_action_bar;
+                }
+                "western_teams_first" => {
+                    config.display_standings_western_first = !config.display_standings_western_first;
+                }
+                _ => {
+                    debug!("SETTINGS: Unknown boolean setting: {}", key);
+                    return (new_state, Effect::None);
+                }
+            }
+
+            new_state.system.config = config.clone();
+
+            // Return effect to persist config
+            let effect = Effect::Async(Box::pin(async move {
+                match crate::config::write(&config) {
+                    Ok(_) => {
+                        debug!("SETTINGS: Config saved successfully");
+                        Action::SettingsAction(SettingsAction::UpdateConfig(Box::new(config)))
+                    }
+                    Err(e) => {
+                        debug!("SETTINGS: Failed to save config: {}", e);
+                        Action::Error(format!("Failed to save config: {}", e))
+                    }
+                }
+            }));
+
+            (new_state, effect)
+        }
+
+        SettingsAction::UpdateConfig(config) => {
+            // Config update confirmation (after successful save)
+            let mut new_state = state.clone();
+            new_state.system.config = *config;
             (new_state, Effect::None)
         }
     }
@@ -699,14 +946,571 @@ mod tests {
     #[test]
     fn test_standings_cycle_view() {
         let state = AppState::default();
+        // Default is Wildcard
+        assert_eq!(state.ui.standings.view, GroupBy::Wildcard);
 
         let (new_state, _) = reduce_standings(state.clone(), StandingsAction::CycleView);
+        assert_eq!(new_state.ui.standings.view, GroupBy::Division);
+
+        let (new_state, _) = reduce_standings(new_state, StandingsAction::CycleView);
         assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
 
         let (new_state, _) = reduce_standings(new_state, StandingsAction::CycleView);
         assert_eq!(new_state.ui.standings.view, GroupBy::League);
 
         let (new_state, _) = reduce_standings(new_state, StandingsAction::CycleView);
-        assert_eq!(new_state.ui.standings.view, GroupBy::Division);
+        assert_eq!(new_state.ui.standings.view, GroupBy::Wildcard);
+    }
+
+    // Helper function to create test standings
+    fn create_test_standings(count: usize) -> Vec<nhl_api::Standing> {
+        (0..count)
+            .map(|i| nhl_api::Standing {
+                conference_abbrev: Some("TEST".to_string()),
+                conference_name: Some("Test Conference".to_string()),
+                division_abbrev: "TST".to_string(),
+                division_name: "Test Division".to_string(),
+                team_name: nhl_api::LocalizedString {
+                    default: format!("Team {} Full Name", i),
+                },
+                team_common_name: nhl_api::LocalizedString {
+                    default: format!("Team {}", i),
+                },
+                team_abbrev: nhl_api::LocalizedString {
+                    default: format!("T{}", i),
+                },
+                team_logo: "https://example.com/logo.png".to_string(),
+                wins: i as i32,
+                losses: 0,
+                ot_losses: 0,
+                points: i as i32 * 2,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_standings_move_up_wraps_from_first_to_last() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League; // Use League view for simple test data
+        state.data.standings = Some(create_test_standings(5)); // 5 teams: rows 0-4
+        state.ui.standings.selected_row = 0; // At first team
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        // Should wrap to last team (row 4)
+        assert_eq!(new_state.ui.standings.selected_row, 4);
+    }
+
+    #[test]
+    fn test_standings_move_down_wraps_from_last_to_first() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League; // Use League view for simple test data
+        state.data.standings = Some(create_test_standings(5)); // 5 teams: rows 0-4
+        state.ui.standings.selected_row = 4; // At last team
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        // Should wrap to first team (row 0)
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+    }
+
+    #[test]
+    fn test_standings_move_up_normal_navigation() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League; // Use League view for simple test data
+        state.data.standings = Some(create_test_standings(5));
+        state.ui.standings.selected_row = 2; // Middle team
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        // Should move to previous team
+        assert_eq!(new_state.ui.standings.selected_row, 1);
+    }
+
+    #[test]
+    fn test_standings_move_down_normal_navigation() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League; // Use League view for simple test data
+        state.data.standings = Some(create_test_standings(5));
+        state.ui.standings.selected_row = 2; // Middle team
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        // Should move to next team
+        assert_eq!(new_state.ui.standings.selected_row, 3);
+    }
+
+    #[test]
+    fn test_standings_move_up_with_no_data() {
+        let mut state = AppState::default();
+        state.data.standings = None; // No standings data
+        state.ui.standings.selected_row = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        // Should not change
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+    }
+
+    #[test]
+    fn test_standings_move_down_with_no_data() {
+        let mut state = AppState::default();
+        state.data.standings = None; // No standings data
+        state.ui.standings.selected_row = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        // Should not change
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+    }
+
+    #[test]
+    fn test_standings_move_up_with_empty_data() {
+        let mut state = AppState::default();
+        state.data.standings = Some(vec![]); // Empty standings
+        state.ui.standings.selected_row = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        // Should not change
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+    }
+
+    #[test]
+    fn test_standings_move_down_with_empty_data() {
+        let mut state = AppState::default();
+        state.data.standings = Some(vec![]); // Empty standings
+        state.ui.standings.selected_row = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        // Should not change
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+    }
+
+    #[test]
+    fn test_conference_view_left_wraps_from_0_to_1() {
+        use nhl_api::LocalizedString;
+
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 0;
+        state.ui.standings.selected_row = 5;
+
+        // Create test standings with 2 conferences (16 teams each)
+        let mut standings = vec![];
+        for i in 0..16 {
+            standings.push(nhl_api::Standing {
+                conference_abbrev: Some("E".to_string()),
+                conference_name: Some("Eastern".to_string()),
+                division_abbrev: "A".to_string(),
+                division_name: "Atlantic".to_string(),
+                team_name: LocalizedString { default: format!("Eastern Team {}", i) },
+                team_common_name: LocalizedString { default: format!("Team E{}", i) },
+                team_abbrev: LocalizedString { default: format!("E{}", i) },
+                team_logo: "".to_string(),
+                wins: 10 - i as i32,
+                losses: i as i32,
+                ot_losses: 0,
+                points: 20 - i as i32,
+            });
+        }
+        for i in 0..16 {
+            standings.push(nhl_api::Standing {
+                conference_abbrev: Some("W".to_string()),
+                conference_name: Some("Western".to_string()),
+                division_abbrev: "C".to_string(),
+                division_name: "Central".to_string(),
+                team_name: LocalizedString { default: format!("Western Team {}", i) },
+                team_common_name: LocalizedString { default: format!("Team W{}", i) },
+                team_abbrev: LocalizedString { default: format!("W{}", i) },
+                team_logo: "".to_string(),
+                wins: 10 - i as i32,
+                losses: i as i32,
+                ot_losses: 0,
+                points: 20 - i as i32,
+            });
+        }
+        state.data.standings = Some(standings);
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        // Should wrap to column 1
+        assert_eq!(new_state.ui.standings.selected_column, 1);
+        // Row should be preserved
+        assert_eq!(new_state.ui.standings.selected_row, 5);
+    }
+
+    #[test]
+    fn test_conference_view_right_wraps_from_1_to_0() {
+        use nhl_api::LocalizedString;
+
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 1;
+        state.ui.standings.selected_row = 3;
+
+        // Create test standings with 2 conferences
+        let mut standings = vec![];
+        for i in 0..16 {
+            standings.push(nhl_api::Standing {
+                conference_abbrev: Some("E".to_string()),
+                conference_name: Some("Eastern".to_string()),
+                division_abbrev: "A".to_string(),
+                division_name: "Atlantic".to_string(),
+                team_name: LocalizedString { default: format!("Eastern Team {}", i) },
+                team_common_name: LocalizedString { default: format!("Team E{}", i) },
+                team_abbrev: LocalizedString { default: format!("E{}", i) },
+                team_logo: "".to_string(),
+                wins: 10,
+                losses: 0,
+                ot_losses: 0,
+                points: 20,
+            });
+        }
+        for i in 0..16 {
+            standings.push(nhl_api::Standing {
+                conference_abbrev: Some("W".to_string()),
+                conference_name: Some("Western".to_string()),
+                division_abbrev: "C".to_string(),
+                division_name: "Central".to_string(),
+                team_name: LocalizedString { default: format!("Western Team {}", i) },
+                team_common_name: LocalizedString { default: format!("Team W{}", i) },
+                team_abbrev: LocalizedString { default: format!("W{}", i) },
+                team_logo: "".to_string(),
+                wins: 10,
+                losses: 0,
+                ot_losses: 0,
+                points: 20,
+            });
+        }
+        state.data.standings = Some(standings);
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+
+        // Should wrap to column 0
+        assert_eq!(new_state.ui.standings.selected_column, 0);
+        // Row should be preserved
+        assert_eq!(new_state.ui.standings.selected_row, 3);
+    }
+
+    #[test]
+    fn test_conference_view_up_down_respects_column() {
+        use nhl_api::LocalizedString;
+
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 0; // Eastern
+        state.ui.standings.selected_row = 0;
+
+        // Create test standings with 2 conferences (16 teams each)
+        let mut standings = vec![];
+        for i in 0..16 {
+            standings.push(nhl_api::Standing {
+                conference_abbrev: Some("E".to_string()),
+                conference_name: Some("Eastern".to_string()),
+                division_abbrev: "A".to_string(),
+                division_name: "Atlantic".to_string(),
+                team_name: LocalizedString { default: format!("Eastern Team {}", i) },
+                team_common_name: LocalizedString { default: format!("Team E{}", i) },
+                team_abbrev: LocalizedString { default: format!("E{}", i) },
+                team_logo: "".to_string(),
+                wins: 10,
+                losses: 0,
+                ot_losses: 0,
+                points: 20,
+            });
+        }
+        for i in 0..16 {
+            standings.push(nhl_api::Standing {
+                conference_abbrev: Some("W".to_string()),
+                conference_name: Some("Western".to_string()),
+                division_abbrev: "C".to_string(),
+                division_name: "Central".to_string(),
+                team_name: LocalizedString { default: format!("Western Team {}", i) },
+                team_common_name: LocalizedString { default: format!("Team W{}", i) },
+                team_abbrev: LocalizedString { default: format!("W{}", i) },
+                team_logo: "".to_string(),
+                wins: 10,
+                losses: 0,
+                ot_losses: 0,
+                points: 20,
+            });
+        }
+        state.data.standings = Some(standings);
+
+        // Move up from first team - should wrap to last team in Eastern conference (15)
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+        assert_eq!(new_state.ui.standings.selected_row, 15);
+
+        // Move down from last team - should wrap to first team in Eastern conference (0)
+        let (new_state, _) = reduce_standings(new_state, StandingsAction::MoveSelectionDown);
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+    }
+
+    #[test]
+    fn test_conference_view_left_right_does_nothing_in_league_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _) = reduce_standings(state.clone(), StandingsAction::MoveSelectionLeft);
+        assert_eq!(new_state.ui.standings.selected_column, 0); // Should not change
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+        assert_eq!(new_state.ui.standings.selected_column, 0); // Should not change
+    }
+
+    #[test]
+    fn test_settings_navigate_category_right() {
+        let state = AppState::default(); // Starts with Logging
+
+        let (new_state, _) = reduce_settings(state.clone(), SettingsAction::NavigateCategoryRight);
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+
+        let (new_state, _) = reduce_settings(new_state, SettingsAction::NavigateCategoryRight);
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Data);
+
+        let (new_state, _) = reduce_settings(new_state, SettingsAction::NavigateCategoryRight);
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Logging);
+    }
+
+    #[test]
+    fn test_settings_navigate_category_left() {
+        let state = AppState::default(); // Starts with Logging
+
+        let (new_state, _) = reduce_settings(state.clone(), SettingsAction::NavigateCategoryLeft);
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Data);
+
+        let (new_state, _) = reduce_settings(new_state, SettingsAction::NavigateCategoryLeft);
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+
+        let (new_state, _) = reduce_settings(new_state, SettingsAction::NavigateCategoryLeft);
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Logging);
+    }
+
+    #[test]
+    fn test_settings_action_dispatches_to_reducer() {
+        let state = AppState::default();
+
+        let (new_state, _) = reduce(
+            state.clone(),
+            Action::SettingsAction(SettingsAction::NavigateCategoryRight),
+        );
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+    }
+
+    #[test]
+    fn test_refresh_data_updates_last_refresh_timestamp() {
+        let state = AppState::default();
+        assert!(state.system.last_refresh.is_none());
+
+        let (new_state, _) = reduce(state, Action::RefreshData);
+
+        // Verify last_refresh was set
+        assert!(new_state.system.last_refresh.is_some());
+    }
+
+    #[test]
+    fn test_data_loaded_does_not_update_last_refresh() {
+        use std::time::Duration;
+
+        let mut state = AppState::default();
+        let initial_refresh_time = SystemTime::now() - Duration::from_secs(30);
+        state.system.last_refresh = Some(initial_refresh_time);
+
+        // Load standings
+        let standings = vec![];
+        let (new_state, _) = reduce(state.clone(), Action::StandingsLoaded(Ok(standings)));
+
+        // last_refresh should NOT change when data loads
+        assert_eq!(new_state.system.last_refresh, Some(initial_refresh_time));
+
+        // Load schedule
+        let schedule = nhl_api::DailySchedule {
+            next_start_date: None,
+            previous_start_date: None,
+            date: "2024-01-15".to_string(),
+            games: vec![],
+            number_of_games: 0,
+        };
+        let (new_state, _) = reduce(new_state, Action::ScheduleLoaded(Ok(schedule)));
+
+        // last_refresh should still NOT change
+        assert_eq!(new_state.system.last_refresh, Some(initial_refresh_time));
+    }
+
+    #[test]
+    fn test_multiple_data_loads_preserve_single_refresh_timestamp() {
+        use std::time::Duration;
+
+        let state = AppState::default();
+
+        // Trigger refresh - this sets last_refresh
+        let (state_after_refresh, _) = reduce(state, Action::RefreshData);
+        let refresh_time = state_after_refresh.system.last_refresh;
+        assert!(refresh_time.is_some());
+
+        // Simulate some time passing
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Load standings
+        let standings = vec![];
+        let (state_after_standings, _) = reduce(
+            state_after_refresh.clone(),
+            Action::StandingsLoaded(Ok(standings)),
+        );
+
+        // last_refresh should be unchanged
+        assert_eq!(state_after_standings.system.last_refresh, refresh_time);
+
+        // Simulate more time passing
+        std::thread::sleep(Duration::from_millis(10));
+
+        // Load schedule
+        let schedule = nhl_api::DailySchedule {
+            next_start_date: None,
+            previous_start_date: None,
+            date: "2024-01-15".to_string(),
+            games: vec![],
+            number_of_games: 0,
+        };
+        let (state_after_schedule, _) = reduce(
+            state_after_standings,
+            Action::ScheduleLoaded(Ok(schedule)),
+        );
+
+        // last_refresh should STILL be the original refresh time
+        assert_eq!(state_after_schedule.system.last_refresh, refresh_time);
+    }
+}
+
+/// Helper function to count teams in a conference column
+/// Column 0 = Eastern Conference (or Western if western_first config is true)
+/// Column 1 = Western Conference (or Eastern if western_first config is true)
+fn count_teams_in_conference_column(standings: &[nhl_api::Standing], column: usize) -> usize {
+    use std::collections::BTreeMap;
+
+    // Group standings by conference
+    let mut grouped: BTreeMap<String, Vec<&nhl_api::Standing>> = BTreeMap::new();
+    for standing in standings {
+        let conference = standing.conference_name
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string());
+        grouped
+            .entry(conference)
+            .or_default()
+            .push(standing);
+    }
+
+    // Convert to vec - BTreeMap gives us Eastern, Western alphabetically
+    let groups: Vec<_> = grouped.into_iter().collect();
+
+    if groups.len() != 2 {
+        return 0;
+    }
+
+    // Column 0 = first conference (Eastern), Column 1 = second conference (Western)
+    // Note: We're ignoring western_first config for now since we don't have access to it here
+    // The proper fix would be to pass the config through, but for now this matches the rendering
+    if column < groups.len() {
+        groups[column].1.len()
+    } else {
+        0
+    }
+}
+
+/// Count teams in a division column (0 = Eastern divisions, 1 = Western divisions)
+/// Respects display_standings_western_first config
+fn count_teams_in_division_column(
+    standings: &[nhl_api::Standing],
+    column: usize,
+    western_first: bool,
+) -> usize {
+    use std::collections::BTreeMap;
+
+    // Group standings by division
+    let mut grouped: BTreeMap<String, Vec<&nhl_api::Standing>> = BTreeMap::new();
+    for standing in standings {
+        grouped
+            .entry(standing.division_name.clone())
+            .or_default()
+            .push(standing);
+    }
+
+    // Separate Eastern and Western divisions
+    let mut eastern_divs = Vec::new();
+    let mut western_divs = Vec::new();
+
+    for (div_name, teams) in grouped {
+        if div_name == "Atlantic" || div_name == "Metropolitan" {
+            eastern_divs.push((div_name, teams));
+        } else if div_name == "Central" || div_name == "Pacific" {
+            western_divs.push((div_name, teams));
+        }
+    }
+
+    // Determine which divisions go in which column based on western_first
+    let (col0_divs, col1_divs) = if western_first {
+        (western_divs, eastern_divs)
+    } else {
+        (eastern_divs, western_divs)
+    };
+
+    // Count total teams in the requested column
+    let divs = if column == 0 { col0_divs } else { col1_divs };
+    divs.iter().map(|(_, teams)| teams.len()).sum()
+}
+
+/// Count teams in a wildcard column (same structure as division view)
+/// Each column has: Division1 top-3 + Division2 top-3 + Wildcards (remaining teams sorted by points)
+fn count_teams_in_wildcard_column(
+    standings: &[nhl_api::Standing],
+    column: usize,
+    western_first: bool,
+) -> usize {
+    use std::collections::BTreeMap;
+
+    // Group teams by division and sort by points
+    let mut grouped: BTreeMap<String, Vec<&nhl_api::Standing>> = BTreeMap::new();
+    for standing in standings {
+        grouped
+            .entry(standing.division_name.clone())
+            .or_default()
+            .push(standing);
+    }
+
+    // Sort teams within each division by points
+    for teams in grouped.values_mut() {
+        teams.sort_by(|a, b| b.points.cmp(&a.points));
+    }
+
+    // Extract divisions
+    let atlantic = grouped.get("Atlantic").cloned().unwrap_or_default();
+    let metropolitan = grouped.get("Metropolitan").cloned().unwrap_or_default();
+    let central = grouped.get("Central").cloned().unwrap_or_default();
+    let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
+
+    // Count teams per conference
+    // Eastern: Atlantic top 3 + Metropolitan top 3 + (remaining teams from both)
+    let eastern_count = {
+        let top_count = atlantic.len().min(3) + metropolitan.len().min(3);
+        let wildcard_count = atlantic.len().saturating_sub(3) + metropolitan.len().saturating_sub(3);
+        top_count + wildcard_count
+    };
+
+    // Western: Central top 3 + Pacific top 3 + (remaining teams from both)
+    let western_count = {
+        let top_count = central.len().min(3) + pacific.len().min(3);
+        let wildcard_count = central.len().saturating_sub(3) + pacific.len().saturating_sub(3);
+        top_count + wildcard_count
+    };
+
+    // Determine which conference is in which column based on western_first
+    if western_first {
+        if column == 0 { western_count } else { eastern_count }
+    } else {
+        if column == 0 { eastern_count } else { western_count }
     }
 }

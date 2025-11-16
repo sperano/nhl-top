@@ -34,43 +34,44 @@ pub fn render_horizontal_separator(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
     use crate::tui::widgets::testing::*;
 
     #[test]
     fn test_horizontal_separator_basic() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
-        let area = Rect::new(0, 0, 80, 1);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 1));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 1);
 
         let lines = render_horizontal_separator(50, 0, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
         assert_buffer(&buf, &[
-            "──────────────────────────────────────────────────                              ",
-        ], 80);
+            "──────────────────────────────────────────────────",
+        ]);
     }
 
     #[test]
     fn test_horizontal_separator_with_margin() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
-        let area = Rect::new(0, 0, 80, 1);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 1));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 1);
 
         let lines = render_horizontal_separator(50, 4, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
         assert_buffer(&buf, &[
-            "    ──────────────────────────────────────────────                              ",
-        ], 80);
+            "    ──────────────────────────────────────────────",
+        ]);
     }
 
     #[test]
     fn test_horizontal_separator_at_bottom() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 5));
-        let area = Rect::new(0, 0, 80, 5);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 5));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 5);
 
         // Try to render at y=5 (at bottom)
         let lines = render_horizontal_separator(50, 0, area, 5, &mut buf, &config);
@@ -82,23 +83,23 @@ mod tests {
     #[test]
     fn test_horizontal_separator_width() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
-        let area = Rect::new(0, 0, 80, 1);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 1));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 1);
 
         let lines = render_horizontal_separator(20, 0, area, 0, &mut buf, &config);
 
         assert_eq!(lines, 1);
 
         assert_buffer(&buf, &[
-            "────────────────────                                                            ",
-        ], 80);
+            "────────────────────",
+        ]);
     }
 
     #[test]
     fn test_horizontal_separator_width_with_margin() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
-        let area = Rect::new(0, 0, 80, 1);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 1));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 1);
 
         // Total width 30, margin 5 means 25 separator chars
         let lines = render_horizontal_separator(30, 5, area, 0, &mut buf, &config);
@@ -106,7 +107,7 @@ mod tests {
         assert_eq!(lines, 1);
 
         assert_buffer(&buf, &[
-            "     ─────────────────────────                                                  ",
-        ], 80);
+            "     ─────────────────────────",
+        ]);
     }
 }
