@@ -1,13 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::time::SystemTime;
 
-use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, Standing};
+use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
 
 use crate::commands::scores_format::PeriodScores;
 use crate::commands::standings::GroupBy;
 use crate::config::Config;
 
-use super::action::{Panel, PlayerStats, Tab};
+use super::action::{Panel, Tab};
 
 /// Root application state - single source of truth
 ///
@@ -76,7 +76,7 @@ pub struct DataState {
     pub period_scores: HashMap<i64, PeriodScores>,
     pub boxscores: HashMap<i64, Boxscore>,
     pub team_roster_stats: HashMap<String, ClubStats>,
-    pub player_stats: HashMap<i64, PlayerStats>,
+    pub player_data: HashMap<i64, PlayerLanding>,
 
     // Loading states
     pub loading: HashSet<LoadingKey>,
@@ -94,7 +94,7 @@ impl Default for DataState {
             period_scores: HashMap::new(),
             boxscores: HashMap::new(),
             team_roster_stats: HashMap::new(),
-            player_stats: HashMap::new(),
+            player_data: HashMap::new(),
             loading: HashSet::new(),
             errors: HashMap::new(),
         }

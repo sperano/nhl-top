@@ -101,7 +101,7 @@ pub async fn fetch_club_stats_cached(
     convert = r#"{ player_id }"#,
     result = true
 )]
-pub async fn fetch_player_info_cached(client: &Client, player_id: i64) -> Result<nhl_api::PlayerLanding, NHLApiError> {
+pub async fn fetch_player_landing_cached(client: &Client, player_id: i64) -> Result<nhl_api::PlayerLanding, NHLApiError> {
     client.player_landing(player_id).await
 }
 

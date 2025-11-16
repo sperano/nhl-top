@@ -89,6 +89,9 @@ impl Runtime {
             // Check if a team detail panel was just pushed and trigger fetch
             let team_detail_effect = self.check_for_team_detail_fetch(&self.state, &new_state);
 
+            // Check if a player detail panel was just pushed and trigger fetch
+            let player_detail_effect = self.check_for_player_detail_fetch(&self.state, &new_state);
+
             // Check if schedule was just loaded and trigger game detail fetches
             let game_details_effect = self.check_for_game_details_fetch(&self.state, &new_state);
 
@@ -99,6 +102,7 @@ impl Runtime {
             if !matches!(reducer_effect, Effect::None) { effects.push(reducer_effect); }
             if !matches!(boxscore_effect, Effect::None) { effects.push(boxscore_effect); }
             if !matches!(team_detail_effect, Effect::None) { effects.push(team_detail_effect); }
+            if !matches!(player_detail_effect, Effect::None) { effects.push(player_detail_effect); }
             if !matches!(game_details_effect, Effect::None) { effects.push(game_details_effect); }
 
             if effects.is_empty() {
@@ -152,6 +156,27 @@ impl Runtime {
                         return self.data_effects.fetch_team_roster_stats(abbrev.clone());
                     } else {
                         trace!("EFFECT: Team roster stats already loaded/loading for team={}", abbrev);
+                    }
+                }
+            }
+        }
+        Effect::None
+    }
+
+    /// Check if a player detail panel was just pushed and needs data fetching
+    fn check_for_player_detail_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
+        // Check if panel_stack grew and new panel is a PlayerDetail
+        if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
+            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
+                if let super::action::Panel::PlayerDetail { player_id } = panel_state.panel {
+                    // Check if we don't already have the data and aren't already loading
+                    if !new_state.data.player_data.contains_key(&player_id)
+                        && !new_state.data.loading.contains(&super::state::LoadingKey::PlayerStats(player_id))
+                    {
+                        debug!("EFFECT: Triggering player stats fetch for player_id={}", player_id);
+                        return self.data_effects.fetch_player_stats(player_id);
+                    } else {
+                        trace!("EFFECT: Player stats already loaded/loading for player_id={}", player_id);
                     }
                 }
             }

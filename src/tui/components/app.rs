@@ -4,9 +4,9 @@ use crate::tui::framework::state::{AppState, LoadingKey};
 use super::{
     boxscore_panel::BoxscorePanelProps, scores_tab::ScoresTabProps,
     settings_tab::SettingsTabProps, standings_tab::StandingsTabProps,
-    team_detail_panel::TeamDetailPanelProps, BoxscorePanel, ScoresTab,
-    SettingsTab, StandingsTab, StatusBar, TabbedPanel, TabbedPanelProps, TabItem,
-    TeamDetailPanel,
+    team_detail_panel::TeamDetailPanelProps, player_detail_panel::PlayerDetailPanelProps,
+    BoxscorePanel, ScoresTab, SettingsTab, StandingsTab, StatusBar, TabbedPanel,
+    TabbedPanelProps, TabItem, TeamDetailPanel, PlayerDetailPanel,
 };
 //
 /// Root App component
@@ -130,36 +130,14 @@ impl App {
                 TeamDetailPanel.view(&props, &())
             }
             Panel::PlayerDetail { player_id } => {
-                // Placeholder for player detail panel
-                use ratatui::{buffer::Buffer, layout::Rect, widgets::{Block, Borders, Paragraph}};
-                use crate::tui::framework::component::RenderableWidget;
-                use crate::config::DisplayConfig;
-//
-                struct PlayerPanelPlaceholder {
-                    player_id: i64,
-                }
-//
-                impl RenderableWidget for PlayerPanelPlaceholder {
-                    fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
-                        let text = format!(
-                            "Player Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back",
-                            self.player_id
-                        );
-                        let widget = Paragraph::new(text)
-                            .block(Block::default().borders(Borders::ALL).title("Player Panel"));
-                        ratatui::widgets::Widget::render(widget, area, buf);
-                    }
-//
-                    fn clone_box(&self) -> Box<dyn RenderableWidget> {
-                        Box::new(PlayerPanelPlaceholder {
-                            player_id: self.player_id,
-                        })
-                    }
-                }
-//
-                Element::Widget(Box::new(PlayerPanelPlaceholder {
+                let props = PlayerDetailPanelProps {
                     player_id: *player_id,
-                }))
+                    player_data: state.data.player_data.get(player_id).cloned(),
+                    loading: state.data.loading.contains(&LoadingKey::PlayerStats(*player_id)),
+                    scroll_offset: panel_state.scroll_offset,
+                    selected_index: panel_state.selected_index,
+                };
+                PlayerDetailPanel.view(&props, &())
             }
         }
     }

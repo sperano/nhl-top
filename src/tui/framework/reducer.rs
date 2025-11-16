@@ -253,7 +253,7 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
         Action::PlayerStatsLoaded(player_id, Ok(stats)) => {
             let mut new_state = state.clone();
-            new_state.data.player_stats.insert(player_id, stats);
+            new_state.data.player_data.insert(player_id, stats);
             new_state
                 .data
                 .loading
@@ -317,7 +317,17 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                             .unwrap_or(0)
                     }
                     super::action::Panel::Boxscore { .. } => 0, // No selection in boxscore
-                    super::action::Panel::PlayerDetail { .. } => 0, // No selection in player detail
+                    super::action::Panel::PlayerDetail { player_id } => {
+                        // Count NHL regular season games
+                        new_state.data.player_data.get(player_id)
+                            .and_then(|player| player.season_totals.as_ref())
+                            .map(|seasons| {
+                                seasons.iter()
+                                    .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
+                                    .count()
+                            })
+                            .unwrap_or(0)
+                    }
                 };
 
                 if total_items > 0 {
@@ -355,7 +365,17 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                             .unwrap_or(0)
                     }
                     super::action::Panel::Boxscore { .. } => 0, // No selection in boxscore
-                    super::action::Panel::PlayerDetail { .. } => 0, // No selection in player detail
+                    super::action::Panel::PlayerDetail { player_id } => {
+                        // Count NHL regular season games
+                        new_state.data.player_data.get(player_id)
+                            .and_then(|player| player.season_totals.as_ref())
+                            .map(|seasons| {
+                                seasons.iter()
+                                    .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
+                                    .count()
+                            })
+                            .unwrap_or(0)
+                    }
                 };
 
                 if total_items > 0 {
@@ -390,16 +410,26 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                         // Get the selected player and navigate to player detail
                         if let Some(selected_index) = panel_state.selected_index {
                             if let Some(stats) = state.data.team_roster_stats.get(abbrev) {
-                                // Get all players (skaters + goalies)
-                                let total_skaters = stats.skaters.len();
+                                // TODO: This sorting should be done in nhl_api's club_stats() call
+                                // to ensure consistent ordering across all consumers
+
+                                // Sort skaters by points descending (same as display order)
+                                let mut sorted_skaters = stats.skaters.clone();
+                                sorted_skaters.sort_by(|a, b| b.points.cmp(&a.points));
+
+                                // Sort goalies by games played descending (same as display order)
+                                let mut sorted_goalies = stats.goalies.clone();
+                                sorted_goalies.sort_by(|a, b| b.games_played.cmp(&a.games_played));
+
+                                let total_skaters = sorted_skaters.len();
 
                                 let player_id = if selected_index < total_skaters {
                                     // Selected a skater
-                                    stats.skaters.get(selected_index).map(|s| s.player_id)
+                                    sorted_skaters.get(selected_index).map(|s| s.player_id)
                                 } else {
                                     // Selected a goalie
                                     let goalie_index = selected_index - total_skaters;
-                                    stats.goalies.get(goalie_index).map(|g| g.player_id)
+                                    sorted_goalies.get(goalie_index).map(|g| g.player_id)
                                 };
 
                                 if let Some(player_id) = player_id {
@@ -407,9 +437,39 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                                     new_state.navigation.panel_stack.push(PanelState {
                                         panel: super::action::Panel::PlayerDetail { player_id },
                                         scroll_offset: 0,
-                                        selected_index: None,
+                                        selected_index: Some(0), // Start with first season selected
                                     });
                                     return (new_state, Effect::None);
+                                }
+                            }
+                        }
+                    }
+                    super::action::Panel::PlayerDetail { player_id } => {
+                        // Get the selected season and navigate to team detail
+                        if let Some(selected_index) = panel_state.selected_index {
+                            if let Some(player) = state.data.player_data.get(player_id) {
+                                if let Some(seasons) = &player.season_totals {
+                                    // Filter to NHL regular season only
+                                    let nhl_seasons: Vec<_> = seasons.iter()
+                                        .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
+                                        .collect();
+
+                                    if let Some(season) = nhl_seasons.get(selected_index) {
+                                        // Extract team abbreviation from common name
+                                        if let Some(ref common_name) = season.team_common_name {
+                                            if let Some(abbrev) = crate::team_abbrev::common_name_to_abbrev(&common_name.default) {
+                                                let mut new_state = state.clone();
+                                                new_state.navigation.panel_stack.push(PanelState {
+                                                    panel: super::action::Panel::TeamDetail {
+                                                        abbrev: abbrev.to_string(),
+                                                    },
+                                                    scroll_offset: 0,
+                                                    selected_index: Some(0),
+                                                });
+                                                return (new_state, Effect::None);
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

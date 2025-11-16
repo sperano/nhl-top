@@ -1,4 +1,4 @@
-use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, Standing};
+use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
 
 /// Global actions - like Redux actions
 ///
@@ -33,7 +33,7 @@ pub enum Action {
     GameDetailsLoaded(i64, Result<GameMatchup, String>),
     BoxscoreLoaded(i64, Result<Boxscore, String>),
     TeamRosterStatsLoaded(String, Result<ClubStats, String>),
-    PlayerStatsLoaded(i64, Result<PlayerStats, String>),
+    PlayerStatsLoaded(i64, Result<PlayerLanding, String>),
 
     // UI actions
     ScrollUp(usize),
@@ -120,11 +120,6 @@ pub enum SettingsAction {
     UpdateConfig(Box<crate::config::Config>),
 }
 
-// Placeholder type for future implementation
-#[derive(Debug, Clone)]
-pub struct PlayerStats {
-    pub player_id: i64,
-}
 
 impl Action {
     /// Returns true if this action should trigger a re-render

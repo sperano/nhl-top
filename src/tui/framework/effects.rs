@@ -113,13 +113,12 @@ impl DataEffects {
         }))
     }
 
-    /// Fetch player stats for a specific player
+    /// Fetch player landing data (career stats, season stats, etc.)
     pub fn fetch_player_stats(&self, player_id: i64) -> Effect {
+        let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            // TODO: Implement player stats fetching when available in nhl_api
-            // For now, return a placeholder
-            let result = Ok(super::action::PlayerStats { player_id });
-            Action::PlayerStatsLoaded(player_id, result)
+            let result = cache::fetch_player_landing_cached(&client, player_id).await;
+            Action::PlayerStatsLoaded(player_id, result.map_err(|e| e.to_string()))
         }))
     }
 
