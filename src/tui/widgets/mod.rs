@@ -7,9 +7,6 @@
 #[cfg(test)]
 pub mod testing;
 
-// Focus management system
-//pub mod focus;
-
 // Small reusable widgets
 pub mod settings;
 
@@ -22,9 +19,6 @@ pub use score_table::ScoreTable;
 
 pub mod game_box;
 pub use game_box::{GameBox, GameState};
-
-pub mod game_grid;
-pub use game_grid::GameGrid;
 
 pub mod settings_list;
 pub use settings_list::SettingsListWidget;
