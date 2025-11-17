@@ -2,10 +2,13 @@ use crate::tui::framework::component::{vertical, Component, Constraint, Element}
 use crate::tui::framework::state::{AppState, LoadingKey};
 //
 use super::{
-    boxscore_panel::BoxscorePanelProps, scores_tab::ScoresTabProps,
-    settings_tab::SettingsTabProps, standings_tab::StandingsTabProps,
-    team_detail_panel::TeamDetailPanelProps, player_detail_panel::PlayerDetailPanelProps,
-    BoxscorePanel, ScoresTab, SettingsTab, StandingsTab, StatusBar, TabbedPanel,
+    boxscore_panel::{BoxscorePanel, BoxscorePanelProps, TeamView},
+    scores_tab::ScoresTabProps,
+    settings_tab::SettingsTabProps,
+    standings_tab::StandingsTabProps,
+    team_detail_panel::TeamDetailPanelProps,
+    player_detail_panel::PlayerDetailPanelProps,
+    ScoresTab, SettingsTab, StandingsTab, StatusBar, TabbedPanel,
     TabbedPanelProps, TabItem, TeamDetailPanel, PlayerDetailPanel,
 };
 //
@@ -103,6 +106,10 @@ impl App {
                     game_id: *game_id,
                     boxscore: state.data.boxscores.get(game_id).cloned(),
                     loading: state.data.loading.contains(&LoadingKey::Boxscore(*game_id)),
+                    team_view: TeamView::Away, // TODO: Store in panel state to allow switching
+                    selected_index: panel_state.selected_index,
+                    focused: true, // Panel has focus when it's on the stack
+                    scroll_offset: panel_state.scroll_offset,
                 };
                 BoxscorePanel.view(&props, &())
             }

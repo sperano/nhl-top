@@ -10,6 +10,8 @@ pub mod team_detail_panel;
 pub mod player_detail_panel;
 pub mod tabbed_panel;
 pub mod table;
+pub mod skater_stats_table;
+pub mod goalie_stats_table;
 
 pub use app::App;
 pub use status_bar::StatusBar;
@@ -21,3 +23,5 @@ pub use team_detail_panel::{TeamDetailPanel, TeamDetailPanelProps};
 pub use player_detail_panel::{PlayerDetailPanel, PlayerDetailPanelProps};
 pub use tabbed_panel::{TabbedPanel, TabbedPanelProps, TabItem};
 pub use table::{Table, TableProps, TableWidget};
+pub use skater_stats_table::SkaterStatsTableWidget;
+pub use goalie_stats_table::GoalieStatsTableWidget;

@@ -132,6 +132,46 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
             (new_state, Effect::Action(Action::RefreshData))
         }
 
+        Action::SelectPlayer(player_id) => {
+            debug!("PLAYER: Opening player detail panel for player_id={}", player_id);
+            let mut new_state = state.clone();
+
+            // Push PlayerDetail panel onto stack
+            new_state.navigation.panel_stack.push(PanelState {
+                panel: super::action::Panel::PlayerDetail { player_id },
+                scroll_offset: 0,
+                selected_index: Some(0), // Start with first season selected
+            });
+
+            // Note: data fetch is triggered by Runtime::check_for_player_detail_fetch()
+            // which detects when a PlayerDetail panel is pushed and triggers the fetch effect
+
+            (new_state, Effect::None)
+        }
+
+        Action::SelectTeam(team_abbrev) => {
+            debug!("TEAM: Opening team detail panel for team={}", team_abbrev);
+            let mut new_state = state.clone();
+
+            // Push TeamDetail panel onto stack
+            new_state.navigation.panel_stack.push(PanelState {
+                panel: super::action::Panel::TeamDetail { abbrev: team_abbrev.clone() },
+                scroll_offset: 0,
+                selected_index: Some(0),
+            });
+
+            // Mark as loading if we don't have data yet
+            if !new_state.data.team_roster_stats.contains_key(&team_abbrev) {
+                new_state
+                    .data
+                    .loading
+                    .insert(LoadingKey::TeamRosterStats(team_abbrev));
+                // TODO: Trigger Effect to fetch team stats
+            }
+
+            (new_state, Effect::None)
+        }
+
         Action::StandingsLoaded(Ok(standings)) => {
             let mut new_state = state.clone();
             new_state.data.standings = Some(standings);
@@ -308,15 +348,29 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
         Action::PanelSelectNext => {
             let mut new_state = state.clone();
-            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
+
+            // Clone panel info before getting mutable reference
+            let panel_type = new_state.navigation.panel_stack.last().map(|p| p.panel.clone());
+
+            if let Some(panel) = panel_type {
                 // Get total item count based on panel type
-                let total_items = match &panel_state.panel {
+                let total_items = match &panel {
                     super::action::Panel::TeamDetail { abbrev } => {
                         new_state.data.team_roster_stats.get(abbrev)
                             .map(|stats| stats.skaters.len() + stats.goalies.len())
                             .unwrap_or(0)
                     }
-                    super::action::Panel::Boxscore { .. } => 0, // No selection in boxscore
+                    super::action::Panel::Boxscore { game_id } => {
+                        // Count all players from both teams
+                        new_state.data.boxscores.get(game_id)
+                            .map(|boxscore| {
+                                let away = &boxscore.player_by_game_stats.away_team;
+                                let home = &boxscore.player_by_game_stats.home_team;
+                                away.forwards.len() + away.defense.len() + away.goalies.len()
+                                    + home.forwards.len() + home.defense.len() + home.goalies.len()
+                            })
+                            .unwrap_or(0)
+                    }
                     super::action::Panel::PlayerDetail { player_id } => {
                         // Count NHL regular season games
                         new_state.data.player_data.get(player_id)
@@ -331,21 +385,124 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                 };
 
                 if total_items > 0 {
-                    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
-                        if let Some(current_index) = panel.selected_index {
+                    if let Some(panel_state) = new_state.navigation.panel_stack.last_mut() {
+                        if let Some(current_index) = panel_state.selected_index {
                             // Wrap around to 0 if at the end
                             let next_index = if current_index + 1 >= total_items {
                                 0
                             } else {
                                 current_index + 1
                             };
-                            panel.selected_index = Some(next_index);
+                            panel_state.selected_index = Some(next_index);
+
+                            // Log navigation for Boxscore panels
+                            if matches!(&panel, super::action::Panel::Boxscore { .. }) {
+                                tracing::debug!("BOXSCORE NAV: PanelSelectNext {} -> {}, scroll_offset={}",
+                                    current_index, next_index, panel_state.scroll_offset);
+                            }
 
                             // Auto-scroll to keep selection visible
-                            if next_index > panel.scroll_offset + 10 {
-                                panel.scroll_offset = next_index.saturating_sub(10);
-                            } else if next_index < panel.scroll_offset {
-                                panel.scroll_offset = next_index;
+                            // For Boxscore panels, account for section chrome when calculating Y position
+                            // IMPORTANT: Use MAX counts (not actual counts) to match rendering logic
+                            let estimated_y = match &panel {
+                                super::action::Panel::Boxscore { game_id } => {
+                                    new_state.data.boxscores.get(game_id)
+                                        .map(|boxscore| {
+                                            let away = &boxscore.player_by_game_stats.away_team;
+                                            let home = &boxscore.player_by_game_stats.home_team;
+
+                                            let away_forwards = away.forwards.len();
+                                            let away_defense = away.defense.len();
+                                            let away_goalies = away.goalies.len();
+                                            let away_total = away_forwards + away_defense + away_goalies;
+
+                                            let home_forwards = home.forwards.len();
+                                            let home_defense = home.defense.len();
+                                            let home_goalies = home.goalies.len();
+
+                                            // Use MAX counts to match rendering (prevents scroll mismatch)
+                                            let max_forwards = away_forwards.max(home_forwards);
+                                            let max_defense = away_defense.max(home_defense);
+                                            let max_goalies = away_goalies.max(home_goalies);
+
+                                            const CHROME: usize = 4;
+
+                                            // Calculate Y position using MAX counts (matching rendering)
+                                            if next_index < away_forwards {
+                                                // Away forwards: chrome + row
+                                                CHROME + next_index
+                                            } else if next_index < away_forwards + away_defense {
+                                                // Away defense: max forwards section + defense chrome + row
+                                                (max_forwards + CHROME) + CHROME + (next_index - away_forwards)
+                                            } else if next_index < away_total {
+                                                // Away goalies: max forwards + max defense sections + goalies chrome + row
+                                                (max_forwards + CHROME) + (max_defense + CHROME) + CHROME + (next_index - away_forwards - away_defense)
+                                            } else {
+                                                let home_idx = next_index - away_total;
+
+                                                // Base offset: all away sections using MAX counts
+                                                let away_offset = (max_forwards + CHROME) + (max_defense + CHROME) + (max_goalies + CHROME);
+
+                                                if home_idx < home_forwards {
+                                                    // Home forwards
+                                                    away_offset + CHROME + home_idx
+                                                } else if home_idx < home_forwards + home_defense {
+                                                    // Home defense
+                                                    away_offset + (max_forwards + CHROME) + CHROME + (home_idx - home_forwards)
+                                                } else {
+                                                    // Home goalies
+                                                    away_offset + (max_forwards + CHROME) + (max_defense + CHROME) + CHROME + (home_idx - home_forwards - home_defense)
+                                                }
+                                            }
+                                        })
+                                        .unwrap_or(next_index)
+                                }
+                                _ => next_index // For other panels, use index as Y
+                            };
+
+                            // Only auto-scroll for Boxscore if content exceeds reasonable terminal size
+                            let old_scroll_offset = panel_state.scroll_offset;
+
+                            if let super::action::Panel::Boxscore { game_id } = &panel {
+                                // Calculate total content height to determine if scrolling is needed
+                                if let Some(boxscore) = new_state.data.boxscores.get(game_id) {
+                                    let away = &boxscore.player_by_game_stats.away_team;
+                                    let home = &boxscore.player_by_game_stats.home_team;
+
+                                    let max_forwards = away.forwards.len().max(home.forwards.len());
+                                    let max_defense = away.defense.len().max(home.defense.len());
+                                    let max_goalies = away.goalies.len().max(home.goalies.len());
+
+                                    const CHROME: usize = 4;
+                                    let total_content_height = (max_forwards + CHROME) + (max_defense + CHROME) + (max_goalies + CHROME);
+
+                                    // Assume a reasonable terminal size of 40 lines
+                                    // Only scroll if content doesn't fit
+                                    const REASONABLE_TERMINAL_HEIGHT: usize = 40;
+
+                                    if total_content_height > REASONABLE_TERMINAL_HEIGHT {
+                                        // Content doesn't fit, use auto-scroll with 20-line buffer
+                                        if estimated_y > panel_state.scroll_offset + 20 {
+                                            panel_state.scroll_offset = estimated_y.saturating_sub(20);
+                                        } else if estimated_y < panel_state.scroll_offset {
+                                            panel_state.scroll_offset = estimated_y;
+                                        }
+                                    }
+                                    // else: content fits entirely, don't scroll (keep scroll_offset at 0)
+                                }
+                            } else {
+                                // For other panel types, use simple auto-scroll
+                                if estimated_y > panel_state.scroll_offset + 20 {
+                                    panel_state.scroll_offset = estimated_y.saturating_sub(20);
+                                } else if estimated_y < panel_state.scroll_offset {
+                                    panel_state.scroll_offset = estimated_y;
+                                }
+                            }
+
+                            // Log scroll changes for Boxscore panels
+                            if matches!(&panel, super::action::Panel::Boxscore { .. }) && old_scroll_offset != panel_state.scroll_offset {
+                                tracing::debug!("BOXSCORE NAV: estimated_y={}, scroll_offset: {} -> {}",
+                                    estimated_y, old_scroll_offset, panel_state.scroll_offset);
                             }
                         }
                     }
@@ -356,15 +513,29 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
         Action::PanelSelectPrevious => {
             let mut new_state = state.clone();
-            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
+
+            // Clone panel info before getting mutable reference
+            let panel_type = new_state.navigation.panel_stack.last().map(|p| p.panel.clone());
+
+            if let Some(panel) = panel_type {
                 // Get total item count based on panel type
-                let total_items = match &panel_state.panel {
+                let total_items = match &panel {
                     super::action::Panel::TeamDetail { abbrev } => {
                         new_state.data.team_roster_stats.get(abbrev)
                             .map(|stats| stats.skaters.len() + stats.goalies.len())
                             .unwrap_or(0)
                     }
-                    super::action::Panel::Boxscore { .. } => 0, // No selection in boxscore
+                    super::action::Panel::Boxscore { game_id } => {
+                        // Count all players from both teams
+                        new_state.data.boxscores.get(game_id)
+                            .map(|boxscore| {
+                                let away = &boxscore.player_by_game_stats.away_team;
+                                let home = &boxscore.player_by_game_stats.home_team;
+                                away.forwards.len() + away.defense.len() + away.goalies.len()
+                                    + home.forwards.len() + home.defense.len() + home.goalies.len()
+                            })
+                            .unwrap_or(0)
+                    }
                     super::action::Panel::PlayerDetail { player_id } => {
                         // Count NHL regular season games
                         new_state.data.player_data.get(player_id)
@@ -379,21 +550,124 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                 };
 
                 if total_items > 0 {
-                    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
-                        if let Some(current_index) = panel.selected_index {
+                    if let Some(panel_state) = new_state.navigation.panel_stack.last_mut() {
+                        if let Some(current_index) = panel_state.selected_index {
                             // Wrap around to end if at the beginning
                             let prev_index = if current_index == 0 {
                                 total_items - 1
                             } else {
                                 current_index - 1
                             };
-                            panel.selected_index = Some(prev_index);
+                            panel_state.selected_index = Some(prev_index);
+
+                            // Log navigation for Boxscore panels
+                            if matches!(&panel, super::action::Panel::Boxscore { .. }) {
+                                tracing::debug!("BOXSCORE NAV: PanelSelectPrevious {} -> {}, scroll_offset={}",
+                                    current_index, prev_index, panel_state.scroll_offset);
+                            }
 
                             // Auto-scroll to keep selection visible
-                            if prev_index < panel.scroll_offset {
-                                panel.scroll_offset = prev_index;
-                            } else if prev_index > panel.scroll_offset + 10 {
-                                panel.scroll_offset = prev_index.saturating_sub(10);
+                            // For Boxscore panels, account for section chrome when calculating Y position
+                            // IMPORTANT: Use MAX counts (not actual counts) to match rendering logic
+                            let estimated_y = match &panel {
+                                super::action::Panel::Boxscore { game_id } => {
+                                    new_state.data.boxscores.get(game_id)
+                                        .map(|boxscore| {
+                                            let away = &boxscore.player_by_game_stats.away_team;
+                                            let home = &boxscore.player_by_game_stats.home_team;
+
+                                            let away_forwards = away.forwards.len();
+                                            let away_defense = away.defense.len();
+                                            let away_goalies = away.goalies.len();
+                                            let away_total = away_forwards + away_defense + away_goalies;
+
+                                            let home_forwards = home.forwards.len();
+                                            let home_defense = home.defense.len();
+                                            let home_goalies = home.goalies.len();
+
+                                            // Use MAX counts to match rendering (prevents scroll mismatch)
+                                            let max_forwards = away_forwards.max(home_forwards);
+                                            let max_defense = away_defense.max(home_defense);
+                                            let max_goalies = away_goalies.max(home_goalies);
+
+                                            const CHROME: usize = 4;
+
+                                            // Calculate Y position using MAX counts (matching rendering)
+                                            if prev_index < away_forwards {
+                                                // Away forwards: chrome + row
+                                                CHROME + prev_index
+                                            } else if prev_index < away_forwards + away_defense {
+                                                // Away defense: max forwards section + defense chrome + row
+                                                (max_forwards + CHROME) + CHROME + (prev_index - away_forwards)
+                                            } else if prev_index < away_total {
+                                                // Away goalies: max forwards + max defense sections + goalies chrome + row
+                                                (max_forwards + CHROME) + (max_defense + CHROME) + CHROME + (prev_index - away_forwards - away_defense)
+                                            } else {
+                                                let home_idx = prev_index - away_total;
+
+                                                // Base offset: all away sections using MAX counts
+                                                let away_offset = (max_forwards + CHROME) + (max_defense + CHROME) + (max_goalies + CHROME);
+
+                                                if home_idx < home_forwards {
+                                                    // Home forwards
+                                                    away_offset + CHROME + home_idx
+                                                } else if home_idx < home_forwards + home_defense {
+                                                    // Home defense
+                                                    away_offset + (max_forwards + CHROME) + CHROME + (home_idx - home_forwards)
+                                                } else {
+                                                    // Home goalies
+                                                    away_offset + (max_forwards + CHROME) + (max_defense + CHROME) + CHROME + (home_idx - home_forwards - home_defense)
+                                                }
+                                            }
+                                        })
+                                        .unwrap_or(prev_index)
+                                }
+                                _ => prev_index // For other panels, use index as Y
+                            };
+
+                            // Only auto-scroll for Boxscore if content exceeds reasonable terminal size
+                            let old_scroll_offset = panel_state.scroll_offset;
+
+                            if let super::action::Panel::Boxscore { game_id } = &panel {
+                                // Calculate total content height to determine if scrolling is needed
+                                if let Some(boxscore) = new_state.data.boxscores.get(game_id) {
+                                    let away = &boxscore.player_by_game_stats.away_team;
+                                    let home = &boxscore.player_by_game_stats.home_team;
+
+                                    let max_forwards = away.forwards.len().max(home.forwards.len());
+                                    let max_defense = away.defense.len().max(home.defense.len());
+                                    let max_goalies = away.goalies.len().max(home.goalies.len());
+
+                                    const CHROME: usize = 4;
+                                    let total_content_height = (max_forwards + CHROME) + (max_defense + CHROME) + (max_goalies + CHROME);
+
+                                    // Assume a reasonable terminal size of 40 lines
+                                    // Only scroll if content doesn't fit
+                                    const REASONABLE_TERMINAL_HEIGHT: usize = 40;
+
+                                    if total_content_height > REASONABLE_TERMINAL_HEIGHT {
+                                        // Content doesn't fit, use auto-scroll with 20-line buffer
+                                        if estimated_y < panel_state.scroll_offset {
+                                            panel_state.scroll_offset = estimated_y;
+                                        } else if estimated_y > panel_state.scroll_offset + 20 {
+                                            panel_state.scroll_offset = estimated_y.saturating_sub(20);
+                                        }
+                                    }
+                                    // else: content fits entirely, don't scroll (keep scroll_offset at 0)
+                                }
+                            } else {
+                                // For other panel types, use simple auto-scroll
+                                if estimated_y < panel_state.scroll_offset {
+                                    panel_state.scroll_offset = estimated_y;
+                                } else if estimated_y > panel_state.scroll_offset + 20 {
+                                    panel_state.scroll_offset = estimated_y.saturating_sub(20);
+                                }
+                            }
+
+                            // Log scroll changes for Boxscore panels
+                            if matches!(&panel, super::action::Panel::Boxscore { .. }) && old_scroll_offset != panel_state.scroll_offset {
+                                tracing::debug!("BOXSCORE NAV: estimated_y={}, scroll_offset: {} -> {}",
+                                    estimated_y, old_scroll_offset, panel_state.scroll_offset);
                             }
                         }
                     }
@@ -474,6 +748,45 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                    super::action::Panel::Boxscore { game_id } => {
+                        // Get the selected player and navigate to player detail
+                        if let Some(selected_index) = panel_state.selected_index {
+                            if let Some(boxscore) = state.data.boxscores.get(game_id) {
+                                // Build player list in display order:
+                                // Away: forwards, defense, goalies
+                                // Home: forwards, defense, goalies
+                                let away = &boxscore.player_by_game_stats.away_team;
+                                let home = &boxscore.player_by_game_stats.home_team;
+
+                                let mut all_players = Vec::new();
+
+                                // Away team
+                                all_players.extend(away.forwards.iter().map(|p| p.player_id));
+                                all_players.extend(away.defense.iter().map(|p| p.player_id));
+                                all_players.extend(away.goalies.iter().map(|p| p.player_id));
+
+                                // Home team
+                                all_players.extend(home.forwards.iter().map(|p| p.player_id));
+                                all_players.extend(home.defense.iter().map(|p| p.player_id));
+                                all_players.extend(home.goalies.iter().map(|p| p.player_id));
+
+                                if let Some(&player_id) = all_players.get(selected_index) {
+                                    debug!("BOXSCORE: Selected player_id={} at index={}", player_id, selected_index);
+                                    let mut new_state = state.clone();
+                                    new_state.navigation.panel_stack.push(PanelState {
+                                        panel: super::action::Panel::PlayerDetail { player_id },
+                                        scroll_offset: 0,
+                                        selected_index: Some(0), // Start with first season selected
+                                    });
+
+                                    // Note: data fetch is triggered by Runtime::check_for_player_detail_fetch()
+                                    // which detects when a PlayerDetail panel is pushed and triggers the fetch effect
+
+                                    return (new_state, Effect::None);
                                 }
                             }
                         }
@@ -570,7 +883,7 @@ fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {
                         new_state.navigation.panel_stack.push(PanelState {
                             panel: super::action::Panel::Boxscore { game_id },
                             scroll_offset: 0,
-                            selected_index: None, // Boxscore panels don't have selection
+                            selected_index: Some(0), // Start with first player selected
                         });
 
                         return (new_state, Effect::None);
@@ -589,7 +902,7 @@ fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {
             new_state.navigation.panel_stack.push(PanelState {
                 panel: super::action::Panel::Boxscore { game_id },
                 scroll_offset: 0,
-                selected_index: None, // Boxscore panels don't have selection
+                selected_index: Some(0), // Start with first player selected
             });
 
             (new_state, Effect::None)

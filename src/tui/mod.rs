@@ -97,18 +97,15 @@ pub async fn run(
 
     // Main loop
     loop {
-        tracing::trace!("LOOP: Start of main loop iteration");
-
         // Process any actions from effects FIRST (so data loads trigger re-render)
         let actions_processed = runtime.process_actions();
-        tracing::trace!("LOOP: Processed {} actions", actions_processed);
+        if actions_processed > 0 {
+            tracing::debug!("LOOP: Processed {} actions", actions_processed);
+        }
 
         // Render
-        tracing::trace!("LOOP: Starting terminal.draw()");
         terminal.draw(|f| {
-            tracing::trace!("DRAW: Inside terminal.draw callback");
             let area = f.size();
-            tracing::trace!("DRAW: Got terminal area: {:?}", area);
 
             // Update boxes_per_row for game grid navigation
             // GameBox dimensions: 37 wide + 2 margin = 39 per box
@@ -118,16 +115,13 @@ pub async fn run(
 
             // Dispatch action to update boxes_per_row if it changed
             let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
-            tracing::trace!("DRAW: boxes_per_row check: current={}, calculated={}", current_boxes_per_row, boxes_per_row);
             if boxes_per_row != current_boxes_per_row {
-                tracing::trace!("DRAW: Dispatching UpdateBoxesPerRow");
+                tracing::debug!("DRAW: boxes_per_row changed: {} -> {}", current_boxes_per_row, boxes_per_row);
                 runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(boxes_per_row)));
             }
 
-            tracing::trace!("DRAW: About to call runtime.build()");
             // Build virtual tree from current state
             let element = runtime.build();
-            tracing::trace!("DRAW: runtime.build() completed");
 
             // Render virtual tree to ratatui buffer
             let config = &runtime.state().system.config.display;
@@ -158,7 +152,7 @@ pub async fn run(
         // If actions were processed, continue loop immediately to check for more
         // This ensures UI updates immediately when async data arrives
         if actions_processed > 0 {
-            tracing::trace!("Processed {} actions, continuing loop immediately for re-render", actions_processed);
+            tracing::debug!("Processed {} actions, continuing loop immediately for re-render", actions_processed);
             continue;
         }
 
