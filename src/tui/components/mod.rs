@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod status_bar;
+pub mod breadcrumb;
 pub mod scores_tab;
 pub mod standings_tab;
 pub mod settings_tab;
@@ -15,6 +16,7 @@ pub mod goalie_stats_table;
 
 pub use app::App;
 pub use status_bar::StatusBar;
+pub use breadcrumb::BreadcrumbWidget;
 pub use scores_tab::{ScoresTab, ScoresTabProps};
 pub use standings_tab::StandingsTab;
 pub use settings_tab::SettingsTab;

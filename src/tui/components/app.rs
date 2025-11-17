@@ -8,7 +8,7 @@ use super::{
     standings_tab::StandingsTabProps,
     team_detail_panel::TeamDetailPanelProps,
     player_detail_panel::PlayerDetailPanelProps,
-    ScoresTab, SettingsTab, StandingsTab, StatusBar, TabbedPanel,
+    BreadcrumbWidget, ScoresTab, SettingsTab, StandingsTab, StatusBar, TabbedPanel,
     TabbedPanelProps, TabItem, TeamDetailPanel, PlayerDetailPanel,
 };
 //
@@ -54,12 +54,23 @@ impl App {
 //
         // Determine content for active tab - if panel is open, show panel instead
         let (scores_content, standings_content, settings_content) = if let Some(panel_state) = state.navigation.panel_stack.last() {
-            // Panel is open - render it in the active tab's content area
+            // Panel is open - render it with breadcrumb in the active tab's content area
             let panel_element = self.render_panel(state, panel_state);
+            let breadcrumb_element = self.render_breadcrumb(state);
+
+            // Wrap panel with breadcrumb
+            let content_with_breadcrumb = vertical(
+                [
+                    Constraint::Length(1), // Breadcrumb (1 line)
+                    Constraint::Min(0),    // Panel content
+                ],
+                vec![breadcrumb_element, panel_element],
+            );
+
             match state.navigation.current_tab {
-                Tab::Scores => (panel_element, Element::None, Element::None),
-                Tab::Standings => (Element::None, panel_element, Element::None),
-                Tab::Settings => (Element::None, Element::None, panel_element),
+                Tab::Scores => (content_with_breadcrumb, Element::None, Element::None),
+                Tab::Standings => (Element::None, content_with_breadcrumb, Element::None),
+                Tab::Settings => (Element::None, Element::None, content_with_breadcrumb),
                 _ => (Element::None, Element::None, Element::None),
             }
         } else {
@@ -190,6 +201,14 @@ impl App {
             edit_buffer: state.ui.settings.edit_buffer.clone(),
         };
         SettingsTab.view(&props, &())
+    }
+//
+    /// Render breadcrumb navigation
+    fn render_breadcrumb(&self, state: &AppState) -> Element {
+        Element::Widget(Box::new(BreadcrumbWidget::new(
+            state.navigation.current_tab,
+            state.navigation.panel_stack.clone(),
+        )))
     }
 }
 //
