@@ -11,9 +11,6 @@ pub mod testing;
 pub mod settings;
 
 // Widget implementations
-pub mod scoring_table;
-pub use scoring_table::ScoringTable;
-
 pub mod score_table;
 pub use score_table::ScoreTable;
 
@@ -22,39 +19,6 @@ pub use game_box::{GameBox, GameState};
 
 pub mod settings_list;
 pub use settings_list::SettingsListWidget;
-
-pub mod action_bar;
-pub use action_bar::{ActionBar, Action};
-
-// Dummy types for old TUI compatibility (dead code)
-// Note: This is a simplified version that allows struct literal construction without description field
-#[derive(Clone, Debug, Default)]
-pub struct KeyHint {
-    #[allow(dead_code)]
-    pub key: String,
-    #[allow(dead_code)]
-    pub action: String,
-    #[allow(dead_code)]
-    pub style: KeyHintStyle,
-}
-
-// Allow construction with just key, action, style (description field removed for simplicity)
-impl KeyHint {
-    pub fn new(key: String, action: String, style: KeyHintStyle) -> Self {
-        Self { key, action, style }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub enum KeyHintStyle {
-    #[default]
-    Normal,
-    Important,
-    Subtle,
-}
-
-pub mod scroll_rendering;
-pub use scroll_rendering::{render_scrollable_widget, render_scrollable_widgets};
 
 use ratatui::{
     buffer::Buffer,

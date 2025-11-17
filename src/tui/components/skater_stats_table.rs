@@ -257,6 +257,8 @@ mod tests {
 
     #[test]
     fn test_table_shows_player_names() {
+        use crate::tui::testing::assert_buffer;
+
         let skaters = vec![
             create_test_skater(8479318, "Auston Matthews", "C", 2, 1),
         ];
@@ -265,51 +267,53 @@ mod tests {
             .with_header("Test")
             .with_margin(0);
 
-        let area = Rect::new(0, 0, 80, 5);
+        let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
         let config = DisplayConfig::default();
 
         table.render(area, &mut buf, &config);
 
-        // Check that the player name appears in the buffer
-        let content = (0..area.height)
-            .map(|y| {
-                (0..area.width)
-                    .map(|x| buf.get(x, y).symbol())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        assert!(content.contains("Auston Matthews"));
+        assert_buffer(&buf, &[
+            "Test",
+            "════",
+            "",
+            "Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI",
+            "────────────────────────────────────────────────────────────────────────────────",
+            "Auston Matthews        C    2   1    3   +2    8     5    2    4   55.0  18...",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]
     fn test_table_shows_all_stat_columns() {
+        use crate::tui::testing::assert_buffer;
+
         let skater = create_test_skater(8479318, "A. Matthews", "C", 2, 1);
 
         let table = SkaterStatsTableWidget::from_game_stats(vec![skater])
             .with_header("Stats")
             .with_margin(0);
 
-        let area = Rect::new(0, 0, 100, 5);
+        let area = Rect::new(0, 0, 100, 10);
         let mut buf = Buffer::empty(area);
         let config = DisplayConfig::default();
 
         table.render(area, &mut buf, &config);
 
-        let content = (0..area.height)
-            .map(|y| {
-                (0..area.width)
-                    .map(|x| buf.get(x, y).symbol())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        // Verify key stats appear
-        assert!(content.contains("A. Matthews"));
-        assert!(content.contains("C")); // Position
-        // The numbers will appear but might be formatted, so we just check they're present
+        assert_buffer(&buf, &[
+            "Stats",
+            "═════",
+            "",
+            "Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI    S...  G...  T...",
+            "────────────────────────────────────────────────────────────────────────────────────────────────",
+            "A. Matthews            C    2   1    3   +2    8     5    2    4   55.0  18...    22     1     3",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 }

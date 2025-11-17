@@ -3,7 +3,6 @@
 //! This module provides the terminal user interface using a React-like architecture.
 
 // Module declarations
-mod common;
 mod scores;
 mod settings;
 pub mod widgets;

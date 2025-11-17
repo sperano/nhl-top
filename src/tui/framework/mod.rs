@@ -4,6 +4,7 @@ pub mod component;
 pub mod effects;
 pub mod navigation;
 pub mod reducer;
+pub mod reducers;
 pub mod renderer;
 pub mod runtime;
 pub mod settings_helpers;

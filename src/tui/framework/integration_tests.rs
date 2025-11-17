@@ -65,7 +65,7 @@ mod tests {
         assert!(runtime.state().data.errors.contains_key("standings"));
         assert_eq!(
             runtime.state().data.errors.get("standings").unwrap(),
-            "Network error"
+            "Failed to load standings: Network error"
         );
     }
 

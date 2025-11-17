@@ -255,6 +255,8 @@ mod tests {
 
     #[test]
     fn test_table_shows_goalie_names() {
+        use crate::tui::testing::assert_buffer;
+
         let goalies = vec![
             create_test_goalie(8471679, "Carey Price", Some("W"), 30, 28),
         ];
@@ -263,23 +265,24 @@ mod tests {
             .with_header("Test")
             .with_margin(0);
 
-        let area = Rect::new(0, 0, 80, 5);
+        let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
         let config = DisplayConfig::default();
 
         table.render(area, &mut buf, &config);
 
-        // Check that the goalie name appears in the buffer
-        let content = (0..area.height)
-            .map(|y| {
-                (0..area.width)
-                    .map(|x| buf.get(x, y).symbol())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        assert!(content.contains("Carey Price"));
+        assert_buffer(&buf, &[
+            "Test",
+            "════",
+            "",
+            "Player                Dec  SA   Sa...  GA  SV%    TOI    EV...  PP...  SH...",
+            "────────────────────────────────────────────────────────────────────────────",
+            "Carey Price            W    30     28   2  0....  60...     15      5      2",
+            "",
+            "",
+            "",
+            "",
+        ]);
     }
 
     #[test]
