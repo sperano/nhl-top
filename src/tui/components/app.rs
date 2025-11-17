@@ -199,6 +199,8 @@ impl App {
             focused: state.navigation.content_focused,
             editing: state.ui.settings.editing,
             edit_buffer: state.ui.settings.edit_buffer.clone(),
+            modal_open: state.ui.settings.modal_open,
+            modal_selected_index: state.ui.settings.modal_selected_index,
         };
         SettingsTab.view(&props, &())
     }

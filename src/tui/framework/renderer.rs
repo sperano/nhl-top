@@ -59,6 +59,13 @@ impl Renderer {
                 }
             }
 
+            Element::Overlay { base, overlay } => {
+                // First render the base content
+                self.render_element(base, area, buf, config);
+                // Then render the overlay on top
+                self.render_element(overlay, area, buf, config);
+            }
+
             Element::Component(_) => {
                 // Components should already be resolved to concrete elements
                 // before reaching the renderer. If we encounter one here,

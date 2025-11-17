@@ -59,6 +59,12 @@ pub enum Element {
     /// A fragment (just groups children, no layout)
     Fragment(Vec<Element>),
 
+    /// An overlay that renders on top of base content (for modals, popups, etc.)
+    Overlay {
+        base: Box<Element>,
+        overlay: Box<Element>,
+    },
+
     /// Nothing to render
     None,
 }

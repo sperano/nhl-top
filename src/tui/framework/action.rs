@@ -117,10 +117,15 @@ pub enum SettingsAction {
     MoveSelectionUp,
     MoveSelectionDown,
     ToggleBoolean(String), // Setting key to toggle
-    StartEditing(String),  // Setting key to start editing
+    StartEditing(String),  // Setting key to start editing (opens modal for list settings)
     CancelEditing,
     AppendChar(char),
     DeleteChar,
+    // Modal navigation actions
+    ModalMoveUp,    // Move selection up in modal
+    ModalMoveDown,  // Move selection down in modal
+    ModalConfirm,   // Confirm modal selection
+    ModalCancel,    // Cancel modal without selecting
     CommitEdit(String), // Setting key to commit edit
     UpdateConfig(Box<crate::config::Config>),
 }

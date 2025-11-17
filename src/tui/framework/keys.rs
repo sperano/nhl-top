@@ -127,6 +127,9 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
             } else if state.ui.standings.browse_mode {
                 // In browse mode - Up navigates teams
                 return Some(Action::StandingsAction(StandingsAction::MoveSelectionUp));
+            } else if state.ui.settings.modal_open || state.ui.settings.editing {
+                // Modal or editing active - let tab-specific handler deal with it
+                // Fall through to tab-specific handling below
             } else if state.ui.settings.settings_mode {
                 // In settings navigation - Up navigates settings (unless at top)
                 if state.ui.settings.selected_setting_index == 0 {
@@ -221,9 +224,26 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                 }
             }
             Tab::Settings => {
-                // Check if we're editing a setting
-                if state.ui.settings.editing {
-                    // In editing mode - handle text input
+                // Check if modal is open
+                if state.ui.settings.modal_open {
+                    // In modal mode - handle modal navigation
+                    match key.code {
+                        KeyCode::Up => {
+                            return Some(Action::SettingsAction(SettingsAction::ModalMoveUp))
+                        }
+                        KeyCode::Down => {
+                            return Some(Action::SettingsAction(SettingsAction::ModalMoveDown))
+                        }
+                        KeyCode::Enter => {
+                            return Some(Action::SettingsAction(SettingsAction::ModalConfirm))
+                        }
+                        KeyCode::Esc => {
+                            return Some(Action::SettingsAction(SettingsAction::ModalCancel))
+                        }
+                        _ => {}
+                    }
+                } else if state.ui.settings.editing {
+                    // In editing mode - handle text input (for non-list settings)
                     match key.code {
                         KeyCode::Char(ch) => {
                             return Some(Action::SettingsAction(SettingsAction::AppendChar(ch)))
@@ -345,6 +365,11 @@ fn get_editable_setting_key_for_index(category: SettingsCategory, index: usize) 
             }
         }
     }
+}
+
+/// Check if a setting is a list-type setting (has a fixed set of values to cycle through)
+fn is_list_setting(key: &str) -> bool {
+    matches!(key, "log_level")
 }
 
 #[cfg(test)]
@@ -520,6 +545,38 @@ mod tests {
         assert!(matches!(
             action,
             Some(Action::StandingsAction(StandingsAction::EnterBrowseMode))
+        ));
+    }
+
+    #[test]
+    fn test_settings_modal_up_key_navigates_modal() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.modal_open = true;
+        state.ui.settings.modal_selected_index = 1;
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        // Should navigate modal, not exit to tab bar or navigate settings
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ModalMoveUp))
+        ));
+    }
+
+    #[test]
+    fn test_settings_modal_down_key_navigates_modal() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.modal_open = true;
+        state.ui.settings.modal_selected_index = 0;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        // Should navigate modal
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ModalMoveDown))
         ));
     }
 }

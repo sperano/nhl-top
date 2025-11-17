@@ -194,6 +194,8 @@ pub struct SettingsUiState {
     pub settings_mode: bool, // true = navigating settings, false = navigating categories
     pub editing: bool,        // true = editing a setting value, false = not editing
     pub edit_buffer: String, // Buffer for editing string/int values
+    pub modal_open: bool,     // true = list selection modal is open
+    pub modal_selected_index: usize, // Selected index within the modal
 }
 
 impl Default for SettingsUiState {
@@ -204,6 +206,8 @@ impl Default for SettingsUiState {
             settings_mode: false,
             editing: false,
             edit_buffer: String::new(),
+            modal_open: false,
+            modal_selected_index: 0,
         }
     }
 }

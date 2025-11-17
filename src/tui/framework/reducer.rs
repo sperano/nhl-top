@@ -1301,6 +1301,40 @@ fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effe
     }
 }
 
+/// Get the list of valid values for a setting that has a fixed set of options
+fn get_setting_values(key: &str) -> Vec<&'static str> {
+    match key {
+        "log_level" => vec!["trace", "debug", "info", "warn", "error"],
+        _ => vec![], // Empty for non-list settings
+    }
+}
+
+/// Check if a setting is a list-type setting (has a fixed set of values)
+fn is_list_setting_reducer(key: &str) -> bool {
+    matches!(key, "log_level")
+}
+
+/// Get editable setting key for a given category and index (same as in keys.rs)
+fn get_editable_setting_key_for_index(category: SettingsCategory, index: usize) -> Option<String> {
+    match category {
+        SettingsCategory::Logging => {
+            match index {
+                0 => Some("log_level".to_string()),
+                1 => Some("log_file".to_string()),
+                _ => None,
+            }
+        }
+        SettingsCategory::Display => None,
+        SettingsCategory::Data => {
+            match index {
+                0 => Some("refresh_interval".to_string()),
+                2 => Some("time_format".to_string()),
+                _ => None,
+            }
+        }
+    }
+}
+
 /// Sub-reducer for settings tab
 fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect) {
     match action {
@@ -1404,10 +1438,27 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
             debug!("SETTINGS: Starting edit for key: {}", key);
             let mut new_state = state.clone();
 
-            // Initialize edit buffer with current value
+            // Check if this is a list setting - if so, open modal instead of text editing
+            if is_list_setting_reducer(&key) {
+                // Get the list of values and find current value's index
+                let values = get_setting_values(&key);
+                let current_value = match key.as_str() {
+                    "log_level" => &new_state.system.config.log_level,
+                    _ => "",
+                };
+                let selected_index = values.iter()
+                    .position(|v| v == &current_value)
+                    .unwrap_or(0);
+
+                new_state.ui.settings.modal_open = true;
+                new_state.ui.settings.modal_selected_index = selected_index;
+                new_state.ui.settings.editing = true; // Set editing flag for modal
+                return (new_state, Effect::None);
+            }
+
+            // For non-list settings, initialize edit buffer with current value
             let current_value = match key.as_str() {
                 "log_file" => new_state.system.config.log_file.clone(),
-                "log_level" => new_state.system.config.log_level.clone(),
                 "time_format" => new_state.system.config.time_format.clone(),
                 "refresh_interval" => new_state.system.config.refresh_interval.to_string(),
                 _ => {
@@ -1426,6 +1477,7 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
             let mut new_state = state.clone();
             new_state.ui.settings.editing = false;
             new_state.ui.settings.edit_buffer.clear();
+            new_state.ui.settings.modal_open = false;
             (new_state, Effect::None)
         }
 
@@ -1438,6 +1490,84 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
         SettingsAction::DeleteChar => {
             let mut new_state = state.clone();
             new_state.ui.settings.edit_buffer.pop();
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::ModalMoveUp => {
+            debug!("SETTINGS: Moving modal selection up");
+            let mut new_state = state.clone();
+
+            if new_state.ui.settings.modal_selected_index > 0 {
+                new_state.ui.settings.modal_selected_index -= 1;
+            }
+
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::ModalMoveDown => {
+            debug!("SETTINGS: Moving modal selection down");
+            let mut new_state = state.clone();
+
+            // Get current setting key to determine max index
+            let setting_key = get_editable_setting_key_for_index(
+                new_state.ui.settings.selected_category,
+                new_state.ui.settings.selected_setting_index,
+            );
+
+            if let Some(key) = setting_key {
+                let values = get_setting_values(&key);
+                let max_index = values.len().saturating_sub(1);
+
+                if new_state.ui.settings.modal_selected_index < max_index {
+                    new_state.ui.settings.modal_selected_index += 1;
+                }
+            }
+
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::ModalConfirm => {
+            debug!("SETTINGS: Confirming modal selection");
+            let mut new_state = state.clone();
+
+            // Get the selected value from the modal
+            let setting_key = get_editable_setting_key_for_index(
+                new_state.ui.settings.selected_category,
+                new_state.ui.settings.selected_setting_index,
+            );
+
+            if let Some(key) = setting_key {
+                let values = get_setting_values(&key);
+                if new_state.ui.settings.modal_selected_index < values.len() {
+                    let selected_value = values[new_state.ui.settings.modal_selected_index];
+
+                    // Update the config with the selected value
+                    match key.as_str() {
+                        "log_level" => {
+                            new_state.system.config.log_level = selected_value.to_string();
+                        }
+                        _ => {}
+                    }
+
+                    // Close the modal and exit editing
+                    new_state.ui.settings.modal_open = false;
+                    new_state.ui.settings.editing = false;
+
+                    // TODO: Trigger config save effect when available
+                    return (new_state, Effect::None);
+                }
+            }
+
+            new_state.ui.settings.modal_open = false;
+            new_state.ui.settings.editing = false;
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::ModalCancel => {
+            debug!("SETTINGS: Cancelling modal");
+            let mut new_state = state.clone();
+            new_state.ui.settings.modal_open = false;
+            new_state.ui.settings.editing = false;
             (new_state, Effect::None)
         }
 

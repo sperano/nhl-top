@@ -5,7 +5,7 @@ use crate::tui::framework::{
 };
 use crate::tui::widgets::SettingsListWidget;
 
-use super::{TabbedPanel, TabbedPanelProps, TabItem};
+use super::{ListModalWidget, TabbedPanel, TabbedPanelProps, TabItem};
 
 /// Props for SettingsTab component
 #[derive(Clone)]
@@ -17,6 +17,8 @@ pub struct SettingsTabProps {
     pub focused: bool,
     pub editing: bool,
     pub edit_buffer: String,
+    pub modal_open: bool,
+    pub modal_selected_index: usize,
 }
 
 /// SettingsTab component - displays settings with category tabs
@@ -28,7 +30,14 @@ impl Component for SettingsTab {
     type Message = ();
 
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        self.render_category_tabs(props)
+        let base = self.render_category_tabs(props);
+
+        // If modal is open, wrap with overlay
+        if props.modal_open {
+            self.render_with_modal(base, props)
+        } else {
+            base
+        }
     }
 }
 
@@ -94,6 +103,39 @@ impl SettingsTab {
             props.edit_buffer.clone(),
         )))
     }
+
+    /// Render with modal overlay
+    fn render_with_modal(&self, base: Element, props: &SettingsTabProps) -> Element {
+        use crate::tui::framework::settings_helpers;
+
+        // Get the setting key to determine what we're editing
+        let setting_key = settings_helpers::get_editable_setting_key(
+            props.selected_category,
+            props.selected_setting_index,
+        );
+
+        if let Some(key) = setting_key {
+            let setting_name = settings_helpers::get_setting_display_name(&key);
+            let options: Vec<String> = settings_helpers::get_setting_values(&key)
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+
+            let modal = Element::Widget(Box::new(ListModalWidget::new(
+                setting_name,
+                options,
+                props.modal_selected_index,
+            )));
+
+            Element::Overlay {
+                base: Box::new(base),
+                overlay: Box::new(modal),
+            }
+        } else {
+            // No valid setting key, just return base without modal
+            base
+        }
+    }
 }
 
 #[cfg(test)]
@@ -112,6 +154,8 @@ mod tests {
             focused: false,
             editing: false,
             edit_buffer: String::new(),
+            modal_open: false,
+            modal_selected_index: 0,
         };
 
         let element = settings_tab.view(&props, &());
@@ -137,6 +181,8 @@ mod tests {
             focused: false,
             editing: false,
             edit_buffer: String::new(),
+            modal_open: false,
+            modal_selected_index: 0,
         };
 
         // Render all three categories and verify each has content
@@ -172,6 +218,8 @@ mod tests {
             focused: false,
             editing: false,
             edit_buffer: String::new(),
+            modal_open: false,
+            modal_selected_index: 0,
         };
 
         // In settings mode
@@ -183,6 +231,8 @@ mod tests {
             focused: true,
             editing: false,
             edit_buffer: String::new(),
+            modal_open: false,
+            modal_selected_index: 0,
         };
 
         // Both should render without panicking

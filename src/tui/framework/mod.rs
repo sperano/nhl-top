@@ -6,6 +6,7 @@ pub mod navigation;
 pub mod reducer;
 pub mod renderer;
 pub mod runtime;
+pub mod settings_helpers;
 pub mod state;
 pub mod table;
 
