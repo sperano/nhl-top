@@ -117,6 +117,11 @@ pub enum SettingsAction {
     MoveSelectionUp,
     MoveSelectionDown,
     ToggleBoolean(String), // Setting key to toggle
+    StartEditing(String),  // Setting key to start editing
+    CancelEditing,
+    AppendChar(char),
+    DeleteChar,
+    CommitEdit(String), // Setting key to commit edit
     UpdateConfig(Box<crate::config::Config>),
 }
 

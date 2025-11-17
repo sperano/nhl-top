@@ -24,7 +24,6 @@ impl Component for App {
     type Message = ();
 //
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        tracing::trace!("APP: App.view() called with panel_stack.len={}", props.navigation.panel_stack.len());
         vertical(
             [
                 Constraint::Min(0),    // TabbedPanel (tabs + content)
@@ -166,10 +165,6 @@ impl App {
 //
     /// Render Standings tab content
     fn render_standings_tab(&self, state: &AppState) -> Element {
-        tracing::debug!(
-            "APP: Building StandingsTab with panel_stack.len = {}",
-            state.navigation.panel_stack.len()
-        );
         let props = StandingsTabProps {
             view: state.ui.standings.view.clone(),
             browse_mode: state.ui.standings.browse_mode,
@@ -191,6 +186,8 @@ impl App {
             selected_setting_index: state.ui.settings.selected_setting_index,
             settings_mode: state.ui.settings.settings_mode,
             focused: state.navigation.content_focused,
+            editing: state.ui.settings.editing,
+            edit_buffer: state.ui.settings.edit_buffer.clone(),
         };
         SettingsTab.view(&props, &())
     }

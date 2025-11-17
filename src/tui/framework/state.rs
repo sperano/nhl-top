@@ -192,6 +192,8 @@ pub struct SettingsUiState {
     pub selected_category: SettingsCategory,
     pub selected_setting_index: usize,
     pub settings_mode: bool, // true = navigating settings, false = navigating categories
+    pub editing: bool,        // true = editing a setting value, false = not editing
+    pub edit_buffer: String, // Buffer for editing string/int values
 }
 
 impl Default for SettingsUiState {
@@ -200,6 +202,8 @@ impl Default for SettingsUiState {
             selected_category: SettingsCategory::default(),
             selected_setting_index: 0,
             settings_mode: false,
+            editing: false,
+            edit_buffer: String::new(),
         }
     }
 }

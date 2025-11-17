@@ -258,7 +258,6 @@ mod tests {
             division_header_fg: Color::Rgb(159, 226, 191),
             error_fg: Color::Red,
             box_chars: BoxChars::unicode(),
-            show_action_bar: true,
         }
     }
 
@@ -270,7 +269,6 @@ mod tests {
             division_header_fg: Color::Rgb(159, 226, 191),
             error_fg: Color::Red,
             box_chars: BoxChars::ascii(),
-            show_action_bar: true,
         }
     }
 

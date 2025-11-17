@@ -529,3 +529,4 @@ bar";
 - from now on, what you call "Production", I want you to call it "legacy". What you call experimental, i want you to call it "current"
 - use the stuff in tui::testing when writing tests
 - remember all this as THE LEGACY NAVIGATION WAY.
+- assert_buffer doesn't need strings to be padded and dont use an expected variable, put the vec in the function call

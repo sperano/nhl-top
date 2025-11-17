@@ -3,9 +3,9 @@ use crate::tui::framework::{
     component::{Component, Element},
     state::SettingsCategory,
 };
-//use crate::tui::widgets::SettingsListWidget;
+use crate::tui::widgets::SettingsListWidget;
 
-use super::{TabbedPanel, TabbedPanelProps};
+use super::{TabbedPanel, TabbedPanelProps, TabItem};
 
 /// Props for SettingsTab component
 #[derive(Clone)]
@@ -15,6 +15,8 @@ pub struct SettingsTabProps {
     pub selected_setting_index: usize,
     pub settings_mode: bool,
     pub focused: bool,
+    pub editing: bool,
+    pub edit_buffer: String,
 }
 
 /// SettingsTab component - displays settings with category tabs
@@ -35,21 +37,21 @@ impl SettingsTab {
     fn render_category_tabs(&self, props: &SettingsTabProps) -> Element {
         // Create tabs for each category
         let tabs = vec![
-            // TabItem::new(
-            //     "logging".to_string(),
-            //     "Logging".to_string(),
-            //     self.render_settings_list(SettingsCategory::Logging, props),
-            // ),
-            // TabItem::new(
-            //     "display".to_string(),
-            //     "Display".to_string(),
-            //     self.render_settings_list(SettingsCategory::Display, props),
-            // ),
-            // TabItem::new(
-            //     "data".to_string(),
-            //     "Data".to_string(),
-            //     self.render_settings_list(SettingsCategory::Data, props),
-            // ),
+            TabItem::new(
+                "logging",
+                "Logging",
+                self.render_settings_list(SettingsCategory::Logging, props),
+            ),
+            TabItem::new(
+                "display",
+                "Display",
+                self.render_settings_list(SettingsCategory::Display, props),
+            ),
+            TabItem::new(
+                "data",
+                "Data",
+                self.render_settings_list(SettingsCategory::Data, props),
+            ),
         ];
 
         // Active key based on selected category
@@ -74,22 +76,24 @@ impl SettingsTab {
         }
     }
 
-    // /// Render the settings list for a category
-    // fn render_settings_list(&self, category: SettingsCategory, props: &SettingsTabProps) -> Element {
-    //     let selected_index = if props.settings_mode && category == props.selected_category {
-    //         Some(props.selected_setting_index)
-    //     } else {
-    //         None
-    //     };
-    //
-    //     // Element::Widget(Box::new(SettingsListWidget::new(
-    //     //     category,
-    //     //     props.config.clone(),
-    //     //     2, // Left margin
-    //     //     selected_index,
-    //     //     props.settings_mode,
-    //     // )))
-    // }
+    /// Render the settings list for a category
+    fn render_settings_list(&self, category: SettingsCategory, props: &SettingsTabProps) -> Element {
+        let selected_index = if props.settings_mode && category == props.selected_category {
+            Some(props.selected_setting_index)
+        } else {
+            None
+        };
+
+        Element::Widget(Box::new(SettingsListWidget::new(
+            category,
+            props.config.clone(),
+            2, // Left margin
+            selected_index,
+            props.settings_mode,
+            props.editing,
+            props.edit_buffer.clone(),
+        )))
+    }
 }
 
 #[cfg(test)]
@@ -106,6 +110,8 @@ mod tests {
             selected_setting_index: 0,
             settings_mode: false,
             focused: false,
+            editing: false,
+            edit_buffer: String::new(),
         };
 
         let element = settings_tab.view(&props, &());
@@ -118,6 +124,70 @@ mod tests {
             }
             _ => panic!("Expected container element"),
         }
+    }
+
+    #[test]
+    fn test_settings_tab_has_three_categories() {
+        let settings_tab = SettingsTab;
+        let props = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Display,
+            selected_setting_index: 0,
+            settings_mode: false,
+            focused: false,
+            editing: false,
+            edit_buffer: String::new(),
+        };
+
+        // Render all three categories and verify each has content
+        let logging_list = settings_tab.render_settings_list(SettingsCategory::Logging, &props);
+        let display_list = settings_tab.render_settings_list(SettingsCategory::Display, &props);
+        let data_list = settings_tab.render_settings_list(SettingsCategory::Data, &props);
+
+        // All should be Widget elements
+        match logging_list {
+            Element::Widget(_) => {}
+            _ => panic!("Expected Widget element for Logging category"),
+        }
+        match display_list {
+            Element::Widget(_) => {}
+            _ => panic!("Expected Widget element for Display category"),
+        }
+        match data_list {
+            Element::Widget(_) => {}
+            _ => panic!("Expected Widget element for Data category"),
+        }
+    }
+
+    #[test]
+    fn test_settings_mode_changes_selection() {
+        let settings_tab = SettingsTab;
+
+        // Not in settings mode
+        let props_unfocused = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Logging,
+            selected_setting_index: 1,
+            settings_mode: false,
+            focused: false,
+            editing: false,
+            edit_buffer: String::new(),
+        };
+
+        // In settings mode
+        let props_focused = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Logging,
+            selected_setting_index: 1,
+            settings_mode: true,
+            focused: true,
+            editing: false,
+            edit_buffer: String::new(),
+        };
+
+        // Both should render without panicking
+        let _ = settings_tab.view(&props_unfocused, &());
+        let _ = settings_tab.view(&props_focused, &());
     }
 
     #[test]

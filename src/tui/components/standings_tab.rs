@@ -45,7 +45,6 @@ impl Component for StandingsTab {
             return self.render_panel(props);
         }
 
-        tracing::trace!("RENDER: No panels, rendering standings view");
         // Use TabbedPanel for view selection
         self.render_view_tabs(props)
     }
@@ -340,31 +339,35 @@ impl StandingsTab {
 
         // Create vertical layouts for each column
         // Each column has 2 divisions + 1 spacer = 3 elements
+        // Each division table: header(1) + underline(1) + blank(1) + col_headers(1) + separator(1) + 7 teams = 12 lines
         // Use Length constraints to keep content top-aligned
+        const DIVISION_TABLE_HEIGHT: u16 = 12;
+        const SPACER_HEIGHT: u16 = 1;
+
         let left_column = if left_elements.len() == 3 {
             vertical(
-                [Constraint::Length(11), Constraint::Length(1), Constraint::Length(11)],
+                [Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)],
                 left_elements,
             )
         } else if left_elements.len() == 2 {
             // No spacer (shouldn't happen with 2 divisions, but handle gracefully)
-            vertical([Constraint::Length(11), Constraint::Length(11)], left_elements)
+            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)], left_elements)
         } else {
             // Fallback for unexpected number of divisions
-            vertical([Constraint::Length(25)], left_elements)
+            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT)], left_elements)
         };
 
         let right_column = if right_elements.len() == 3 {
             vertical(
-                [Constraint::Length(11), Constraint::Length(1), Constraint::Length(11)],
+                [Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)],
                 right_elements,
             )
         } else if right_elements.len() == 2 {
             // No spacer
-            vertical([Constraint::Length(11), Constraint::Length(11)], right_elements)
+            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)], right_elements)
         } else {
             // Fallback for unexpected number of divisions
-            vertical([Constraint::Length(25)], right_elements)
+            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT)], right_elements)
         };
 
         // Return horizontal layout with both columns
@@ -539,18 +542,20 @@ impl StandingsTab {
 
     /// Create vertical layout for wildcard column elements
     fn create_wildcard_column_layout(&self, elements: Vec<Element>) -> Element {
-        // Each division top-3 table needs exactly: header (1) + separator (1) + column headers (1) + separator (1) + 3 rows = 7 lines
+        // Each division top-3 table needs exactly: header (1) + separator (1) + blank (1) + column headers (1) + separator (1) + 3 rows = 8 lines
         // Spacers are 1 line
         // Use Length for fixed-size elements to prevent ratatui from expanding them
+        const TABLE_HEIGHT: u16 = 8;
+        const SPACER_HEIGHT: u16 = 1;
         match elements.len() {
             0 => Element::None,
             1 => vertical([Constraint::Min(0)], elements),
-            2 => vertical([Constraint::Length(7), Constraint::Length(1)], elements),
-            3 => vertical([Constraint::Length(7), Constraint::Length(1), Constraint::Length(7)], elements),
-            4 => vertical([Constraint::Length(7), Constraint::Length(1), Constraint::Length(7), Constraint::Length(1)], elements),
-            5 => vertical([Constraint::Length(7), Constraint::Length(1), Constraint::Length(7), Constraint::Length(1), Constraint::Min(1)], elements),
-            6 => vertical([Constraint::Length(7), Constraint::Length(1), Constraint::Length(7), Constraint::Length(1), Constraint::Min(1), Constraint::Length(1)], elements),
-            7 => vertical([Constraint::Length(7), Constraint::Length(1), Constraint::Length(7), Constraint::Length(1), Constraint::Min(1), Constraint::Length(1), Constraint::Min(1)], elements),
+            2 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT)], elements),
+            3 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT)], elements),
+            4 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT)], elements),
+            5 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1)], elements),
+            6 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1), Constraint::Length(SPACER_HEIGHT)], elements),
+            7 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1)], elements),
             _ => {
                 // Fallback for more elements
                 vertical([Constraint::Min(0)], elements)
@@ -799,6 +804,7 @@ mod tests {
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
             "  Atlantic                                                    Central",
             "  ════════                                                    ═══════",
+            "",
             "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
             "  Panthers                      19    14    3    2     30     Avalanche                     19    16    2    1     33",
@@ -811,6 +817,7 @@ mod tests {
             "",
             "  Metropolitan                                                Pacific",
             "  ════════════                                                ═══════",
+            "",
             "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
             "  Devils                        18    15    2    1     31     Golden Knights                19    15    3    1     31",
@@ -820,8 +827,6 @@ mod tests {
             "  Capitals                      18    10    7    1     21     Canucks                       19    10    7    2     22",
             "  Islanders                     18     9    7    2     20     Flames                        19     9    8    2     20",
             "  Flyers                        18     8    9    1     17     Ducks                         19     7   10    2     16",
-            "",
-            "",
             "",
             "",
             "",
@@ -863,6 +868,7 @@ mod tests {
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
             "  Eastern                                                     Western",
             "  ═══════                                                     ═══════",
+            "",
             "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
             "  Panthers                      19    14    3    2     30     Avalanche                     19    16    2    1     33",
@@ -881,7 +887,6 @@ mod tests {
             "  Islanders                     18     9    7    2     20     Flames                        19     9    8    2     20",
             "  Flyers                        18     8    9    1     17     Ducks                         19     7   10    2     16",
             "  Blue Jackets                  18     5   11    2     12     Sharks                        18     5   12    1     11",
-            "",
             "",
             "",
             "",
@@ -926,6 +931,7 @@ mod tests {
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
             "  Atlantic                                                    Central",
             "  ════════                                                    ═══════",
+            "",
             "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
             "  Panthers                      19    14    3    2     30     Avalanche                     19    16    2    1     33",
@@ -934,6 +940,7 @@ mod tests {
             "",
             "  Metropolitan                                                Pacific",
             "  ════════════                                                ═══════",
+            "",
             "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
             "  Devils                        18    15    2    1     31     Golden Knights                19    15    3    1     31",
@@ -942,6 +949,7 @@ mod tests {
             "",
             "  Wildcard                                                    Wildcard",
             "  ════════                                                    ════════",
+            "",
             "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
             "  Penguins                      19    11    6    2     24     Wild                          19    11    6    2     24",
@@ -954,9 +962,6 @@ mod tests {
             "  Flyers                        18     8    9    1     17     Blackhawks                    18     7   10    1     15",
             "  Sabres                        18     6   10    2     14     Sharks                        18     5   12    1     11",
             "  Blue Jackets                  18     5   11    2     12     Coyotes                       18     4   13    1      9",
-            "",
-            "",
-            "",
             "",
             "",
             "",

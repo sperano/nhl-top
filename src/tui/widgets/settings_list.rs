@@ -21,6 +21,10 @@ pub struct SettingsListWidget {
     pub selected_index: Option<usize>,
     /// Whether we're in settings navigation mode
     pub settings_mode: bool,
+    /// Whether we're editing a setting
+    pub editing: bool,
+    /// Edit buffer for current edit
+    pub edit_buffer: String,
 }
 
 impl SettingsListWidget {
@@ -31,6 +35,8 @@ impl SettingsListWidget {
         margin: u16,
         selected_index: Option<usize>,
         settings_mode: bool,
+        editing: bool,
+        edit_buffer: String,
     ) -> Self {
         Self {
             category,
@@ -38,6 +44,8 @@ impl SettingsListWidget {
             margin,
             selected_index,
             settings_mode,
+            editing,
+            edit_buffer,
         }
     }
 
@@ -53,7 +61,6 @@ impl SettingsListWidget {
                 ("Selection Color".to_string(), format_color(&self.config.display.selection_fg)),
                 ("Division Header Color".to_string(), format_color(&self.config.display.division_header_fg)),
                 ("Error Color".to_string(), format_color(&self.config.display.error_fg)),
-                ("Show Action Bar".to_string(), self.config.display.show_action_bar.to_string()),
             ],
             SettingsCategory::Data => vec![
                 ("Refresh Interval".to_string(), format!("{} seconds", self.config.refresh_interval)),
@@ -75,8 +82,18 @@ impl RenderableWidget for SettingsListWidget {
                 break; // Stop if we run out of space
             }
 
+            // Check if this setting is being edited
+            let is_editing = self.editing && self.settings_mode && self.selected_index == Some(index);
+
+            // Format value with cursor if editing
+            let display_value = if is_editing {
+                format!("{}█", &self.edit_buffer)
+            } else {
+                value.clone()
+            };
+
             // Format as "Key: Value"
-            let line_text = format!("{}: {}", key, value);
+            let line_text = format!("{}: {}", key, display_value);
 
             // Apply selection highlighting if this is the selected setting
             let style = if self.settings_mode && self.selected_index == Some(index) {
@@ -139,7 +156,15 @@ mod tests {
     #[test]
     fn test_settings_list_logging_category() {
         let config = Config::default();
-        let widget = SettingsListWidget::new(SettingsCategory::Logging, config.clone(), 2, None, false);
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config.clone(),
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        );
 
         let area = Rect::new(0, 0, 50, 10);
         let mut buf = Buffer::empty(area);
@@ -159,17 +184,33 @@ mod tests {
     #[test]
     fn test_settings_list_display_category() {
         let config = Config::default();
-        let widget = SettingsListWidget::new(SettingsCategory::Display, config, 2, None, false);
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Display,
+            config,
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        );
 
         let settings = widget.get_settings();
-        assert_eq!(settings.len(), 5);
+        assert_eq!(settings.len(), 4);
         assert_eq!(settings[0].0, "Use Unicode");
     }
 
     #[test]
     fn test_settings_list_data_category() {
         let config = Config::default();
-        let widget = SettingsListWidget::new(SettingsCategory::Data, config.clone(), 2, None, false);
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Data,
+            config.clone(),
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        );
 
         let settings = widget.get_settings();
         assert_eq!(settings.len(), 3);
@@ -184,5 +225,89 @@ mod tests {
         assert_eq!(format_color(&Color::Red), "red");
         assert_eq!(format_color(&Color::Rgb(255, 165, 0)), "rgb(255, 165, 0)");
         assert_eq!(format_color(&Color::Cyan), "cyan");
+    }
+
+    #[test]
+    fn test_settings_list_editing_mode() {
+        use crate::tui::testing::assert_buffer;
+
+        let config = Config::default();
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config.clone(),
+            2,
+            Some(1), // Select "Log File"
+            true,    // settings_mode = true
+            true,    // editing = true
+            "/tmp/test.log".to_string(),
+        );
+
+        let area = Rect::new(0, 0, 80, 2);
+        let mut buf = Buffer::empty(area);
+        let display_config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &display_config);
+
+        // Log File should show with edit cursor
+        assert_buffer(&buf, &[
+            &format!("  Log Level: {}", config.log_level),
+            "  Log File: /tmp/test.log█",
+        ]);
+    }
+
+    #[test]
+    fn test_settings_list_not_editing() {
+        use crate::tui::testing::assert_buffer;
+
+        let config = Config::default();
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config.clone(),
+            2,
+            Some(1), // Select "Log File"
+            true,    // settings_mode = true
+            false,   // editing = false
+            String::new(),
+        );
+
+        let area = Rect::new(0, 0, 80, 2);
+        let mut buf = Buffer::empty(area);
+        let display_config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &display_config);
+
+        // Log File should show without edit cursor
+        assert_buffer(&buf, &[
+            &format!("  Log Level: {}", config.log_level),
+            &format!("  Log File: {}", config.log_file),
+        ]);
+    }
+
+    #[test]
+    fn test_settings_list_empty_edit_buffer() {
+        use crate::tui::testing::assert_buffer;
+
+        let config = Config::default();
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config,
+            2,
+            Some(1), // Select "Log File"
+            true,    // settings_mode = true
+            true,    // editing = true
+            String::new(), // Empty buffer
+        );
+
+        let area = Rect::new(0, 0, 80, 2);
+        let mut buf = Buffer::empty(area);
+        let display_config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &display_config);
+
+        // Log File should show with just cursor
+        assert_buffer(&buf, &[
+            "  Log Level: info",
+            "  Log File: █",
+        ]);
     }
 }

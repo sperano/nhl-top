@@ -221,9 +221,33 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                 }
             }
             Tab::Settings => {
-                // Check if in settings navigation mode
-                if state.ui.settings.settings_mode {
-                    // In settings navigation mode - arrows navigate settings, Enter toggles
+                // Check if we're editing a setting
+                if state.ui.settings.editing {
+                    // In editing mode - handle text input
+                    match key.code {
+                        KeyCode::Char(ch) => {
+                            return Some(Action::SettingsAction(SettingsAction::AppendChar(ch)))
+                        }
+                        KeyCode::Backspace => {
+                            return Some(Action::SettingsAction(SettingsAction::DeleteChar))
+                        }
+                        KeyCode::Enter => {
+                            // Commit the edit
+                            let setting_key = get_editable_setting_key_for_index(
+                                state.ui.settings.selected_category,
+                                state.ui.settings.selected_setting_index,
+                            );
+                            if let Some(key) = setting_key {
+                                return Some(Action::SettingsAction(SettingsAction::CommitEdit(key)));
+                            }
+                        }
+                        KeyCode::Esc => {
+                            return Some(Action::SettingsAction(SettingsAction::CancelEditing))
+                        }
+                        _ => {}
+                    }
+                } else if state.ui.settings.settings_mode {
+                    // In settings navigation mode - arrows navigate settings, Enter activates
                     match key.code {
                         KeyCode::Up => {
                             return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp))
@@ -232,13 +256,21 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                             return Some(Action::SettingsAction(SettingsAction::MoveSelectionDown))
                         }
                         KeyCode::Enter => {
-                            // Get the setting key for the selected index
-                            let setting_key = get_setting_key_for_index(
+                            // Check if it's a boolean setting (toggle) or editable setting (start edit)
+                            let boolean_key = get_setting_key_for_index(
                                 state.ui.settings.selected_category,
                                 state.ui.settings.selected_setting_index,
                             );
-                            if let Some(key) = setting_key {
+                            if let Some(key) = boolean_key {
                                 return Some(Action::SettingsAction(SettingsAction::ToggleBoolean(key)));
+                            }
+
+                            let editable_key = get_editable_setting_key_for_index(
+                                state.ui.settings.selected_category,
+                                state.ui.settings.selected_setting_index,
+                            );
+                            if let Some(key) = editable_key {
+                                return Some(Action::SettingsAction(SettingsAction::StartEditing(key)));
                             }
                         }
                         _ => {}
@@ -273,10 +305,9 @@ fn get_setting_key_for_index(category: SettingsCategory, index: usize) -> Option
     match category {
         SettingsCategory::Logging => None, // No boolean settings in Logging
         SettingsCategory::Display => {
-            // Display category: index 0 = use_unicode, index 4 = show_action_bar
+            // Display category: index 0 = use_unicode
             match index {
                 0 => Some("use_unicode".to_string()),
-                4 => Some("show_action_bar".to_string()),
                 _ => None,
             }
         }
@@ -284,6 +315,32 @@ fn get_setting_key_for_index(category: SettingsCategory, index: usize) -> Option
             // Data category: index 1 = western_teams_first
             match index {
                 1 => Some("western_teams_first".to_string()),
+                _ => None,
+            }
+        }
+    }
+}
+
+/// Get the editable setting key for a given category and index (for string/int editing)
+fn get_editable_setting_key_for_index(category: SettingsCategory, index: usize) -> Option<String> {
+    match category {
+        SettingsCategory::Logging => {
+            // Logging category: 0 = log_level, 1 = log_file
+            match index {
+                0 => Some("log_level".to_string()),
+                1 => Some("log_file".to_string()),
+                _ => None,
+            }
+        }
+        SettingsCategory::Display => {
+            // Display category has boolean and color settings, not editable strings
+            None
+        }
+        SettingsCategory::Data => {
+            // Data category: 0 = refresh_interval, 2 = time_format
+            match index {
+                0 => Some("refresh_interval".to_string()),
+                2 => Some("time_format".to_string()),
                 _ => None,
             }
         }

@@ -475,6 +475,11 @@ impl RenderableWidget for TableWidget {
                 buf.set_string(area.x, y, &underline, Style::default());
                 y += 1;
             }
+
+            // Blank line after header
+            if y < area.bottom() {
+                y += 1;
+            }
         }
 
         // Render column headers
@@ -535,7 +540,7 @@ impl RenderableWidget for TableWidget {
     }
 
     fn preferred_height(&self) -> Option<u16> {
-        let header_height = if self.header.is_some() { 2 } else { 0 }; // header + underline
+        let header_height = if self.header.is_some() { 3 } else { 0 }; // header + underline + blank
         let col_header_height = if !self.column_headers.is_empty() { 1 } else { 0 };
         let separator_height = if !self.column_headers.is_empty() { 1 } else { 0 }; // separator line under headers
         let rows_height = self.cell_data.len() as u16;
@@ -693,6 +698,7 @@ mod tests {
             &[
                 "Test Table",
                 "══════════",
+                "",
                 "Name",
                 "──────────",
                 "Test",
@@ -796,8 +802,8 @@ mod tests {
 
         let widget = TableWidget::from_data(columns, rows).with_header("Stats");
 
-        // Height: header(1) + underline(1) + col_header(1) + separator(1) + 3 rows = 7
-        assert_eq!(widget.preferred_height(), Some(7));
+        // Height: header(1) + underline(1) + blank(1) + col_header(1) + separator(1) + 3 rows = 8
+        assert_eq!(widget.preferred_height(), Some(8));
 
         // Width: margin(0) + col1(20) + spacing(2) + col2(4) = 26
         assert_eq!(widget.preferred_width(), Some(26));
@@ -1033,7 +1039,7 @@ mod tests {
         render_framework_widget(&widget, 50, height, &config);
 
         // Just verify it renders without panicking
-        assert_eq!(height, 7); // header(2) + col_header(1) + separator(1) + 3 rows
+        assert_eq!(height, 8); // header(3) + col_header(1) + separator(1) + 3 rows
     }
 
     #[test]

@@ -34,7 +34,6 @@ pub struct DisplayConfig {
     pub error_fg: Color,
     #[serde(skip)]
     pub box_chars: crate::formatting::BoxChars,
-    pub show_action_bar: bool,
 }
 
 impl Default for Config {
@@ -59,7 +58,6 @@ impl Default for DisplayConfig {
             division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
             error_fg: Color::Rgb(255, 0, 0), // Red
             box_chars: crate::formatting::BoxChars::unicode(),
-            show_action_bar: false,
         }
     }
 }
@@ -446,70 +444,4 @@ selection_fg = "128,0,128"
         assert_eq!(deserialized.display_standings_western_first, true);
     }
 
-    #[test]
-    fn test_default_new_config_fields() {
-        let config = DisplayConfig::default();
-        assert_eq!(config.show_action_bar, false);
-    }
-
-    #[test]
-    fn test_config_serialization_with_new_fields() {
-        let mut config = Config::default();
-        config.display.show_action_bar = false;
-
-        let toml_str = toml::to_string_pretty(&config).unwrap();
-
-        assert!(toml_str.contains("show_action_bar = false"));
-    }
-
-    #[test]
-    fn test_config_deserialization_with_new_fields() {
-        let toml_str = r#"
-log_level = "info"
-log_file = "/dev/null"
-refresh_interval = 60
-display_standings_western_first = false
-time_format = "%H:%M:%S"
-
-[display]
-selection_fg = "orange"
-show_action_bar = false
-command_palette_width = 70
-command_palette_height = 60
-enable_animations = true
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.display.show_action_bar, false);
-    }
-
-    #[test]
-    fn test_config_deserialization_with_missing_fields() {
-        // Test that defaults are applied when fields are missing
-        let toml_str = r#"
-log_level = "info"
-log_file = "/dev/null"
-refresh_interval = 60
-display_standings_western_first = false
-time_format = "%H:%M:%S"
-
-[display]
-selection_fg = "orange"
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        // Should use defaults
-        assert_eq!(config.display.show_action_bar, false);
-    }
-
-    #[test]
-    fn test_roundtrip_with_all_new_fields() {
-        let mut config = Config::default();
-        config.display.show_action_bar = true;
-
-        let toml_str = toml::to_string_pretty(&config).unwrap();
-        let deserialized: Config = toml::from_str(&toml_str).unwrap();
-
-        assert_eq!(deserialized.display.show_action_bar, true);
-    }
 }

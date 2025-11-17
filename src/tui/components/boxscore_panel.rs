@@ -12,8 +12,8 @@ use crate::config::DisplayConfig;
 use crate::tui::framework::component::{Component, Element, RenderableWidget};
 use super::{SkaterStatsTableWidget, GoalieStatsTableWidget};
 
-/// Number of chrome lines per section (title + sep + column headers + sep)
-const SECTION_CHROME_LINES: usize = 4;
+/// Number of chrome lines per section (title + sep + blank + column headers + sep)
+const SECTION_CHROME_LINES: usize = 5;
 
 /// View mode for boxscore panel
 #[derive(Clone, Debug, PartialEq)]
@@ -365,8 +365,8 @@ impl BoxscorePanelWidget {
                 (false, 0, 0)
             } else {
                 // Section at least partially visible
-                // Account for chrome (4 lines: title + sep + column headers + sep)
-                let data_start_in_section = 4;
+                // Account for chrome (title + sep + blank + column headers + sep)
+                let data_start_in_section = SECTION_CHROME_LINES;
                 let window_start_in_content = visible_start.saturating_sub(section_start);
                 let window_end_in_content = (visible_end.saturating_sub(section_start)).min(forwards_height);
 
@@ -393,7 +393,7 @@ impl BoxscorePanelWidget {
             if visible_end <= section_start || visible_start >= section_end {
                 (false, 0, 0)
             } else {
-                let data_start_in_section = 4;
+                let data_start_in_section = SECTION_CHROME_LINES;
                 let window_start_in_content = visible_start.saturating_sub(section_start);
                 let window_end_in_content = (visible_end.saturating_sub(section_start)).min(defense_height);
 
@@ -417,7 +417,7 @@ impl BoxscorePanelWidget {
             if visible_end <= section_start || visible_start >= section_end {
                 (false, 0, 0)
             } else {
-                let data_start_in_section = 4;
+                let data_start_in_section = SECTION_CHROME_LINES;
                 let window_start_in_content = visible_start.saturating_sub(section_start);
                 let window_end_in_content = (visible_end.saturating_sub(section_start)).min(goalies_height);
 
@@ -450,11 +450,19 @@ impl BoxscorePanelWidget {
             constraints.push(Constraint::Length(height as u16));
         }
         if defense_visible {
+            // Add spacing before defense section if forwards was visible
+            if forwards_visible {
+                constraints.push(Constraint::Length(1)); // 1 line spacing
+            }
             // Use max_defense_count to ensure both teams get same constraint height
             let height = max_defense_count + SECTION_CHROME_LINES;
             constraints.push(Constraint::Length(height as u16));
         }
         if goalies_visible {
+            // Add spacing before goalies section if defense was visible
+            if defense_visible {
+                constraints.push(Constraint::Length(1)); // 1 line spacing
+            }
             // Use max_goalies_count to ensure both teams get same constraint height
             let height = max_goalies_count + SECTION_CHROME_LINES;
             constraints.push(Constraint::Length(height as u16));
@@ -513,6 +521,11 @@ impl BoxscorePanelWidget {
 
         // Render Defense if visible
         if defense_visible && defense_window_end > defense_window_start {
+            // Skip spacer if forwards was visible
+            if forwards_visible {
+                section_idx += 1; // Skip the spacer constraint
+            }
+
             let windowed_data: Vec<_> = team_stats.defense[defense_window_start..defense_window_end].to_vec();
 
             let (selected_row, focused) = if let Some(idx) = self.selected_index {
@@ -545,6 +558,11 @@ impl BoxscorePanelWidget {
 
         // Render Goalies if visible
         if goalies_visible && goalies_window_end > goalies_window_start {
+            // Skip spacer if defense was visible
+            if defense_visible {
+                section_idx += 1; // Skip the spacer constraint
+            }
+
             let windowed_data: Vec<_> = team_stats.goalies[goalies_window_start..goalies_window_end].to_vec();
 
             let (selected_row, focused) = if let Some(idx) = self.selected_index {

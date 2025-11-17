@@ -1365,9 +1365,6 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
                     config.display.use_unicode = !config.display.use_unicode;
                     config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(config.display.use_unicode);
                 }
-                "show_action_bar" => {
-                    config.display.show_action_bar = !config.display.show_action_bar;
-                }
                 "western_teams_first" => {
                     config.display_standings_western_first = !config.display_standings_western_first;
                 }
@@ -1401,6 +1398,109 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
             let mut new_state = state.clone();
             new_state.system.config = *config;
             (new_state, Effect::None)
+        }
+
+        SettingsAction::StartEditing(key) => {
+            debug!("SETTINGS: Starting edit for key: {}", key);
+            let mut new_state = state.clone();
+
+            // Initialize edit buffer with current value
+            let current_value = match key.as_str() {
+                "log_file" => new_state.system.config.log_file.clone(),
+                "log_level" => new_state.system.config.log_level.clone(),
+                "time_format" => new_state.system.config.time_format.clone(),
+                "refresh_interval" => new_state.system.config.refresh_interval.to_string(),
+                _ => {
+                    debug!("SETTINGS: Unknown editable setting: {}", key);
+                    return (new_state, Effect::None);
+                }
+            };
+
+            new_state.ui.settings.editing = true;
+            new_state.ui.settings.edit_buffer = current_value;
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::CancelEditing => {
+            debug!("SETTINGS: Cancelling edit");
+            let mut new_state = state.clone();
+            new_state.ui.settings.editing = false;
+            new_state.ui.settings.edit_buffer.clear();
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::AppendChar(ch) => {
+            let mut new_state = state.clone();
+            new_state.ui.settings.edit_buffer.push(ch);
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::DeleteChar => {
+            let mut new_state = state.clone();
+            new_state.ui.settings.edit_buffer.pop();
+            (new_state, Effect::None)
+        }
+
+        SettingsAction::CommitEdit(key) => {
+            debug!("SETTINGS: Committing edit for key: {}", key);
+            let mut new_state = state.clone();
+            let mut config = new_state.system.config.clone();
+            let edit_value = new_state.ui.settings.edit_buffer.clone();
+
+            // Update the config with the edited value
+            let result = match key.as_str() {
+                "log_file" => {
+                    config.log_file = edit_value;
+                    Ok(())
+                }
+                "log_level" => {
+                    config.log_level = edit_value;
+                    Ok(())
+                }
+                "time_format" => {
+                    config.time_format = edit_value;
+                    Ok(())
+                }
+                "refresh_interval" => {
+                    match edit_value.parse::<u32>() {
+                        Ok(value) => {
+                            config.refresh_interval = value;
+                            Ok(())
+                        }
+                        Err(_) => Err("Invalid number".to_string()),
+                    }
+                }
+                _ => Err(format!("Unknown setting: {}", key)),
+            };
+
+            match result {
+                Ok(()) => {
+                    // Clear editing state
+                    new_state.ui.settings.editing = false;
+                    new_state.ui.settings.edit_buffer.clear();
+                    new_state.system.config = config.clone();
+
+                    // Return effect to persist config
+                    let effect = Effect::Async(Box::pin(async move {
+                        match crate::config::write(&config) {
+                            Ok(_) => {
+                                debug!("SETTINGS: Config saved successfully");
+                                Action::SettingsAction(SettingsAction::UpdateConfig(Box::new(config)))
+                            }
+                            Err(e) => {
+                                debug!("SETTINGS: Failed to save config: {}", e);
+                                Action::Error(format!("Failed to save config: {}", e))
+                            }
+                        }
+                    }));
+
+                    (new_state, effect)
+                }
+                Err(e) => {
+                    debug!("SETTINGS: Failed to commit edit: {}", e);
+                    (new_state, Effect::None)
+                }
+            }
         }
     }
 }
@@ -1835,6 +1935,116 @@ mod tests {
         );
 
         assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+    }
+
+    #[test]
+    fn test_settings_start_editing_log_file() {
+        let state = AppState::default();
+
+        let (new_state, _) = reduce_settings(state, SettingsAction::StartEditing("log_file".to_string()));
+
+        assert_eq!(new_state.ui.settings.editing, true);
+        assert_eq!(new_state.ui.settings.edit_buffer, "/dev/null"); // Default log_file
+    }
+
+    #[test]
+    fn test_settings_start_editing_log_level() {
+        let state = AppState::default();
+
+        let (new_state, _) = reduce_settings(state, SettingsAction::StartEditing("log_level".to_string()));
+
+        assert_eq!(new_state.ui.settings.editing, true);
+        assert_eq!(new_state.ui.settings.edit_buffer, "info"); // Default log_level
+    }
+
+    #[test]
+    fn test_settings_cancel_editing() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "some text".to_string();
+
+        let (new_state, _) = reduce_settings(state, SettingsAction::CancelEditing);
+
+        assert_eq!(new_state.ui.settings.editing, false);
+        assert_eq!(new_state.ui.settings.edit_buffer, "");
+    }
+
+    #[test]
+    fn test_settings_append_char() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "/tmp".to_string();
+
+        let (new_state, _) = reduce_settings(state, SettingsAction::AppendChar('/'));
+
+        assert_eq!(new_state.ui.settings.edit_buffer, "/tmp/");
+    }
+
+    #[test]
+    fn test_settings_delete_char() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "/tmp/".to_string();
+
+        let (new_state, _) = reduce_settings(state, SettingsAction::DeleteChar);
+
+        assert_eq!(new_state.ui.settings.edit_buffer, "/tmp");
+    }
+
+    #[test]
+    fn test_settings_delete_char_empty_buffer() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "".to_string();
+
+        let (new_state, _) = reduce_settings(state, SettingsAction::DeleteChar);
+
+        assert_eq!(new_state.ui.settings.edit_buffer, "");
+    }
+
+    #[test]
+    fn test_settings_commit_edit_string() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "/tmp/test.log".to_string();
+
+        let (new_state, effect) = reduce_settings(state, SettingsAction::CommitEdit("log_file".to_string()));
+
+        assert_eq!(new_state.ui.settings.editing, false);
+        assert_eq!(new_state.ui.settings.edit_buffer, "");
+        assert_eq!(new_state.system.config.log_file, "/tmp/test.log");
+        // Should return async effect to save config
+        assert!(matches!(effect, Effect::Async(_)));
+    }
+
+    #[test]
+    fn test_settings_commit_edit_int_valid() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "120".to_string();
+
+        let (new_state, effect) = reduce_settings(state, SettingsAction::CommitEdit("refresh_interval".to_string()));
+
+        assert_eq!(new_state.ui.settings.editing, false);
+        assert_eq!(new_state.ui.settings.edit_buffer, "");
+        assert_eq!(new_state.system.config.refresh_interval, 120);
+        // Should return async effect to save config
+        assert!(matches!(effect, Effect::Async(_)));
+    }
+
+    #[test]
+    fn test_settings_commit_edit_int_invalid() {
+        let mut state = AppState::default();
+        state.ui.settings.editing = true;
+        state.ui.settings.edit_buffer = "not a number".to_string();
+
+        let (new_state, effect) = reduce_settings(state, SettingsAction::CommitEdit("refresh_interval".to_string()));
+
+        // Should remain in editing mode since parse failed
+        assert_eq!(new_state.ui.settings.editing, true);
+        assert_eq!(new_state.ui.settings.edit_buffer, "not a number");
+        assert_eq!(new_state.system.config.refresh_interval, 60); // Unchanged
+        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
