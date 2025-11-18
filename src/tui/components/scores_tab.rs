@@ -73,7 +73,7 @@ impl ScoresTab {
             &TabbedPanelProps {
                 active_key,
                 tabs,
-                focused: props.focused,
+                focused: props.focused && !props.box_selection_active,
             },
             &(),
         )

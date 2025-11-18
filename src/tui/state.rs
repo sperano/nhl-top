@@ -203,6 +203,8 @@ impl Default for SettingsUiState {
 pub struct SystemState {
     pub last_refresh: Option<SystemTime>,
     pub config: Config,
+    pub status_message: Option<String>,
+    pub status_is_error: bool,
 }
 
 impl Default for SystemState {
@@ -210,6 +212,8 @@ impl Default for SystemState {
         Self {
             last_refresh: None,
             config: Config::default(),
+            status_message: None,
+            status_is_error: false,
         }
     }
 }

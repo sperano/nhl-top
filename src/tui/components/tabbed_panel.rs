@@ -1,5 +1,6 @@
 use crate::config::DisplayConfig;
 use crate::tui::component::{vertical, Component, Constraint, Element};
+use ratatui::style::{Modifier, Style};
 
 /// A single tab item containing its label and content
 #[derive(Clone)]
@@ -10,8 +11,6 @@ pub struct TabItem {
     pub title: String,
     /// Content to show when this tab is active
     pub content: Element,
-    /// Whether this tab is disabled
-    pub disabled: bool,
 }
 
 impl TabItem {
@@ -21,14 +20,7 @@ impl TabItem {
             key: key.into(),
             title: title.into(),
             content,
-            disabled: false,
         }
-    }
-
-    /// Create a disabled tab item
-    pub fn disabled(mut self) -> Self {
-        self.disabled = true;
-        self
     }
 }
 
@@ -72,7 +64,6 @@ impl Component for TabbedPanel {
             .map(|tab| TabLabel {
                 title: tab.title.clone(),
                 key: tab.key.clone(),
-                disabled: tab.disabled,
                 active: tab.key == props.active_key,
             })
             .collect();
@@ -105,7 +96,6 @@ struct TabLabel {
     title: String,
     #[allow(dead_code)]
     key: String,
-    disabled: bool,
     active: bool,
 }
 
@@ -116,43 +106,50 @@ struct TabBarWidget {
 }
 
 impl TabBarWidget {
-    /// Get the base style based on focus state
-    fn base_style(&self) -> ratatui::style::Style {
-        use ratatui::style::{Color, Style};
-        if self.focused {
-            Style::default()
+    /// Get the style for box characters (borders/separators) based on focus state and theme
+    fn box_char_style(&self, config: &DisplayConfig) -> Style {
+        if let Some(theme) = &config.theme {
+            if self.focused {
+                Style::default().fg(theme.fg3)
+            } else {
+                Style::default().fg(theme.fg3_dark())
+            }
         } else {
-            Style::default().fg(Color::DarkGray)
+            Style::default()
         }
     }
 
     /// Build segments for the tab line with separators
-    fn build_tab_line(&self, config: &DisplayConfig) -> Vec<(String, ratatui::style::Style)> {
-        use ratatui::style::{Color, Modifier, Style};
-
-        let base_style = self.base_style();
+    fn build_tab_line(&self, config: &DisplayConfig) -> Vec<(String, Style)> {
+        let box_style = self.box_char_style(config);
         let separator = format!(" {} ", config.box_chars.vertical);
         let mut segments = Vec::new();
 
         for (i, label) in self.labels.iter().enumerate() {
             if i > 0 {
-                segments.push((separator.clone(), base_style));
+                segments.push((separator.clone(), box_style));
             }
 
-            let style = if label.active {
-                if self.focused {
-                    base_style
-                        .fg(config.selection_fg)
-                        .add_modifier(Modifier::BOLD)
+            let style = if let Some(theme) = &config.theme {
+                // When theme is set: use fg2 (focused) or fg2_dark (unfocused)
+                let fg_color = if self.focused {
+                    theme.fg2
                 } else {
-                    base_style
-                        .fg(config.unfocused_selection_fg())
-                        .add_modifier(Modifier::BOLD)
+                    theme.fg2_dark()
+                };
+                let base = Style::default().fg(fg_color);
+                if label.active {
+                    base.add_modifier(Modifier::REVERSED)
+                } else {
+                    base
                 }
-            } else if label.disabled {
-                Style::default().fg(Color::DarkGray)
             } else {
-                base_style
+                // No theme: use default style, reverse for active
+                if label.active {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                }
             };
 
             segments.push((label.title.clone(), style));
@@ -162,12 +159,12 @@ impl TabBarWidget {
     }
 
     /// Build the separator line with connectors under tab gaps
-    fn build_separator_line(&self, area_width: usize, config: &DisplayConfig) -> Vec<(String, ratatui::style::Style)> {
+    fn build_separator_line(&self, area_width: usize, config: &DisplayConfig) -> Vec<(String, Style)> {
         use unicode_width::UnicodeWidthStr;
 
         let horizontal = &config.box_chars.horizontal;
         let connector = &config.box_chars.connector2;
-        let base_style = self.base_style();
+        let box_style = self.box_char_style(config);
 
         let mut segments = Vec::new();
         let mut pos = 0;
@@ -175,20 +172,20 @@ impl TabBarWidget {
         for (i, label) in self.labels.iter().enumerate() {
             if i > 0 {
                 // Add horizontal line before separator (1 char)
-                segments.push((horizontal.repeat(1), base_style));
-                segments.push((connector.to_string(), base_style));
-                segments.push((horizontal.repeat(1), base_style));
+                segments.push((horizontal.repeat(1), box_style));
+                segments.push((connector.to_string(), box_style));
+                segments.push((horizontal.repeat(1), box_style));
                 pos += 3; // separator width: 1 + 1 + 1 (" │ ")
             }
             // Add horizontal line under tab
             let tab_width = label.title.width();
-            segments.push((horizontal.repeat(tab_width), base_style));
+            segments.push((horizontal.repeat(tab_width), box_style));
             pos += tab_width;
         }
 
         // Fill rest of line
         if pos < area_width {
-            segments.push((horizontal.repeat(area_width - pos), base_style));
+            segments.push((horizontal.repeat(area_width - pos), box_style));
         }
 
         segments
@@ -253,6 +250,8 @@ mod tests {
     fn test_config() -> DisplayConfig {
         DisplayConfig {
             use_unicode: true,
+            theme_name: None,
+            theme: None,
             selection_fg: Color::Rgb(255, 200, 0),
             unfocused_selection_fg: None,
             division_header_fg: Color::Rgb(159, 226, 191),
@@ -264,6 +263,8 @@ mod tests {
     fn test_config_ascii() -> DisplayConfig {
         DisplayConfig {
             use_unicode: false,
+            theme_name: None,
+            theme: None,
             selection_fg: Color::Rgb(255, 200, 0),
             unfocused_selection_fg: None,
             division_header_fg: Color::Rgb(159, 226, 191),
@@ -366,10 +367,6 @@ mod tests {
         let tab = TabItem::new("key", "Title", Element::None);
         assert_eq!(tab.key, "key");
         assert_eq!(tab.title, "Title");
-        assert!(!tab.disabled);
-
-        let disabled_tab = TabItem::new("key", "Title", Element::None).disabled();
-        assert!(disabled_tab.disabled);
     }
 
     #[test]
@@ -423,19 +420,16 @@ mod tests {
                 TabLabel {
                     title: "Home".into(),
                     key: "home".into(),
-                    disabled: false,
                     active: true,
                 },
                 TabLabel {
                     title: "Profile".into(),
                     key: "profile".into(),
-                    disabled: false,
                     active: false,
                 },
                 TabLabel {
                     title: "Settings".into(),
                     key: "settings".into(),
-                    disabled: false,
                     active: false,
                 },
             ],
@@ -451,41 +445,12 @@ mod tests {
     }
 
     #[test]
-    fn test_tab_bar_widget_with_disabled_tab() {
-        let widget = TabBarWidget {
-            labels: vec![
-                TabLabel {
-                    title: "Tab 1".into(),
-                    key: "tab1".into(),
-                    disabled: false,
-                    active: true,
-                },
-                TabLabel {
-                    title: "Tab 2".into(),
-                    key: "tab2".into(),
-                    disabled: true,
-                    active: false,
-                },
-            ],
-            focused: true,
-        };
-
-        let buf = render_widget(&widget, RENDER_WIDTH, 2);
-
-        assert_buffer(&buf, &[
-            "Tab 1 │ Tab 2",
-            "──────┴─────────────────────────────────────────────────────────────────────────",
-        ]);
-    }
-
-    #[test]
     fn test_tab_bar_widget_single_tab() {
         let widget = TabBarWidget {
             labels: vec![
                 TabLabel {
                     title: "Only Tab".into(),
                     key: "only".into(),
-                    disabled: false,
                     active: true,
                 },
             ],
@@ -522,13 +487,11 @@ mod tests {
                 TabLabel {
                     title: "Tab A".into(),
                     key: "a".into(),
-                    disabled: false,
                     active: true,
                 },
                 TabLabel {
                     title: "Tab B".into(),
                     key: "b".into(),
-                    disabled: false,
                     active: false,
                 },
             ],
@@ -551,19 +514,16 @@ mod tests {
                 TabLabel {
                     title: "Scores".into(),
                     key: "scores".into(),
-                    disabled: false,
                     active: true,
                 },
                 TabLabel {
                     title: "Standings".into(),
                     key: "standings".into(),
-                    disabled: false,
                     active: false,
                 },
                 TabLabel {
                     title: "Stats".into(),
                     key: "stats".into(),
-                    disabled: false,
                     active: false,
                 },
             ],
@@ -602,7 +562,6 @@ mod tests {
                 TabLabel {
                     title: "Test".into(),
                     key: "test".into(),
-                    disabled: false,
                     active: true,
                 },
             ],
@@ -622,7 +581,6 @@ mod tests {
                 TabLabel {
                     title: "Test".into(),
                     key: "test".into(),
-                    disabled: false,
                     active: true,
                 },
             ],
@@ -645,13 +603,11 @@ mod tests {
                 TabLabel {
                     title: "Home".into(),
                     key: "home".into(),
-                    disabled: false,
                     active: true,
                 },
                 TabLabel {
                     title: "Profile".into(),
                     key: "profile".into(),
-                    disabled: false,
                     active: false,
                 },
             ],
@@ -660,21 +616,22 @@ mod tests {
 
         let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
-        // When unfocused, all text should use DarkGray
-        // Check that the separators and inactive tabs use DarkGray
-        let config = test_config();
+        // When unfocused with no theme, all tabs use default style (Reset)
+        // Active tab gets REVERSED modifier
 
         // Check inactive tab (Profile at position 9+)
         let profile_cell = &buf[(9, 0)]; // 'P' in Profile
-        assert_eq!(profile_cell.fg, ratatui::style::Color::DarkGray);
+        assert_eq!(profile_cell.fg, ratatui::style::Color::Reset);
+        assert!(!profile_cell.modifier.contains(Modifier::REVERSED));
 
-        // Check separator (│ at position 5)
+        // Check separator (│ at position 5) - uses default style when no theme
         let separator_cell = &buf[(5, 0)];
-        assert_eq!(separator_cell.fg, ratatui::style::Color::DarkGray);
+        assert_eq!(separator_cell.fg, ratatui::style::Color::Reset);
 
-        // Check active tab uses unfocused_selection_fg (darker orange)
+        // Check active tab uses default style with REVERSED modifier
         let home_cell = &buf[(0, 0)]; // 'H' in Home
-        assert_eq!(home_cell.fg, config.unfocused_selection_fg());
+        assert_eq!(home_cell.fg, ratatui::style::Color::Reset);
+        assert!(home_cell.modifier.contains(Modifier::REVERSED));
     }
 
     #[test]
@@ -684,13 +641,11 @@ mod tests {
                 TabLabel {
                     title: "Tab A".into(),
                     key: "a".into(),
-                    disabled: false,
                     active: true,
                 },
                 TabLabel {
                     title: "Tab B".into(),
                     key: "b".into(),
-                    disabled: false,
                     active: false,
                 },
             ],
@@ -699,63 +654,12 @@ mod tests {
 
         let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
-        // Check separator line uses DarkGray
+        // Check separator line uses default style (Reset) when no theme
         let horizontal_cell = &buf[(0, 1)]; // First horizontal line character
-        assert_eq!(horizontal_cell.fg, ratatui::style::Color::DarkGray);
+        assert_eq!(horizontal_cell.fg, ratatui::style::Color::Reset);
 
         let connector_cell = &buf[(6, 1)]; // Connector ┴ position
-        assert_eq!(connector_cell.fg, ratatui::style::Color::DarkGray);
-    }
-
-    #[test]
-    fn test_tab_bar_widget_disabled_always_dark_gray() {
-        // Disabled tabs should always be DarkGray regardless of focus state
-        let widget_focused = TabBarWidget {
-            labels: vec![
-                TabLabel {
-                    title: "Active".into(),
-                    key: "active".into(),
-                    disabled: false,
-                    active: true,
-                },
-                TabLabel {
-                    title: "Disabled".into(),
-                    key: "disabled".into(),
-                    disabled: true,
-                    active: false,
-                },
-            ],
-            focused: true,
-        };
-
-        let widget_unfocused = TabBarWidget {
-            labels: vec![
-                TabLabel {
-                    title: "Active".into(),
-                    key: "active".into(),
-                    disabled: false,
-                    active: true,
-                },
-                TabLabel {
-                    title: "Disabled".into(),
-                    key: "disabled".into(),
-                    disabled: true,
-                    active: false,
-                },
-            ],
-            focused: false,
-        };
-
-        let buf_focused = render_widget(&widget_focused, RENDER_WIDTH, 2);
-        let buf_unfocused = render_widget(&widget_unfocused, RENDER_WIDTH, 2);
-
-        // "Disabled" starts at position 10 (after "Active │ ")
-        let disabled_cell_focused = &buf_focused[(10, 0)];
-        let disabled_cell_unfocused = &buf_unfocused[(10, 0)];
-
-        // Both should be DarkGray
-        assert_eq!(disabled_cell_focused.fg, ratatui::style::Color::DarkGray);
-        assert_eq!(disabled_cell_unfocused.fg, ratatui::style::Color::DarkGray);
+        assert_eq!(connector_cell.fg, ratatui::style::Color::Reset);
     }
 
     // Helper test widget

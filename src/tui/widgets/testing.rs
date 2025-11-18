@@ -17,6 +17,8 @@ use super::RenderableWidget;
 pub fn test_config() -> DisplayConfig {
     DisplayConfig {
         use_unicode: true,
+        theme_name: None,
+        theme: None,
         selection_fg: Color::Rgb(255, 200, 0), // Gold
         unfocused_selection_fg: None,
         division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
@@ -31,6 +33,8 @@ pub fn test_config() -> DisplayConfig {
 pub fn test_config_ascii() -> DisplayConfig {
     DisplayConfig {
         use_unicode: false,
+        theme_name: None,
+        theme: None,
         selection_fg: Color::Rgb(255, 200, 0),
         unfocused_selection_fg: None,
         division_header_fg: Color::Rgb(159, 226, 191),

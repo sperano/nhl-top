@@ -70,7 +70,7 @@ impl SettingsTab {
             &TabbedPanelProps {
                 active_key,
                 tabs,
-                focused: props.focused,
+                focused: props.focused && !props.settings_mode,
             },
             &(),
         )
@@ -289,8 +289,8 @@ mod tests {
         let settings_tab = SettingsTab;
         let props = SettingsTabProps {
             config: Config::default(),
-            selected_category: SettingsCategory::Display, // Display has no editable settings
-            selected_setting_index: 0,
+            selected_category: SettingsCategory::Display,
+            selected_setting_index: 1, // Index 1 is "Use Unicode" which is not editable
             settings_mode: true,
             focused: true,
             editing: false,
@@ -301,7 +301,7 @@ mod tests {
 
         let element = settings_tab.view(&props, &());
 
-        // Should return base element (Container), not overlay, since Display has no editable settings
+        // Should return base element (Container), not overlay, since index 1 is not editable
         match element {
             Element::Container { .. } => {
                 // Base element returned as expected

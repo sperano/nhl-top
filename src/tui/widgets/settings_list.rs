@@ -57,6 +57,7 @@ impl SettingsListWidget {
                 ("Log File".to_string(), self.config.log_file.clone()),
             ],
             SettingsCategory::Display => vec![
+                ("Theme".to_string(), self.config.display.theme_name.clone().unwrap_or_else(|| "none".to_string())),
                 ("Use Unicode".to_string(), self.config.display.use_unicode.to_string()),
                 ("Selection Color".to_string(), format_color(&self.config.display.selection_fg)),
                 ("Division Header Color".to_string(), format_color(&self.config.display.division_header_fg)),
@@ -195,8 +196,9 @@ mod tests {
         );
 
         let settings = widget.get_settings();
-        assert_eq!(settings.len(), 4);
-        assert_eq!(settings[0].0, "Use Unicode");
+        assert_eq!(settings.len(), 5);
+        assert_eq!(settings[0].0, "Theme");
+        assert_eq!(settings[1].0, "Use Unicode");
     }
 
     #[test]

@@ -1,9 +1,13 @@
 use xdg::BaseDirectories;
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 use std::fs;
 use std::path::PathBuf;
 use ratatui::style::Color;
 use phf::phf_map;
+
+/// Factor used to darken theme colors (0.5 = 50% darker)
+const DARKENING_FACTOR: f32 = 0.5;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -30,41 +34,61 @@ pub struct Theme {
     #[serde(deserialize_with = "deserialize_color")]
     #[serde(serialize_with = "serialize_color")]
     pub fg3: Color,
+    #[serde(skip)]
+    pub fg2_dark: OnceLock<Color>,
+    #[serde(skip)]
+    pub fg3_dark: OnceLock<Color>,
 }
 
-pub const THEME_ORANGE: Theme = Theme {
+pub static THEME_ID_ORANGE: &str = "orange";
+pub static THEME_ID_GREEN: &str = "green";
+pub static THEME_ID_BLUE: &str = "blue";
+pub static THEME_ID_PURPLE: &str = "purple";
+pub static THEME_ID_WHITE: &str = "white";
+
+pub static THEME_ORANGE: Theme = Theme {
     name: "Orange",
     fg1: Color::Rgb(255, 214, 128),
     fg2: Color::Rgb(255, 175, 64),
     fg3: Color::Rgb(226, 108, 34),
+    fg2_dark: OnceLock::new(),
+    fg3_dark: OnceLock::new(),
 };
 
-pub const THEME_GREEN: Theme = Theme {
+pub static THEME_GREEN: Theme = Theme {
     name: "Green",
     fg1: Color::Rgb(175, 255, 135),
     fg2: Color::Rgb(95, 255, 175),
     fg3: Color::Rgb(0, 255, 0),
+    fg2_dark: OnceLock::new(),
+    fg3_dark: OnceLock::new(),
 };
 
-pub const THEME_BLUE: Theme = Theme {
+pub static THEME_BLUE: Theme = Theme {
     name: "Blue",
     fg1: Color::Rgb(175, 255, 255),
     fg2: Color::Rgb(95, 135, 255),
     fg3: Color::Rgb(0, 95, 255),
+    fg2_dark: OnceLock::new(),
+    fg3_dark: OnceLock::new(),
 };
 
-pub const THEME_PURPLE: Theme = Theme {
+pub static THEME_PURPLE: Theme = Theme {
     name: "Purple",
     fg1: Color::Rgb(255, 175, 255),
     fg2: Color::Rgb(175, 135, 255),
     fg3: Color::Rgb(135, 95, 175),
+    fg2_dark: OnceLock::new(),
+    fg3_dark: OnceLock::new(),
 };
 
-pub const THEME_WHITE: Theme = Theme {
+pub static THEME_WHITE: Theme = Theme {
     name: "White",
-    fg1: Color::White,
-    fg2: Color::Gray,
-    fg3: Color::DarkGray,
+    fg1: Color::Rgb(255, 255, 255),
+    fg2: Color::Rgb(192, 192, 192),
+    fg3: Color::Rgb(128, 128, 128),
+    fg2_dark: OnceLock::new(),
+    fg3_dark: OnceLock::new(),
 };
 
 pub static THEMES: phf::Map<&'static str, &Theme> = phf_map! {
@@ -76,13 +100,30 @@ pub static THEMES: phf::Map<&'static str, &Theme> = phf_map! {
 };
 
 impl Default for Theme {
-    fn default() -> Self { THEME_WHITE }
+    fn default() -> Self { THEME_WHITE.clone() }
+}
+
+impl Theme {
+    /// Get a 50% darker version of fg2, computed lazily and cached
+    pub fn fg2_dark(&self) -> Color {
+        *self.fg2_dark.get_or_init(|| darken_color(self.fg2, DARKENING_FACTOR))
+    }
+
+    /// Get a 50% darker version of fg3, computed lazily and cached
+    pub fn fg3_dark(&self) -> Color {
+        *self.fg3_dark.get_or_init(|| darken_color(self.fg3, DARKENING_FACTOR))
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
 pub struct DisplayConfig {
     pub use_unicode: bool,
+    #[serde(rename = "theme")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_name: Option<String>,
+    #[serde(skip)]
+    pub theme: Option<Theme>,
     #[serde(deserialize_with = "deserialize_color")]
     #[serde(serialize_with = "serialize_color")]
     pub selection_fg: Color,
@@ -117,6 +158,8 @@ impl Default for DisplayConfig {
     fn default() -> Self {
         DisplayConfig {
             use_unicode: true,
+            theme_name: None,
+            theme: None,
             selection_fg: Color::Rgb(255, 165, 0), // Orange
             unfocused_selection_fg: None,
             division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
@@ -130,6 +173,13 @@ impl DisplayConfig {
     /// Get the unfocused selection color, calculating 50% darker if not explicitly set
     pub fn unfocused_selection_fg(&self) -> Color {
         self.unfocused_selection_fg.unwrap_or_else(|| darken_color(self.selection_fg, 0.5))
+    }
+
+    /// Apply theme from theme_name by looking it up in THEMES map
+    pub fn apply_theme(&mut self) {
+        self.theme = self.theme_name.as_ref()
+            .and_then(|name| THEMES.get(name.as_str()))
+            .map(|theme| (*theme).clone());
     }
 }
 
@@ -322,8 +372,13 @@ pub fn read() -> Config {
     };
 
     let mut config: Config = toml::from_str(&content).unwrap_or_else(|_| Config::default());
+
     // Initialize box_chars based on use_unicode (since it's not serialized)
     config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(config.display.use_unicode);
+
+    // Apply theme based on theme_name (since it's not serialized)
+    config.display.apply_theme();
+
     config
 }
 
@@ -506,6 +561,147 @@ selection_fg = "128,0,128"
         assert_eq!(deserialized.display.use_unicode, false);
         assert_eq!(deserialized.refresh_interval, 45);
         assert_eq!(deserialized.display_standings_western_first, true);
+    }
+
+    #[test]
+    fn test_theme_auto_loading_with_valid_theme() {
+        let toml_str = r#"
+log_level = "info"
+log_file = "/dev/null"
+refresh_interval = 60
+display_standings_western_first = false
+time_format = "%H:%M:%S"
+
+[display]
+theme = "orange"
+        "#;
+
+        let mut config: Config = toml::from_str(toml_str).unwrap();
+
+        // Manually apply theme loading logic (simulating what read() does)
+        config.display.theme = config.display.theme_name.as_ref()
+            .and_then(|name| THEMES.get(name.as_str()))
+            .map(|theme| (*theme).clone());
+
+        assert_eq!(config.display.theme_name, Some("orange".to_string()));
+        assert!(config.display.theme.is_some());
+
+        let theme = config.display.theme.unwrap();
+        assert_eq!(theme.fg1, THEME_ORANGE.fg1);
+        assert_eq!(theme.fg2, THEME_ORANGE.fg2);
+        assert_eq!(theme.fg3, THEME_ORANGE.fg3);
+    }
+
+    #[test]
+    fn test_theme_auto_loading_with_invalid_theme() {
+        let toml_str = r#"
+log_level = "info"
+log_file = "/dev/null"
+refresh_interval = 60
+display_standings_western_first = false
+time_format = "%H:%M:%S"
+
+[display]
+theme = "invalid_theme_name"
+        "#;
+
+        let mut config: Config = toml::from_str(toml_str).unwrap();
+
+        // Manually apply theme loading logic
+        config.display.theme = config.display.theme_name.as_ref()
+            .and_then(|name| THEMES.get(name.as_str()))
+            .map(|theme| (*theme).clone());
+
+        assert_eq!(config.display.theme_name, Some("invalid_theme_name".to_string()));
+        assert!(config.display.theme.is_none());
+    }
+
+    #[test]
+    fn test_theme_auto_loading_with_no_theme() {
+        let toml_str = r#"
+log_level = "info"
+log_file = "/dev/null"
+refresh_interval = 60
+display_standings_western_first = false
+time_format = "%H:%M:%S"
+        "#;
+
+        let mut config: Config = toml::from_str(toml_str).unwrap();
+
+        // Manually apply theme loading logic
+        config.display.theme = config.display.theme_name.as_ref()
+            .and_then(|name| THEMES.get(name.as_str()))
+            .map(|theme| (*theme).clone());
+
+        assert_eq!(config.display.theme_name, None);
+        assert!(config.display.theme.is_none());
+    }
+
+    #[test]
+    fn test_theme_auto_loading_all_themes() {
+        let theme_names = vec!["orange", "green", "blue", "purple", "white"];
+
+        for theme_name in theme_names {
+            let toml_str = format!(r#"
+log_level = "info"
+log_file = "/dev/null"
+refresh_interval = 60
+display_standings_western_first = false
+time_format = "%H:%M:%S"
+
+[display]
+theme = "{}"
+            "#, theme_name);
+
+            let mut config: Config = toml::from_str(&toml_str).unwrap();
+
+            // Apply theme loading logic
+            config.display.apply_theme();
+
+            assert_eq!(config.display.theme_name, Some(theme_name.to_string()));
+            assert!(config.display.theme.is_some(), "Theme '{}' should load", theme_name);
+        }
+    }
+
+    #[test]
+    fn test_theme_dark_colors() {
+        // Test fg2_dark returns 50% darker (50% of original)
+        let orange_fg2 = THEME_ORANGE.fg2;
+        let orange_fg2_dark = THEME_ORANGE.fg2_dark();
+
+        match (orange_fg2, orange_fg2_dark) {
+            (Color::Rgb(r, g, b), Color::Rgb(rd, gd, bd)) => {
+                assert_eq!(rd, (r as f32 * DARKENING_FACTOR) as u8);
+                assert_eq!(gd, (g as f32 * DARKENING_FACTOR) as u8);
+                assert_eq!(bd, (b as f32 * DARKENING_FACTOR) as u8);
+            }
+            _ => panic!("Expected RGB colors"),
+        }
+
+        // Test fg3_dark returns 50% darker (50% of original)
+        let orange_fg3 = THEME_ORANGE.fg3;
+        let orange_fg3_dark = THEME_ORANGE.fg3_dark();
+
+        match (orange_fg3, orange_fg3_dark) {
+            (Color::Rgb(r, g, b), Color::Rgb(rd, gd, bd)) => {
+                assert_eq!(rd, (r as f32 * DARKENING_FACTOR) as u8);
+                assert_eq!(gd, (g as f32 * DARKENING_FACTOR) as u8);
+                assert_eq!(bd, (b as f32 * DARKENING_FACTOR) as u8);
+            }
+            _ => panic!("Expected RGB colors"),
+        }
+    }
+
+    #[test]
+    fn test_theme_dark_colors_cached() {
+        // Call twice to verify it returns the same value (cached)
+        let first_call = THEME_GREEN.fg2_dark();
+        let second_call = THEME_GREEN.fg2_dark();
+        assert_eq!(first_call, second_call);
+
+        let first_call = THEME_GREEN.fg3_dark();
+        let second_call = THEME_GREEN.fg3_dark();
+        assert_eq!(first_call, second_call);
     }
 
 }

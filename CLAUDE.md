@@ -530,3 +530,4 @@ bar";
 - use the stuff in tui::testing when writing tests
 - remember all this as THE LEGACY NAVIGATION WAY.
 - assert_buffer doesn't need strings to be padded and dont use an expected variable, put the vec in the function call
+- after you wrote new code, always ask me if you should write unit tests. if i say yes, then target 100% coverage for the new code. In case achieving 100% would be impossible or require too much, please ask me if you should target 90% instead

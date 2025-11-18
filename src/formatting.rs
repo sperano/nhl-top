@@ -1,7 +1,7 @@
 use crate::config::DisplayConfig;
 
 /// Box-drawing characters for table borders
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BoxChars {
     pub horizontal: String,
     pub double_horizontal: String,

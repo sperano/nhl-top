@@ -56,6 +56,7 @@ pub enum Action {
     // System actions
     Quit,
     Error(String),
+    SetStatusMessage { message: String, is_error: bool },
 }
 
 /// Tab-specific actions for Scores

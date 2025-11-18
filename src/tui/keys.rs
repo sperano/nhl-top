@@ -332,9 +332,9 @@ fn get_setting_key_for_index(category: SettingsCategory, index: usize) -> Option
     match category {
         SettingsCategory::Logging => None, // No boolean settings in Logging
         SettingsCategory::Display => {
-            // Display category: index 0 = use_unicode
+            // Display category: index 1 = use_unicode (Theme is at 0)
             match index {
-                0 => Some("use_unicode".to_string()),
+                1 => Some("use_unicode".to_string()),
                 _ => None,
             }
         }
@@ -360,8 +360,11 @@ fn get_editable_setting_key_for_index(category: SettingsCategory, index: usize) 
             }
         }
         SettingsCategory::Display => {
-            // Display category has boolean and color settings, not editable strings
-            None
+            // Display category: 0 = theme (list-based editable)
+            match index {
+                0 => Some("theme".to_string()),
+                _ => None,
+            }
         }
         SettingsCategory::Data => {
             // Data category: 0 = refresh_interval, 2 = time_format
@@ -1028,7 +1031,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.settings_mode = true;
         state.ui.settings.selected_category = SettingsCategory::Display;
-        state.ui.settings.selected_setting_index = 0; // use_unicode
+        state.ui.settings.selected_setting_index = 1; // use_unicode (index 0 is theme)
 
         let action = key_to_action(make_key(KeyCode::Enter), &state);
         assert!(matches!(
@@ -1105,15 +1108,16 @@ mod tests {
 
     #[test]
     fn test_get_setting_key_display_use_unicode() {
+        // Display index 1 is Use Unicode (index 0 is Theme)
         assert_eq!(
-            get_setting_key_for_index(SettingsCategory::Display, 0),
+            get_setting_key_for_index(SettingsCategory::Display, 1),
             Some("use_unicode".to_string())
         );
     }
 
     #[test]
     fn test_get_setting_key_display_other_indices() {
-        assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 1), None);
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 0), None); // Theme is editable, not boolean
         assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 2), None);
     }
 
@@ -1154,9 +1158,18 @@ mod tests {
     }
 
     #[test]
-    fn test_get_editable_setting_key_display_returns_none() {
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 0), None);
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 1), None);
+    fn test_get_editable_setting_key_display_theme() {
+        // Display index 0 is Theme (list-based editable)
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Display, 0),
+            Some("theme".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_display_other_indices() {
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 1), None); // Use Unicode is boolean
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 2), None); // Colors not editable
     }
 
     #[test]
@@ -1208,10 +1221,10 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.editing = true;
         state.ui.settings.selected_category = SettingsCategory::Display;
-        state.ui.settings.selected_setting_index = 0; // Not editable
+        state.ui.settings.selected_setting_index = 2; // Selection Color - not editable
 
         let action = key_to_action(make_key(KeyCode::Enter), &state);
-        // Should return None since display settings aren't editable
+        // Should return None since color settings aren't editable
         assert!(action.is_none());
     }
 }

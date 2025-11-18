@@ -28,7 +28,8 @@ impl Component for StatusBar {
         Element::Widget(Box::new(StatusBarWidget {
             last_refresh: props.last_refresh,
             refresh_interval: props.config.refresh_interval,
-            error_message: None, // TODO: Get from props when we have error state
+            status_message: props.status_message.clone(),
+            is_error: props.status_is_error,
         }))
     }
 }
@@ -37,16 +38,17 @@ impl Component for StatusBar {
 struct StatusBarWidget {
     last_refresh: Option<SystemTime>,
     refresh_interval: u32,
-    error_message: Option<String>,
+    status_message: Option<String>,
+    is_error: bool,
 }
 
 impl RenderableWidget for StatusBarWidget {
-    fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let mut lines = Vec::new();
 
         // Left side: status message (if any)
-        let left_text = if let Some(msg) = &self.error_message {
-            format!("ERROR: {}", msg)
+        let left_text = if let Some(msg) = &self.status_message {
+            msg.clone()
         } else {
             String::new()
         };
@@ -73,11 +75,28 @@ impl RenderableWidget for StatusBarWidget {
         let right_text_with_margin = format!("{} ", right_text);
         let bar_position = area.width.saturating_sub(right_text_with_margin.len() as u16 + 1);
 
+        // Determine styles based on theme
+        let separator_style = if let Some(theme) = &config.theme {
+            Style::default().fg(theme.fg3)
+        } else {
+            Style::default()
+        };
+
+        let text_style = if let Some(theme) = &config.theme {
+            Style::default().fg(theme.fg2)
+        } else {
+            Style::default()
+        };
+
         // First line: horizontal separator with connector
         let left_part = "─".repeat(bar_position as usize);
         let right_part = "─".repeat((area.width.saturating_sub(bar_position + 1)) as usize);
-        let line1 = format!("{}┬{}", left_part, right_part);
-        lines.push(Line::raw(line1));
+        let line1 = Line::from(vec![
+            Span::styled(left_part, separator_style),
+            Span::styled("┬", separator_style),
+            Span::styled(right_part, separator_style),
+        ]);
+        lines.push(line1);
 
         // Second line: status message on left, refresh on right
         let mut line2_spans = Vec::new();
@@ -85,10 +104,14 @@ impl RenderableWidget for StatusBarWidget {
         // Left side: status message
         if !left_text.is_empty() {
             line2_spans.push(Span::raw(" "));
-            line2_spans.push(Span::styled(
-                &left_text,
-                Style::default().fg(Color::Red),
-            ));
+            if self.is_error {
+                line2_spans.push(Span::styled(
+                    &left_text,
+                    Style::default().fg(Color::Red),
+                ));
+            } else {
+                line2_spans.push(Span::styled(&left_text, text_style));
+            }
         }
 
         // Middle: padding
@@ -101,9 +124,9 @@ impl RenderableWidget for StatusBarWidget {
         line2_spans.push(Span::raw(" ".repeat(padding_len)));
 
         // Right side: vertical bar + refresh text
-        line2_spans.push(Span::raw("│"));
+        line2_spans.push(Span::styled("│", separator_style));
         line2_spans.push(Span::raw(" "));
-        line2_spans.push(Span::raw(&right_text));
+        line2_spans.push(Span::styled(&right_text, text_style));
         line2_spans.push(Span::raw(" "));
 
         lines.push(Line::from(line2_spans));
@@ -116,7 +139,8 @@ impl RenderableWidget for StatusBarWidget {
         Box::new(StatusBarWidget {
             last_refresh: self.last_refresh,
             refresh_interval: self.refresh_interval,
-            error_message: self.error_message.clone(),
+            status_message: self.status_message.clone(),
+            is_error: self.is_error,
         })
     }
 
@@ -138,6 +162,8 @@ mod tests {
         let system_state = SystemState {
             last_refresh: None,
             config: Config::default(),
+            status_message: None,
+            status_is_error: false,
         };
 
         let element = status_bar.view(&system_state, &());
@@ -161,6 +187,8 @@ mod tests {
         let system_state = SystemState {
             last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
             config: Config::default(),
+            status_message: None,
+            status_is_error: false,
         };
 
         let element = status_bar.view(&system_state, &());
@@ -183,7 +211,8 @@ mod tests {
         let widget = StatusBarWidget {
             last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
             refresh_interval: 60,
-            error_message: Some("Network timeout".to_string()),
+            status_message: Some("ERROR: Network timeout".to_string()),
+            is_error: true,
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
@@ -202,7 +231,8 @@ mod tests {
         let widget = StatusBarWidget {
             last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(60)),
             refresh_interval: 60,
-            error_message: None,
+            status_message: None,
+            is_error: false,
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
@@ -222,7 +252,8 @@ mod tests {
         let widget = StatusBarWidget {
             last_refresh: Some(SystemTime::now() + std::time::Duration::from_secs(100)),
             refresh_interval: 60,
-            error_message: None,
+            status_message: None,
+            is_error: false,
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
@@ -241,7 +272,8 @@ mod tests {
         let widget = StatusBarWidget {
             last_refresh: Some(SystemTime::now()),
             refresh_interval: 60,
-            error_message: Some("Test".to_string()),
+            status_message: Some("Test".to_string()),
+            is_error: false,
         };
 
         let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
@@ -253,9 +285,212 @@ mod tests {
         let widget = StatusBarWidget {
             last_refresh: None,
             refresh_interval: 60,
-            error_message: None,
+            status_message: None,
+            is_error: false,
         };
 
         assert_eq!(widget.preferred_height(), Some(2));
+    }
+
+    #[test]
+    fn test_status_bar_with_success_message() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Configuration saved".to_string()),
+            is_error: false,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        assert_buffer(&buf, &[
+            "────────────────────────────────────────────────────────────────┬───────────────",
+            " Configuration saved                                            │ Refresh in 55s",
+        ]);
+
+        // Verify success message is NOT styled red
+        if let Some(cell) = buf.cell((1, 1)) {
+            assert_ne!(cell.fg, Color::Red, "Success message should not be red");
+        }
+    }
+
+    #[test]
+    fn test_status_bar_error_message_has_red_color() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Failed to save config".to_string()),
+            is_error: true,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        assert_buffer(&buf, &[
+            "────────────────────────────────────────────────────────────────┬───────────────",
+            " Failed to save config                                          │ Refresh in 55s",
+        ]);
+
+        // Verify error message IS styled red
+        if let Some(cell) = buf.cell((1, 1)) {
+            assert_eq!(cell.fg, Color::Red, "Error message should be red");
+        }
+    }
+
+    #[test]
+    fn test_status_bar_clears_previous_status_message() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: None,
+            is_error: false,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        assert_buffer(&buf, &[
+            "────────────────────────────────────────────────────────────────┬───────────────",
+            "                                                                │ Refresh in 55s",
+        ]);
+    }
+
+    #[test]
+    fn test_status_bar_separators_use_fg3_when_theme_set() {
+        use crate::config::THEME_ORANGE;
+
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: None,
+            is_error: false,
+        };
+
+        let mut config = DisplayConfig::default();
+        config.theme = Some(THEME_ORANGE.clone());
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &config);
+
+        // Verify separator characters are styled with fg3
+        // Check horizontal line character on line 1
+        if let Some(cell) = buf.cell((0, 0)) {
+            assert_eq!(cell.fg, THEME_ORANGE.fg3, "Horizontal separator should use theme fg3");
+        }
+
+        // Check connector character (┬) on line 1
+        if let Some(cell) = buf.cell((64, 0)) {
+            assert_eq!(cell.fg, THEME_ORANGE.fg3, "Connector should use theme fg3");
+        }
+
+        // Check vertical bar character (│) on line 2
+        if let Some(cell) = buf.cell((64, 1)) {
+            assert_eq!(cell.fg, THEME_ORANGE.fg3, "Vertical bar should use theme fg3");
+        }
+    }
+
+    #[test]
+    fn test_status_bar_separators_unstyled_when_no_theme() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: None,
+            is_error: false,
+        };
+
+        let config = DisplayConfig::default(); // No theme set
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &config);
+
+        // Verify separator characters use default color (Reset)
+        // Check horizontal line character on line 1
+        if let Some(cell) = buf.cell((0, 0)) {
+            assert_eq!(cell.fg, Color::Reset, "Separator should use default color when no theme");
+        }
+
+        // Check vertical bar character (│) on line 2
+        if let Some(cell) = buf.cell((64, 1)) {
+            assert_eq!(cell.fg, Color::Reset, "Vertical bar should use default color when no theme");
+        }
+    }
+
+    #[test]
+    fn test_status_bar_text_uses_fg2_when_theme_set() {
+        use crate::config::THEME_ORANGE;
+
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Configuration saved".to_string()),
+            is_error: false,
+        };
+
+        let mut config = DisplayConfig::default();
+        config.theme = Some(THEME_ORANGE.clone());
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &config);
+
+        // Verify success message uses fg2
+        if let Some(cell) = buf.cell((1, 1)) {
+            assert_eq!(cell.fg, THEME_ORANGE.fg2, "Success message should use theme fg2");
+        }
+
+        // Verify refresh text uses fg2
+        // Find the refresh text (right side of the vertical bar)
+        if let Some(cell) = buf.cell((66, 1)) {
+            assert_eq!(cell.fg, THEME_ORANGE.fg2, "Refresh text should use theme fg2");
+        }
+    }
+
+    #[test]
+    fn test_status_bar_error_text_ignores_theme() {
+        use crate::config::THEME_ORANGE;
+
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Failed to save config".to_string()),
+            is_error: true,
+        };
+
+        let mut config = DisplayConfig::default();
+        config.theme = Some(THEME_ORANGE.clone());
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &config);
+
+        // Verify error message still uses Color::Red, not theme fg2
+        if let Some(cell) = buf.cell((1, 1)) {
+            assert_eq!(cell.fg, Color::Red, "Error message should use Color::Red even with theme set");
+            assert_ne!(cell.fg, THEME_ORANGE.fg2, "Error message should NOT use theme fg2");
+        }
+    }
+
+    #[test]
+    fn test_status_bar_text_unstyled_when_no_theme() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Configuration saved".to_string()),
+            is_error: false,
+        };
+
+        let config = DisplayConfig::default(); // No theme set
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &config);
+
+        // Verify success message uses default color when no theme
+        if let Some(cell) = buf.cell((1, 1)) {
+            assert_eq!(cell.fg, Color::Reset, "Success message should use default color when no theme");
+        }
+
+        // Verify refresh text uses default color when no theme
+        if let Some(cell) = buf.cell((66, 1)) {
+            assert_eq!(cell.fg, Color::Reset, "Refresh text should use default color when no theme");
+        }
     }
 }
