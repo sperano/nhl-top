@@ -8,7 +8,8 @@
 pub mod testing;
 
 // Small reusable widgets
-pub mod settings;
+pub mod list_modal;
+pub use list_modal::{render_list_modal, ListModalWidget};
 
 // Widget implementations
 pub mod score_table;

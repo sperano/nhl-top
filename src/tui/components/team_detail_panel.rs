@@ -8,7 +8,7 @@ use ratatui::{
 use nhl_api::{ClubStats, Standing};
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
+use crate::tui::{
     component::{Component, Element, RenderableWidget},
     Alignment, CellValue, ColumnDef,
 };

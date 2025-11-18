@@ -1,8 +1,9 @@
 use tracing::{debug, trace};
 
-use crate::tui::framework::action::{Action, Tab};
-use crate::tui::framework::component::Effect;
-use crate::tui::framework::state::AppState;
+use crate::tui::action::Action;
+use crate::tui::types::Tab;
+use crate::tui::component::Effect;
+use crate::tui::state::AppState;
 
 /// Handle all navigation-related actions
 pub fn reduce_navigation(state: AppState, action: &Action) -> Option<(AppState, Effect)> {

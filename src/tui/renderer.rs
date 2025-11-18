@@ -171,7 +171,7 @@ mod tests {
         // Buffer should remain empty
         for y in 0..10 {
             for x in 0..10 {
-                assert_eq!(buffer.get(x, y).symbol(), " ");
+                assert_eq!(buffer[(x, y)].symbol(), " ");
             }
         }
     }
@@ -191,7 +191,7 @@ mod tests {
 
         // Should render "Hello" in the first row
         let line = (0..10)
-            .map(|x| buffer.get(x, 0).symbol())
+            .map(|x| buffer[(x, 0)].symbol())
             .collect::<String>();
         assert!(line.contains("Hello"));
     }
@@ -219,12 +219,12 @@ mod tests {
 
         // Top should be in first 3 rows, bottom in last 3 rows
         let top_line = (0..10)
-            .map(|x| buffer.get(x, 0).symbol())
+            .map(|x| buffer[(x, 0)].symbol())
             .collect::<String>();
         assert!(top_line.contains("TOP"));
 
         let bottom_line = (0..10)
-            .map(|x| buffer.get(x, 3).symbol())
+            .map(|x| buffer[(x, 3)].symbol())
             .collect::<String>();
         assert!(bottom_line.contains("BOTTOM"));
     }
@@ -255,12 +255,12 @@ mod tests {
 
         // Left should be in first 10 columns, right in last 10 columns
         let left_part = (0..10)
-            .map(|x| buffer.get(x, 0).symbol())
+            .map(|x| buffer[(x, 0)].symbol())
             .collect::<String>();
         assert!(left_part.contains("LEFT"));
 
         let right_part = (10..20)
-            .map(|x| buffer.get(x, 0).symbol())
+            .map(|x| buffer[(x, 0)].symbol())
             .collect::<String>();
         assert!(right_part.contains("RIGHT"));
     }
@@ -287,7 +287,7 @@ mod tests {
 
         // Should render "Second" (overwrites "First")
         let line = (0..10)
-            .map(|x| buffer.get(x, 0).symbol())
+            .map(|x| buffer[(x, 0)].symbol())
             .collect::<String>();
         assert!(line.contains("Second"));
     }

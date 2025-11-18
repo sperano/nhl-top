@@ -7,7 +7,7 @@ use crate::commands::scores_format::PeriodScores;
 use crate::commands::standings::GroupBy;
 use crate::config::Config;
 
-use super::action::{Panel, Tab};
+use super::types::{Panel, SettingsCategory, Tab};
 
 /// Root application state - single source of truth
 ///
@@ -171,19 +171,6 @@ impl Default for StandingsUiState {
             scroll_offset: 0,
             layout: Vec::new(),
         }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SettingsCategory {
-    Logging,
-    Display,
-    Data,
-}
-
-impl Default for SettingsCategory {
-    fn default() -> Self {
-        Self::Logging
     }
 }
 

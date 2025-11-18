@@ -1,9 +1,10 @@
 use tracing::debug;
 
 use crate::commands::standings::GroupBy;
-use crate::tui::framework::action::{Panel, StandingsAction};
-use crate::tui::framework::component::Effect;
-use crate::tui::framework::state::{AppState, PanelState};
+use crate::tui::action::StandingsAction;
+use crate::tui::types::Panel;
+use crate::tui::component::Effect;
+use crate::tui::state::{AppState, PanelState};
 
 use super::standings_layout::{
     build_standings_layout,

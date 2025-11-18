@@ -13,6 +13,42 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Widget},
 };
 use crate::config::DisplayConfig;
+use crate::tui::component::RenderableWidget;
+
+/// Widget for rendering a list selection modal
+#[derive(Clone)]
+pub struct ListModalWidget {
+    pub setting_name: String,
+    pub options: Vec<String>,
+    pub selected_index: usize,
+}
+
+impl ListModalWidget {
+    pub fn new(setting_name: impl Into<String>, options: Vec<String>, selected_index: usize) -> Self {
+        Self {
+            setting_name: setting_name.into(),
+            options,
+            selected_index,
+        }
+    }
+}
+
+impl RenderableWidget for ListModalWidget {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+        render_list_modal(
+            &self.setting_name,
+            &self.options,
+            self.selected_index,
+            area,
+            buf,
+            config,
+        );
+    }
+
+    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+        Box::new(self.clone())
+    }
+}
 
 /// Renders a centered list selection modal
 ///

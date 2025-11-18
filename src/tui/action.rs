@@ -1,5 +1,7 @@
 use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
 
+use super::types::{Panel, Tab};
+
 /// Global actions - like Redux actions
 ///
 /// All state changes in the application happen through actions.
@@ -54,25 +56,6 @@ pub enum Action {
     // System actions
     Quit,
     Error(String),
-}
-
-/// Tab enum for navigation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Tab {
-    Scores,
-    Standings,
-    Stats,
-    Players,
-    Settings,
-    Browser,
-}
-
-/// Panel types for drill-down views
-#[derive(Debug, Clone)]
-pub enum Panel {
-    Boxscore { game_id: i64 },
-    TeamDetail { abbrev: String },
-    PlayerDetail { player_id: i64 },
 }
 
 /// Tab-specific actions for Scores

@@ -135,8 +135,8 @@ impl DataEffects {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::action::Tab;
-    use crate::tui::framework::state::{NavigationState, SystemState, UiState};
+    use crate::tui::types::Tab;
+    use crate::tui::state::{NavigationState, SystemState, UiState};
 
     fn create_test_state() -> AppState {
         AppState {

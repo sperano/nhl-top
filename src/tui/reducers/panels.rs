@@ -1,8 +1,9 @@
 use tracing::debug;
 
-use crate::tui::framework::action::{Action, Panel};
-use crate::tui::framework::component::Effect;
-use crate::tui::framework::state::{AppState, LoadingKey, PanelState};
+use crate::tui::action::Action;
+use crate::tui::types::Panel;
+use crate::tui::component::Effect;
+use crate::tui::state::{AppState, LoadingKey, PanelState};
 
 /// Handle all panel management actions
 pub fn reduce_panels(state: AppState, action: &Action) -> Option<(AppState, Effect)> {
@@ -281,10 +282,6 @@ fn panel_select_item(state: AppState) -> (AppState, Effect) {
                         }
                     }
                 }
-            }
-            _ => {
-                // Other panels don't have selectable items yet
-                debug!("PANEL: Select not implemented for {:?}", panel);
             }
         }
     }

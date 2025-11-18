@@ -7,11 +7,12 @@
 mod tests {
     use std::sync::Arc;
 
-    use crate::tui::framework::{
-        action::{Action, Tab},
+    use crate::tui::{
+        action::Action,
         effects::DataEffects,
         runtime::Runtime,
         state::AppState,
+        Tab,
     };
     use crate::tui::testing::create_client;
 

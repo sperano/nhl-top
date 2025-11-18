@@ -1,11 +1,11 @@
 use crate::config::Config;
-use crate::tui::framework::{
+use crate::tui::{
     component::{Component, Element},
-    state::SettingsCategory,
+    SettingsCategory,
 };
-use crate::tui::widgets::SettingsListWidget;
+use crate::tui::widgets::{ListModalWidget, SettingsListWidget};
 
-use super::{ListModalWidget, TabbedPanel, TabbedPanelProps, TabItem};
+use super::{TabbedPanel, TabbedPanelProps, TabItem};
 
 /// Props for SettingsTab component
 #[derive(Clone)]
@@ -106,7 +106,7 @@ impl SettingsTab {
 
     /// Render with modal overlay
     fn render_with_modal(&self, base: Element, props: &SettingsTabProps) -> Element {
-        use crate::tui::framework::settings_helpers;
+        use crate::tui::settings_helpers;
 
         // Get the setting key to determine what we're editing
         let setting_key = settings_helpers::get_editable_setting_key(

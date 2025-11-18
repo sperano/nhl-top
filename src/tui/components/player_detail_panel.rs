@@ -9,7 +9,7 @@ use nhl_api::{PlayerLanding, SeasonTotal};
 
 use crate::config::DisplayConfig;
 use crate::team_abbrev::common_name_to_abbrev;
-use crate::tui::framework::{
+use crate::tui::{
     component::{Component, Element, RenderableWidget},
     Alignment, CellValue, ColumnDef,
 };

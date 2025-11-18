@@ -3,7 +3,7 @@
 /// This module provides common functionality used by the reducer, key handler,
 /// and components for managing settings.
 
-use super::state::SettingsCategory;
+use super::types::SettingsCategory;
 
 /// Get the editable setting key for a given category and index
 pub fn get_editable_setting_key(category: SettingsCategory, index: usize) -> Option<String> {
@@ -39,9 +39,4 @@ pub fn get_setting_values(key: &str) -> Vec<&'static str> {
         "log_level" => vec!["trace", "debug", "info", "warn", "error"],
         _ => vec![], // Empty for non-list settings
     }
-}
-
-/// Check if a setting is a list-type setting (has a fixed set of values)
-pub fn is_list_setting(key: &str) -> bool {
-    matches!(key, "log_level")
 }

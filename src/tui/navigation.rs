@@ -3,39 +3,15 @@
 //! This module provides helper functions for working with the navigation panel stack.
 //! It supports breadcrumb generation and panel metadata extraction.
 
-use super::action::Panel;
 use super::state::PanelState;
-
-/// Get the display label for a panel (for breadcrumbs)
-///
-/// Returns a human-readable string representing the panel,
-/// suitable for display in breadcrumb trails.
-pub fn panel_label(panel: &Panel) -> String {
-    match panel {
-        Panel::Boxscore { game_id } => format!("Game {}", game_id),
-        Panel::TeamDetail { abbrev } => abbrev.clone(),
-        Panel::PlayerDetail { player_id } => format!("Player {}", player_id),
-    }
-}
-
-/// Get a cache key for a panel (for data caching)
-///
-/// Returns a unique string key that can be used to cache data
-/// associated with this panel.
-pub fn panel_cache_key(panel: &Panel) -> String {
-    match panel {
-        Panel::Boxscore { game_id } => format!("boxscore:{}", game_id),
-        Panel::TeamDetail { abbrev } => format!("team:{}", abbrev),
-        Panel::PlayerDetail { player_id } => format!("player:{}", player_id),
-    }
-}
+use super::types::Panel;
 
 /// Generate breadcrumb trail from panel stack
 ///
 /// Returns a vector of labels representing the navigation path.
 /// Example: `["TOR", "Player 8478402"]`
 pub fn breadcrumb_trail(panel_stack: &[PanelState]) -> Vec<String> {
-    panel_stack.iter().map(|ps| panel_label(&ps.panel)).collect()
+    panel_stack.iter().map(|ps| ps.panel.label()).collect()
 }
 
 /// Generate breadcrumb string from panel stack
@@ -68,7 +44,7 @@ mod tests {
     #[test]
     fn test_panel_label_boxscore() {
         let panel = Panel::Boxscore { game_id: 2024020001 };
-        assert_eq!(panel_label(&panel), "Game 2024020001");
+        assert_eq!(panel.label(), "Game 2024020001");
     }
 
     #[test]
@@ -76,27 +52,27 @@ mod tests {
         let panel = Panel::TeamDetail {
             abbrev: "TOR".to_string(),
         };
-        assert_eq!(panel_label(&panel), "TOR");
+        assert_eq!(panel.label(), "TOR");
     }
 
     #[test]
     fn test_panel_label_player_detail() {
         let panel = Panel::PlayerDetail { player_id: 8478402 };
-        assert_eq!(panel_label(&panel), "Player 8478402");
+        assert_eq!(panel.label(), "Player 8478402");
     }
 
     #[test]
     fn test_panel_cache_key() {
         let boxscore = Panel::Boxscore { game_id: 2024020001 };
-        assert_eq!(panel_cache_key(&boxscore), "boxscore:2024020001");
+        assert_eq!(boxscore.cache_key(), "boxscore:2024020001");
 
         let team = Panel::TeamDetail {
             abbrev: "TOR".to_string(),
         };
-        assert_eq!(panel_cache_key(&team), "team:TOR");
+        assert_eq!(team.cache_key(), "team:TOR");
 
         let player = Panel::PlayerDetail { player_id: 8478402 };
-        assert_eq!(panel_cache_key(&player), "player:8478402");
+        assert_eq!(player.cache_key(), "player:8478402");
     }
 
     #[test]

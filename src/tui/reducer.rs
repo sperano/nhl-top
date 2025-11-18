@@ -2,10 +2,11 @@ use tracing::debug;
 
 use super::action::{Action, SettingsAction};
 use super::component::Effect;
-use super::state::{AppState, SettingsCategory};
+use super::state::AppState;
+use super::types::{Panel, SettingsCategory};
 
 // Import sub-reducers from the parent framework module
-use crate::tui::framework::reducers::{
+use crate::tui::reducers::{
     reduce_navigation,
     reduce_panels,
     reduce_data_loading,
@@ -50,7 +51,7 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
             // Push PlayerDetail panel onto stack
             new_state.navigation.panel_stack.push(super::state::PanelState {
-                panel: super::action::Panel::PlayerDetail { player_id },
+                panel: Panel::PlayerDetail { player_id },
                 scroll_offset: 0,
                 selected_index: Some(0), // Start with first season selected
             });
@@ -64,7 +65,7 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
             // Push TeamDetail panel onto stack
             new_state.navigation.panel_stack.push(super::state::PanelState {
-                panel: super::action::Panel::TeamDetail { abbrev: team_abbrev },
+                panel: Panel::TeamDetail { abbrev: team_abbrev },
                 scroll_offset: 0,
                 selected_index: Some(0), // Start with first player selected
             });
@@ -142,7 +143,8 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::action::{Tab, ScoresAction, StandingsAction};
+    use crate::tui::action::{ScoresAction, StandingsAction};
+    use crate::tui::types::Tab;
 
     #[test]
     fn test_navigation_actions_are_handled() {
@@ -159,7 +161,7 @@ mod tests {
     #[test]
     fn test_panel_actions_are_handled() {
         let state = AppState::default();
-        let panel = super::super::action::Panel::TeamDetail {
+        let panel = super::super::types::Panel::TeamDetail {
             abbrev: "BOS".to_string(),
         };
         let action = Action::PushPanel(panel.clone());

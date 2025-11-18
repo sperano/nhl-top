@@ -4,8 +4,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::tui::framework::{Action, Runtime, DataEffects, AppState};
-    use crate::tui::framework::keys::key_to_action;
+    use crate::tui::{Action, Runtime, DataEffects, AppState};
+    use crate::tui::keys::key_to_action;
     use crate::tui::testing::create_client;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use std::sync::Arc;
@@ -22,7 +22,7 @@ mod tests {
         let state = runtime.state();
 
         // Should start on Scores tab
-        assert_eq!(state.navigation.current_tab, crate::tui::framework::action::Tab::Scores);
+        assert_eq!(state.navigation.current_tab, crate::tui::Tab::Scores);
     }
 
     #[tokio::test]
@@ -91,7 +91,7 @@ mod tests {
 
         // State should have changed
         let state = runtime.state();
-        assert_eq!(state.navigation.current_tab, crate::tui::framework::action::Tab::Standings);
+        assert_eq!(state.navigation.current_tab, crate::tui::Tab::Standings);
     }
 
     #[tokio::test]
@@ -100,27 +100,27 @@ mod tests {
 
         // Start on Scores, go right to Standings
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Standings);
+        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Standings);
 
         // Go right to Stats
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Stats);
+        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Stats);
 
         // Go right to Players
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Players);
+        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Players);
 
         // Go right to Settings
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Settings);
+        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Settings);
 
         // Go right to Browser
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Browser);
+        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Browser);
 
         // Go right to wrap around to Scores
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::framework::action::Tab::Scores);
+        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Scores);
     }
 
 }

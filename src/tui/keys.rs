@@ -6,8 +6,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use tracing::{debug, trace};
 
-use super::action::{Action, ScoresAction, SettingsAction, StandingsAction, Tab};
-use super::state::{AppState, SettingsCategory};
+use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
+use super::state::AppState;
+use super::types::{SettingsCategory, Tab};
 
 /// Convert a KeyEvent into an Action based on current application state
 ///
@@ -367,11 +368,6 @@ fn get_editable_setting_key_for_index(category: SettingsCategory, index: usize) 
     }
 }
 
-/// Check if a setting is a list-type setting (has a fixed set of values to cycle through)
-fn is_list_setting(key: &str) -> bool {
-    matches!(key, "log_level")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,7 +396,7 @@ mod tests {
     fn test_esc_pops_panel_when_panel_open() {
         let mut state = AppState::default();
         state.navigation.panel_stack.push(super::super::state::PanelState {
-            panel: super::super::action::Panel::Boxscore { game_id: 123 },
+            panel: super::super::types::Panel::Boxscore { game_id: 123 },
             scroll_offset: 0,
             selected_index: None,
         });

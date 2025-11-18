@@ -126,7 +126,7 @@ impl Runtime {
         // Check if panel_stack grew and new panel is a Boxscore
         if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
             if let Some(panel_state) = new_state.navigation.panel_stack.last() {
-                if let super::action::Panel::Boxscore { game_id } = panel_state.panel {
+                if let super::types::Panel::Boxscore { game_id } = panel_state.panel {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.boxscores.contains_key(&game_id)
                         && !new_state.data.loading.contains(&super::state::LoadingKey::Boxscore(game_id))
@@ -147,7 +147,7 @@ impl Runtime {
         // Check if panel_stack grew and new panel is a TeamDetail
         if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
             if let Some(panel_state) = new_state.navigation.panel_stack.last() {
-                if let super::action::Panel::TeamDetail { abbrev } = &panel_state.panel {
+                if let super::types::Panel::TeamDetail { abbrev } = &panel_state.panel {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.team_roster_stats.contains_key(abbrev)
                         && !new_state.data.loading.contains(&super::state::LoadingKey::TeamRosterStats(abbrev.clone()))
@@ -168,7 +168,7 @@ impl Runtime {
         // Check if panel_stack grew and new panel is a PlayerDetail
         if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
             if let Some(panel_state) = new_state.navigation.panel_stack.last() {
-                if let super::action::Panel::PlayerDetail { player_id } = panel_state.panel {
+                if let super::types::Panel::PlayerDetail { player_id } = panel_state.panel {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.player_data.contains_key(&player_id)
                         && !new_state.data.loading.contains(&super::state::LoadingKey::PlayerStats(player_id))
@@ -226,7 +226,7 @@ impl Runtime {
     /// with the current state as props.
     pub fn build(&self) -> Element {
         use crate::tui::components::App;
-        use crate::tui::framework::component::Component;
+        use crate::tui::component::Component;
 
         let app = App;
         app.view(&self.state, &())
@@ -305,7 +305,7 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::action::{Tab};
+    use crate::tui::types::Tab;
     use crate::tui::testing::create_client;
 
     fn create_test_data_effects() -> Arc<DataEffects> {

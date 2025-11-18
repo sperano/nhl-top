@@ -30,7 +30,7 @@ use ratatui::{buffer::Buffer, layout::Rect};
 use nhl_api::GoalieStats;
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
+use crate::tui::{
     component::RenderableWidget,
     Alignment, CellValue, ColumnDef,
 };

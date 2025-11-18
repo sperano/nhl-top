@@ -11,10 +11,11 @@ use ratatui::{
 };
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
-    action::{Panel, Tab},
+use crate::tui::{
     component::RenderableWidget,
     state::PanelState,
+    Panel,
+    Tab,
 };
 
 /// Breadcrumb widget that renders a navigation path

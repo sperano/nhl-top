@@ -9,7 +9,7 @@ use nhl_api::Standing;
 use crate::commands::standings::GroupBy;
 use crate::config::DisplayConfig;
 use crate::config::Config;
-use crate::tui::framework::{
+use crate::tui::{
     component::{horizontal, vertical, Component, Constraint, Element, RenderableWidget},
     state::PanelState,
     Alignment, CellValue, ColumnDef,
@@ -567,13 +567,13 @@ impl StandingsTab {
         // Get the current panel info
         let panel_info = if let Some(panel_state) = props.panel_stack.last() {
             let msg = match &panel_state.panel {
-                super::super::framework::action::Panel::TeamDetail { abbrev } => {
+                super::super::Panel::TeamDetail { abbrev } => {
                     format!("Team Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", abbrev)
                 }
-                super::super::framework::action::Panel::PlayerDetail { player_id } => {
+                super::super::Panel::PlayerDetail { player_id } => {
                     format!("Player Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", player_id)
                 }
-                super::super::framework::action::Panel::Boxscore { game_id } => {
+                super::super::Panel::Boxscore { game_id } => {
                     format!("Boxscore: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", game_id)
                 }
             };
@@ -648,7 +648,7 @@ impl RenderableWidget for SpacerWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::renderer::Renderer;
+    use crate::tui::renderer::Renderer;
     use ratatui::{buffer::Buffer, layout::Rect};
     use crate::tui::testing::{assert_buffer, create_test_standings};
     const RENDER_WIDTH: u16 = 120;

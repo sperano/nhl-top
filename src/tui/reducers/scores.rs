@@ -1,8 +1,9 @@
 use tracing::{debug, trace};
 
-use crate::tui::framework::action::{Action, Panel, ScoresAction};
-use crate::tui::framework::component::Effect;
-use crate::tui::framework::state::{AppState, PanelState};
+use crate::tui::action::{Action, ScoresAction};
+use crate::tui::types::Panel;
+use crate::tui::component::Effect;
+use crate::tui::state::{AppState, PanelState};
 
 /// Sub-reducer for scores tab
 pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {

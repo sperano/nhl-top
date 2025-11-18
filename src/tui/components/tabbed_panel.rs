@@ -1,5 +1,5 @@
 use crate::config::DisplayConfig;
-use crate::tui::framework::component::{vertical, Component, Constraint, Element};
+use crate::tui::component::{vertical, Component, Constraint, Element};
 
 /// A single tab item containing its label and content
 #[derive(Clone)]
@@ -195,7 +195,7 @@ impl TabBarWidget {
     }
 }
 
-impl crate::tui::framework::component::RenderableWidget for TabBarWidget {
+impl crate::tui::component::RenderableWidget for TabBarWidget {
     fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, config: &DisplayConfig) {
         use unicode_width::UnicodeWidthStr;
 
@@ -231,7 +231,7 @@ impl crate::tui::framework::component::RenderableWidget for TabBarWidget {
         Some(2) // Tab line + separator line
     }
 
-    fn clone_box(&self) -> Box<dyn crate::tui::framework::component::RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn crate::tui::component::RenderableWidget> {
         Box::new(TabBarWidget {
             labels: self.labels.clone(),
             focused: self.focused,
@@ -242,7 +242,7 @@ impl crate::tui::framework::component::RenderableWidget for TabBarWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::component::Element;
+    use crate::tui::component::Element;
     use crate::config::DisplayConfig;
     use crate::formatting::BoxChars;
     use ratatui::{buffer::Buffer, layout::Rect, style::Color};
@@ -273,7 +273,7 @@ mod tests {
     }
 
     fn render_widget(
-        widget: &impl crate::tui::framework::component::RenderableWidget,
+        widget: &impl crate::tui::component::RenderableWidget,
         width: u16,
         height: u16,
     ) -> Buffer {
@@ -284,7 +284,7 @@ mod tests {
     }
 
     fn render_widget_with_config(
-        widget: &impl crate::tui::framework::component::RenderableWidget,
+        widget: &impl crate::tui::component::RenderableWidget,
         width: u16,
         height: u16,
         config: &DisplayConfig,
@@ -763,9 +763,9 @@ mod tests {
         id: u32,
     }
 
-    impl crate::tui::framework::component::RenderableWidget for TestWidget {
+    impl crate::tui::component::RenderableWidget for TestWidget {
         fn render(&self, _area: ratatui::layout::Rect, _buf: &mut ratatui::buffer::Buffer, _config: &DisplayConfig) {}
-        fn clone_box(&self) -> Box<dyn crate::tui::framework::component::RenderableWidget> {
+        fn clone_box(&self) -> Box<dyn crate::tui::component::RenderableWidget> {
             Box::new(TestWidget { id: self.id })
         }
     }

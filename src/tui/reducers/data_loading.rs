@@ -1,9 +1,9 @@
 use std::time::SystemTime;
 use tracing::debug;
 
-use crate::tui::framework::action::Action;
-use crate::tui::framework::component::Effect;
-use crate::tui::framework::state::{AppState, LoadingKey};
+use crate::tui::action::Action;
+use crate::tui::component::Effect;
+use crate::tui::state::{AppState, LoadingKey};
 
 /// Handle all data loading actions (API responses)
 pub fn reduce_data_loading(state: AppState, action: &Action) -> Option<(AppState, Effect)> {

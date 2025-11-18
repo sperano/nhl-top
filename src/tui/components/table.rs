@@ -40,7 +40,7 @@
 ///
 /// ```ignore
 /// use nhl::tui::components::TableWidget;
-/// use nhl::tui::framework::{CellValue, ColumnDef, Alignment, Element};
+/// use nhl::tui::{CellValue, ColumnDef, Alignment, Element};
 /// use nhl_api::PlayerStats;
 ///
 /// // 1. Define your row data type (or use existing nhl_api types)
@@ -158,10 +158,10 @@
 /// - `row_count()` / `column_count()` - Get table dimensions
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
+use crate::tui::{
     Alignment, CellValue, ColumnDef, Component, Element,
 };
-use crate::tui::framework::component::RenderableWidget;
+use crate::tui::component::RenderableWidget;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -568,7 +568,7 @@ mod tests {
 
     // Helper to render framework RenderableWidget for testing
     fn render_framework_widget(
-        widget: &impl crate::tui::framework::component::RenderableWidget,
+        widget: &impl crate::tui::component::RenderableWidget,
         width: u16,
         height: u16,
         config: &DisplayConfig,

@@ -9,7 +9,7 @@ use ratatui::{
 use nhl_api::Boxscore;
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::component::{Component, Element, RenderableWidget};
+use crate::tui::component::{Component, Element, RenderableWidget};
 use super::{SkaterStatsTableWidget, GoalieStatsTableWidget};
 
 /// Number of chrome lines per section (title + sep + blank + column headers + sep)

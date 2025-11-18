@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use nhl_api::{DailySchedule, GameDate, GameMatchup};
 //
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
+use crate::tui::{
     component::{Component, Element, RenderableWidget},
 };
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};

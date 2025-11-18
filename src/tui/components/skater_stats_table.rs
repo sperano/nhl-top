@@ -30,7 +30,7 @@ use ratatui::{buffer::Buffer, layout::Rect};
 use nhl_api::SkaterStats;
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
+use crate::tui::{
     component::RenderableWidget,
     Alignment, CellValue, ColumnDef,
 };
@@ -181,7 +181,6 @@ mod tests {
     use nhl_api::LocalizedString;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
-    use crate::tui::testing::assert_buffer;
 
     fn create_test_skater(id: i64, name: &str, pos: &str, g: i32, a: i32) -> SkaterStats {
         SkaterStats {

@@ -5,8 +5,8 @@
 
 use ratatui::{buffer::Buffer, layout::Rect, text::Line};
 use crate::config::{Config, DisplayConfig};
-use crate::tui::framework::component::RenderableWidget;
-use crate::tui::framework::state::SettingsCategory;
+use crate::tui::component::RenderableWidget;
+use crate::tui::SettingsCategory;
 
 /// Widget for displaying settings list
 #[derive(Debug, Clone)]

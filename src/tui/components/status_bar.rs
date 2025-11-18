@@ -8,7 +8,7 @@ use ratatui::{
 use std::time::SystemTime;
 
 use crate::config::DisplayConfig;
-use crate::tui::framework::{
+use crate::tui::{
     component::{Component, Element, RenderableWidget},
     state::SystemState,
 };

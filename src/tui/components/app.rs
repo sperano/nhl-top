@@ -1,5 +1,5 @@
-use crate::tui::framework::component::{vertical, Component, Constraint, Element};
-use crate::tui::framework::state::{AppState, LoadingKey};
+use crate::tui::component::{vertical, Component, Constraint, Element};
+use crate::tui::state::{AppState, LoadingKey};
 //
 use super::{
     boxscore_panel::{BoxscorePanel, BoxscorePanelProps, TeamView},
@@ -40,7 +40,7 @@ impl Component for App {
 impl App {
     /// Render main navigation tabs using TabbedPanel
     fn render_main_tabs(&self, state: &AppState) -> Element {
-        use crate::tui::framework::action::Tab;
+        use crate::tui::Tab;
 //
         // Convert Tab enum to string key
         let active_key = match state.navigation.current_tab {
@@ -106,9 +106,9 @@ impl App {
     fn render_panel(
         &self,
         state: &AppState,
-        panel_state: &crate::tui::framework::state::PanelState,
+        panel_state: &crate::tui::state::PanelState,
     ) -> Element {
-        use crate::tui::framework::action::Panel;
+        use crate::tui::types::Panel;
 //
         match &panel_state.panel {
             Panel::Boxscore { game_id } => {
@@ -217,7 +217,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::framework::state::AppState;
+    use crate::tui::state::AppState;
 //
     #[test]
     fn test_app_renders_with_default_state() {
@@ -233,7 +233,7 @@ mod tests {
             } => {
                 assert_eq!(children.len(), 2);
                 match layout {
-                    crate::tui::framework::component::ContainerLayout::Vertical(constraints) => {
+                    crate::tui::component::ContainerLayout::Vertical(constraints) => {
                         assert_eq!(constraints.len(), 2);
                     }
                     _ => panic!("Expected vertical layout"),

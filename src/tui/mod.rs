@@ -1,22 +1,46 @@
-//! TUI module with React-like implementation
-//!
-//! This module provides the terminal user interface using a React-like architecture.
-
 // Module declarations
-mod scores;
-mod settings;
 pub mod widgets;
 mod context;
-pub mod framework;
 pub mod components;
+
+// Core modules (formerly framework/)
+pub mod action;
+pub mod component;
+pub mod effects;
+pub mod keys;
+pub mod navigation;
+pub mod reducer;
+pub mod reducers;
+pub mod renderer;
+pub mod runtime;
+pub mod settings_helpers;
+pub mod state;
+pub mod table;
+pub mod types;
 
 #[cfg(test)]
 pub mod testing;
 
-//pub use context::{NavigationContextProvider, BreadcrumbProvider};
+#[cfg(test)]
+mod integration_tests;
+
+#[cfg(test)]
+mod experimental_tests;
+
+pub use action::{Action, ScoresAction};
+pub use component::{Component, Effect, Element};
+pub use effects::DataEffects;
+pub use keys::key_to_action;
+pub use reducer::reduce;
+pub use renderer::Renderer;
+pub use runtime::Runtime;
+pub use state::AppState;
+pub use table::{Alignment, CellValue, ColumnDef};
+pub use types::{Panel, SettingsCategory, Tab};
 
 use std::io;
 use std::sync::Arc;
+use std::time::Duration;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
@@ -26,41 +50,10 @@ use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
-
-#[cfg(feature = "development")]
-use ratatui::{buffer::Buffer, layout::Rect};
 use nhl_api::Client;
 use crate::config::Config;
 
-use self::framework::{Runtime, DataEffects, Renderer, Action};
-use self::framework::action::ScoresAction;
-use self::framework::keys::key_to_action;
-
-/// Event polling interval in milliseconds
-const EVENT_POLL_INTERVAL_MS: u64 = 100;
-
-/// Development feature: Save terminal buffer to a text file
-#[cfg(feature = "development")]
-fn save_screenshot(buffer: &Buffer, area: Rect) -> std::io::Result<String> {
-    use std::io::Write;
-
-    let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-    let filename = format!("nhl-screenshot-{}.txt", timestamp);
-
-    let mut file = std::fs::File::create(&filename)?;
-
-    for y in 0..area.height {
-        for x in 0..area.width {
-            let cell = &buffer[(x, y)];
-            write!(file, "{}", cell.symbol())?;
-        }
-        writeln!(file)?;
-    }
-
-    Ok(filename)
-}
-
-/// Run the React-like TUI (main entry point)
+/// Main entry point for TUI mode
 pub async fn run(
     client: Arc<Client>,
     config: Config,
@@ -76,23 +69,17 @@ pub async fn run(
     let data_effects = Arc::new(DataEffects::new(client));
 
     // Create initial AppState with config
-    let mut initial_state = self::framework::AppState::default();
+    let mut initial_state = AppState::default();
     initial_state.system.config = config.clone();
 
     // Create runtime with DataEffects
     let mut runtime = Runtime::new(initial_state, data_effects);
 
-    // Create renderer
-    let mut renderer = Renderer::new();
-
     // Trigger initial data load
     runtime.dispatch(Action::RefreshData);
 
-    // Development feature: Screenshot support
     #[cfg(feature = "development")]
     let mut screenshot_requested = false;
-    #[cfg(feature = "development")]
-    let mut screenshot_buffer: Option<(Buffer, Rect)> = None;
 
     // Main loop
     loop {
@@ -104,13 +91,12 @@ pub async fn run(
 
         // Render
         terminal.draw(|f| {
-            let area = f.size();
+            let area = f.area();
 
             // Update boxes_per_row for game grid navigation
             // GameBox dimensions: 37 wide + 2 margin = 39 per box
-            const GAME_BOX_WIDTH: u16 = 37;
-            const GAME_BOX_MARGIN: u16 = 2;
-            let boxes_per_row = (area.width / (GAME_BOX_WIDTH + GAME_BOX_MARGIN)).max(1);
+            let box_width_with_margin = 39;
+            let boxes_per_row = (area.width / box_width_with_margin).max(1);
 
             // Dispatch action to update boxes_per_row if it changed
             let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
@@ -124,27 +110,19 @@ pub async fn run(
 
             // Render virtual tree to ratatui buffer
             let config = &runtime.state().system.config.display;
+            let mut renderer = Renderer::new();
             renderer.render(element, area, f.buffer_mut(), config);
-
-            // Development feature: Clone buffer if screenshot requested
-            #[cfg(feature = "development")]
-            if screenshot_requested {
-                screenshot_buffer = Some((f.buffer_mut().clone(), area));
-            }
         })?;
 
-        // Development feature: Save screenshot if captured
         #[cfg(feature = "development")]
-        if let Some((buffer, area)) = screenshot_buffer.take() {
+        if screenshot_requested {
             screenshot_requested = false;
-            match save_screenshot(&buffer, area) {
-                Ok(filename) => {
-                    tracing::info!("Screenshot saved to: {}", filename);
-                    // TODO: Show status message in UI when we have status bar
-                }
-                Err(e) => {
-                    tracing::error!("Failed to save screenshot: {}", e);
-                }
+            let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+            let filename = format!("nhl-screenshot-{}.txt", timestamp);
+            if let Err(e) = crate::dev::screenshot::save_terminal_screenshot(&mut terminal, &filename) {
+                tracing::error!("Failed to save screenshot: {}", e);
+            } else {
+                tracing::info!("Screenshot saved to {}", filename);
             }
         }
 
@@ -155,10 +133,9 @@ pub async fn run(
             continue;
         }
 
-        // Handle events (only block if no actions were processed)
-        if event::poll(std::time::Duration::from_millis(EVENT_POLL_INTERVAL_MS))? {
+        // Poll for keyboard events
+        if event::poll(Duration::from_millis(100))? {
             if let Event::Key(key) = event::read()? {
-                // Development feature: Shift-S for screenshot
                 #[cfg(feature = "development")]
                 {
                     use crossterm::event::{KeyCode, KeyModifiers};

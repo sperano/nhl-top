@@ -76,7 +76,7 @@ pub enum Alignment {
 ///
 /// # Example
 /// ```ignore
-/// use nhl::tui::framework::table::{ColumnDef, CellValue, Alignment};
+/// use nhl::tui::table::{ColumnDef, CellValue, Alignment};
 ///
 /// struct Player {
 ///     name: String,
