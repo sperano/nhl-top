@@ -53,6 +53,18 @@ use ratatui::{
 use nhl_api::Client;
 use crate::config::Config;
 
+/// Calculate how many game boxes fit per row based on terminal width
+/// GameBox dimensions: 37 wide + 2 margin = 39 per box
+fn calculate_boxes_per_row(terminal_width: u16) -> u16 {
+    const BOX_WIDTH_WITH_MARGIN: u16 = 39;
+    (terminal_width / BOX_WIDTH_WITH_MARGIN).max(1)
+}
+
+/// Check if an action is a quit action
+fn is_quit_action(action: &Action) -> bool {
+    matches!(action, Action::Quit)
+}
+
 /// Main entry point for TUI mode
 pub async fn run(
     client: Arc<Client>,
@@ -94,9 +106,7 @@ pub async fn run(
             let area = f.area();
 
             // Update boxes_per_row for game grid navigation
-            // GameBox dimensions: 37 wide + 2 margin = 39 per box
-            let box_width_with_margin = 39;
-            let boxes_per_row = (area.width / box_width_with_margin).max(1);
+            let boxes_per_row = calculate_boxes_per_row(area.width);
 
             // Dispatch action to update boxes_per_row if it changed
             let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
@@ -150,11 +160,7 @@ pub async fn run(
                 let action = key_to_action(key, runtime.state());
 
                 // Check for quit action before handling
-                let should_quit = if let Some(ref act) = action {
-                    matches!(act, Action::Quit)
-                } else {
-                    false
-                };
+                let should_quit = action.as_ref().map_or(false, is_quit_action);
 
                 // Dispatch action if we have one
                 if let Some(act) = action {
@@ -185,4 +191,65 @@ pub async fn run(
     terminal.show_cursor()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_boxes_per_row_with_wide_terminal() {
+        // Terminal width = 200, box width = 39
+        // 200 / 39 = 5.128... = 5 boxes
+        assert_eq!(calculate_boxes_per_row(200), 5);
+    }
+
+    #[test]
+    fn test_calculate_boxes_per_row_with_narrow_terminal() {
+        // Terminal width = 80, box width = 39
+        // 80 / 39 = 2.051... = 2 boxes
+        assert_eq!(calculate_boxes_per_row(80), 2);
+    }
+
+    #[test]
+    fn test_calculate_boxes_per_row_with_very_narrow_terminal() {
+        // Terminal width = 30, box width = 39
+        // 30 / 39 = 0.769... = 0, but max(1) = 1
+        assert_eq!(calculate_boxes_per_row(30), 1);
+    }
+
+    #[test]
+    fn test_calculate_boxes_per_row_with_exact_fit() {
+        // Terminal width = 39 * 3 = 117
+        // 117 / 39 = 3 boxes exactly
+        assert_eq!(calculate_boxes_per_row(117), 3);
+    }
+
+    #[test]
+    fn test_calculate_boxes_per_row_minimum_is_one() {
+        // Even with width 0, should return 1
+        assert_eq!(calculate_boxes_per_row(0), 1);
+        assert_eq!(calculate_boxes_per_row(1), 1);
+        assert_eq!(calculate_boxes_per_row(10), 1);
+    }
+
+    #[test]
+    fn test_is_quit_action_with_quit() {
+        assert!(is_quit_action(&Action::Quit));
+    }
+
+    #[test]
+    fn test_is_quit_action_with_non_quit_actions() {
+        assert!(!is_quit_action(&Action::RefreshData));
+        assert!(!is_quit_action(&Action::NavigateTab(Tab::Scores)));
+        assert!(!is_quit_action(&Action::ToggleCommandPalette));
+        assert!(!is_quit_action(&Action::ScoresAction(ScoresAction::DateLeft)));
+    }
+
+    #[test]
+    fn test_is_quit_action_with_panel_actions() {
+        assert!(!is_quit_action(&Action::PopPanel));
+        assert!(!is_quit_action(&Action::SelectPlayer(123456)));
+        assert!(!is_quit_action(&Action::SelectTeam("BOS".to_string())));
+    }
 }

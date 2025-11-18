@@ -207,4 +207,230 @@ mod tests {
 
         assert!(new_state.system.last_refresh.is_some());
     }
+
+    #[test]
+    fn test_select_player_opens_panel() {
+        let state = AppState::default();
+        let action = Action::SelectPlayer(8471214);
+
+        let (new_state, effect) = reduce(state, action);
+
+        assert_eq!(new_state.navigation.panel_stack.len(), 1);
+        match &new_state.navigation.panel_stack[0].panel {
+            Panel::PlayerDetail { player_id } => {
+                assert_eq!(*player_id, 8471214);
+            }
+            _ => panic!("Expected PlayerDetail panel"),
+        }
+        assert_eq!(new_state.navigation.panel_stack[0].scroll_offset, 0);
+        assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_team_opens_panel() {
+        let state = AppState::default();
+        let action = Action::SelectTeam("BOS".to_string());
+
+        let (new_state, effect) = reduce(state, action);
+
+        assert_eq!(new_state.navigation.panel_stack.len(), 1);
+        match &new_state.navigation.panel_stack[0].panel {
+            Panel::TeamDetail { abbrev } => {
+                assert_eq!(abbrev, "BOS");
+            }
+            _ => panic!("Expected TeamDetail panel"),
+        }
+        assert_eq!(new_state.navigation.panel_stack[0].scroll_offset, 0);
+        assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_quit_action_does_nothing_to_state() {
+        let state = AppState::default();
+        let action = Action::Quit;
+
+        let (new_state, effect) = reduce(state.clone(), action);
+
+        // State should remain unchanged
+        assert_eq!(new_state.navigation.current_tab, state.navigation.current_tab);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_error_action_does_nothing_to_state() {
+        let state = AppState::default();
+        let action = Action::Error("test error".to_string());
+
+        let (new_state, effect) = reduce(state.clone(), action);
+
+        // State should remain unchanged
+        assert_eq!(new_state.navigation.current_tab, state.navigation.current_tab);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_unknown_action_does_nothing() {
+        let state = AppState::default();
+        let action = Action::ToggleCommandPalette;
+
+        let (new_state, effect) = reduce(state.clone(), action);
+
+        // State should remain unchanged
+        assert_eq!(new_state.navigation.current_tab, state.navigation.current_tab);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    // Settings reducer tests
+    #[test]
+    fn test_settings_navigate_category_left_from_logging() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_category = SettingsCategory::Logging;
+        state.ui.settings.selected_setting_index = 2;
+
+        let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
+        let (new_state, effect) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Data);
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0); // Reset to 0
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_settings_navigate_category_left_from_display() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_category = SettingsCategory::Display;
+        state.ui.settings.selected_setting_index = 1;
+
+        let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
+        let (new_state, _) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Logging);
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
+    }
+
+    #[test]
+    fn test_settings_navigate_category_left_from_data() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_category = SettingsCategory::Data;
+        state.ui.settings.selected_setting_index = 1;
+
+        let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
+        let (new_state, _) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
+    }
+
+    #[test]
+    fn test_settings_navigate_category_right_from_logging() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_category = SettingsCategory::Logging;
+        state.ui.settings.selected_setting_index = 2;
+
+        let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
+        let (new_state, effect) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_settings_navigate_category_right_from_display() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_category = SettingsCategory::Display;
+
+        let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
+        let (new_state, _) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Data);
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
+    }
+
+    #[test]
+    fn test_settings_navigate_category_right_from_data() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_category = SettingsCategory::Data;
+
+        let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
+        let (new_state, _) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Logging);
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
+    }
+
+    #[test]
+    fn test_settings_enter_settings_mode() {
+        let mut state = AppState::default();
+        state.ui.settings.settings_mode = false;
+
+        let action = Action::SettingsAction(SettingsAction::EnterSettingsMode);
+        let (new_state, effect) = reduce(state, action);
+
+        assert!(new_state.ui.settings.settings_mode);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_settings_exit_settings_mode() {
+        let mut state = AppState::default();
+        state.ui.settings.settings_mode = true;
+
+        let action = Action::SettingsAction(SettingsAction::ExitSettingsMode);
+        let (new_state, effect) = reduce(state, action);
+
+        assert!(!new_state.ui.settings.settings_mode);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_settings_move_selection_up_from_middle() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_setting_index = 2;
+
+        let action = Action::SettingsAction(SettingsAction::MoveSelectionUp);
+        let (new_state, effect) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_setting_index, 1);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_settings_move_selection_up_from_top() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_setting_index = 0;
+
+        let action = Action::SettingsAction(SettingsAction::MoveSelectionUp);
+        let (new_state, _) = reduce(state, action);
+
+        // Should stay at 0
+        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
+    }
+
+    #[test]
+    fn test_settings_move_selection_down() {
+        let mut state = AppState::default();
+        state.ui.settings.selected_setting_index = 1;
+
+        let action = Action::SettingsAction(SettingsAction::MoveSelectionDown);
+        let (new_state, effect) = reduce(state, action);
+
+        assert_eq!(new_state.ui.settings.selected_setting_index, 2);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_settings_unhandled_action_does_nothing() {
+        let state = AppState::default();
+        let action = Action::SettingsAction(SettingsAction::ModalMoveUp);
+
+        let (new_state, effect) = reduce(state.clone(), action);
+
+        // State should remain unchanged
+        assert_eq!(new_state.ui.settings.selected_category, state.ui.settings.selected_category);
+        assert_eq!(new_state.ui.settings.selected_setting_index, state.ui.settings.selected_setting_index);
+        assert!(matches!(effect, Effect::None));
+    }
 }

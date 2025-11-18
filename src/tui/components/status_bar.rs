@@ -177,4 +177,85 @@ mod tests {
             _ => panic!("Expected widget element"),
         }
     }
+
+    #[test]
+    fn test_status_bar_with_error_message() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            error_message: Some("Network timeout".to_string()),
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        // Error message should appear on left side
+        let line2 = (0..RENDER_WIDTH).map(|x| {
+            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
+        }).collect::<String>();
+
+        assert!(line2.contains("ERROR: Network timeout"), "Error message not found in: {}", line2);
+    }
+
+    #[test]
+    fn test_status_bar_refreshing_state() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(60)),
+            refresh_interval: 60,
+            error_message: None,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        // Should show "Refreshing..." when time has elapsed
+        let line2 = (0..RENDER_WIDTH).map(|x| {
+            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
+        }).collect::<String>();
+
+        assert!(line2.contains("Refreshing..."), "Refreshing message not found in: {}", line2);
+    }
+
+    #[test]
+    fn test_status_bar_future_time() {
+        // Test with a future time (should handle time calculation error)
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() + std::time::Duration::from_secs(100)),
+            refresh_interval: 60,
+            error_message: None,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        // Should show "Refresh in ?s" when duration_since fails
+        let line2 = (0..RENDER_WIDTH).map(|x| {
+            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
+        }).collect::<String>();
+
+        assert!(line2.contains("Refresh in ?s"), "Error fallback not found in: {}", line2);
+    }
+
+    #[test]
+    fn test_status_bar_clone_box() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now()),
+            refresh_interval: 60,
+            error_message: Some("Test".to_string()),
+        };
+
+        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        // If we get here, clone_box() worked
+    }
+
+    #[test]
+    fn test_status_bar_preferred_height() {
+        let widget = StatusBarWidget {
+            last_refresh: None,
+            refresh_interval: 60,
+            error_message: None,
+        };
+
+        assert_eq!(widget.preferred_height(), Some(2));
+    }
 }

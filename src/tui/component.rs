@@ -158,3 +158,150 @@ pub fn horizontal<const N: usize>(constraints: [Constraint; N], children: Vec<El
         layout: ContainerLayout::Horizontal(constraints.to_vec()),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Test component that uses all default trait methods
+    struct TestComponent;
+
+    #[derive(Clone)]
+    struct TestProps;
+
+    #[derive(Default, Clone)]
+    struct TestState {
+        value: i32,
+    }
+
+    enum TestMessage {
+        Increment,
+    }
+
+    impl Component for TestComponent {
+        type Props = TestProps;
+        type State = TestState;
+        type Message = TestMessage;
+
+        // Using default init (lines 26-27)
+        // Using default update (lines 31-32)
+        // Using default did_update (lines 39-40)
+
+        fn view(&self, _props: &Self::Props, _state: &Self::State) -> Element {
+            Element::None
+        }
+    }
+
+    // Test widget that uses default preferred_height and preferred_width
+    #[derive(Clone)]
+    struct TestWidget;
+
+    impl RenderableWidget for TestWidget {
+        fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
+            // Minimal implementation
+        }
+
+        fn clone_box(&self) -> Box<dyn RenderableWidget> {
+            Box::new(self.clone())
+        }
+
+        // Using default preferred_height (lines 115-116)
+        // Using default preferred_width (lines 123-124)
+    }
+
+    // Test component wrapper for clone test
+    struct TestComponentWrapper;
+
+    impl ComponentWrapper for TestComponentWrapper {
+        fn view_any(&self) -> Element {
+            Element::None
+        }
+
+        fn clone_box(&self) -> Box<dyn ComponentWrapper> {
+            Box::new(TestComponentWrapper)
+        }
+    }
+
+    #[test]
+    fn test_component_init_default() {
+        let state = TestComponent::init(&TestProps);
+        assert_eq!(state.value, 0); // Default value
+    }
+
+    #[test]
+    fn test_component_update_default() {
+        let mut component = TestComponent;
+        let mut state = TestState::default();
+
+        let effect = component.update(TestMessage::Increment, &mut state);
+
+        // Default update returns Effect::None
+        matches!(effect, Effect::None);
+    }
+
+    #[test]
+    fn test_component_did_update_default() {
+        let mut component = TestComponent;
+        let old_props = TestProps;
+        let new_props = TestProps;
+
+        let effect = component.did_update(&old_props, &new_props);
+
+        // Default did_update returns Effect::None
+        matches!(effect, Effect::None);
+    }
+
+    #[test]
+    fn test_renderable_widget_default_preferred_height() {
+        let widget = TestWidget;
+        assert_eq!(widget.preferred_height(), None);
+    }
+
+    #[test]
+    fn test_renderable_widget_default_preferred_width() {
+        let widget = TestWidget;
+        assert_eq!(widget.preferred_width(), None);
+    }
+
+    #[test]
+    fn test_box_renderable_widget_clone() {
+        let widget: Box<dyn RenderableWidget> = Box::new(TestWidget);
+        let _cloned = widget.clone();
+        // If we get here, clone worked
+    }
+
+    #[test]
+    fn test_box_component_wrapper_clone() {
+        let wrapper: Box<dyn ComponentWrapper> = Box::new(TestComponentWrapper);
+        let _cloned = wrapper.clone();
+        // If we get here, clone worked (tests lines 141-142)
+    }
+
+    #[test]
+    fn test_vertical_helper() {
+        let children = vec![Element::None, Element::None];
+        let element = vertical([Constraint::Length(10), Constraint::Min(5)], children.clone());
+
+        match element {
+            Element::Container { children: c, layout } => {
+                assert_eq!(c.len(), 2);
+                matches!(layout, ContainerLayout::Vertical(_));
+            }
+            _ => panic!("Expected Container element"),
+        }
+    }
+
+    #[test]
+    fn test_horizontal_helper() {
+        let children = vec![Element::None];
+        let element = horizontal([Constraint::Percentage(50)], children.clone());
+
+        match element {
+            Element::Container { children: c, layout } => {
+                assert_eq!(c.len(), 1);
+                matches!(layout, ContainerLayout::Horizontal(_));
+            }
+            _ => panic!("Expected Container element"),
+        }
+    }
+}

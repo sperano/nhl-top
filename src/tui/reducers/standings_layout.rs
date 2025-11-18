@@ -265,3 +265,260 @@ fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
         vec![eastern, western]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nhl_api::LocalizedString;
+
+    fn create_test_standing(
+        abbrev: &str,
+        division: &str,
+        conference: &str,
+        points: i32,
+    ) -> Standing {
+        Standing {
+            conference_abbrev: Some(conference.chars().next().unwrap().to_string()),
+            conference_name: Some(conference.to_string()),
+            division_abbrev: division.chars().take(3).collect(),
+            division_name: division.to_string(),
+            team_name: LocalizedString {
+                default: format!("{} Team", abbrev),
+            },
+            team_common_name: LocalizedString {
+                default: abbrev.to_string(),
+            },
+            team_abbrev: LocalizedString {
+                default: abbrev.to_string(),
+            },
+            team_logo: format!("https://assets.nhle.com/logos/nhl/svg/{}_light.svg", abbrev),
+            wins: points / 2,
+            losses: (82 - points / 2) / 2,
+            ot_losses: 82 - points / 2 - (82 - points / 2) / 2,
+            points,
+        }
+    }
+
+    fn create_sample_standings() -> Vec<Standing> {
+        vec![
+            create_test_standing("TOR", "Atlantic", "Eastern", 100),
+            create_test_standing("BOS", "Atlantic", "Eastern", 95),
+            create_test_standing("TBL", "Atlantic", "Eastern", 90),
+            create_test_standing("FLA", "Atlantic", "Eastern", 85),
+            create_test_standing("NYR", "Metropolitan", "Eastern", 93),
+            create_test_standing("CAR", "Metropolitan", "Eastern", 88),
+            create_test_standing("NJD", "Metropolitan", "Eastern", 83),
+            create_test_standing("PIT", "Metropolitan", "Eastern", 80),
+            create_test_standing("COL", "Central", "Western", 102),
+            create_test_standing("DAL", "Central", "Western", 97),
+            create_test_standing("MIN", "Central", "Western", 92),
+            create_test_standing("WPG", "Central", "Western", 87),
+            create_test_standing("VGK", "Pacific", "Western", 99),
+            create_test_standing("EDM", "Pacific", "Western", 94),
+            create_test_standing("LAK", "Pacific", "Western", 89),
+            create_test_standing("SEA", "Pacific", "Western", 84),
+        ]
+    }
+
+    #[test]
+    fn test_build_league_layout() {
+        let standings = create_sample_standings();
+        let layout = build_league_layout(&standings);
+
+        assert_eq!(layout.len(), 1, "League view should have 1 column");
+        assert_eq!(layout[0].len(), 16, "Should have all 16 teams");
+        assert_eq!(layout[0][0], "COL", "Highest points team should be first");
+        assert_eq!(layout[0][1], "TOR", "Second highest should be TOR");
+        assert_eq!(layout[0][15], "PIT", "Lowest points team should be last");
+    }
+
+    #[test]
+    fn test_build_conference_layout_eastern_first() {
+        let standings = create_sample_standings();
+        let layout = build_conference_layout(&standings, false);
+
+        assert_eq!(layout.len(), 2, "Should have 2 columns");
+        assert_eq!(layout[0].len(), 8, "Eastern conference should have 8 teams");
+        assert_eq!(layout[1].len(), 8, "Western conference should have 8 teams");
+        assert_eq!(layout[0][0], "TOR", "TOR should be first in Eastern");
+        assert_eq!(layout[1][0], "COL", "COL should be first in Western");
+    }
+
+    #[test]
+    fn test_build_conference_layout_western_first() {
+        let standings = create_sample_standings();
+        let layout = build_conference_layout(&standings, true);
+
+        assert_eq!(layout.len(), 2, "Should have 2 columns");
+        assert_eq!(layout[0].len(), 8, "Western conference should have 8 teams");
+        assert_eq!(layout[1].len(), 8, "Eastern conference should have 8 teams");
+        assert_eq!(layout[0][0], "COL", "COL should be first in Western (col 0)");
+        assert_eq!(layout[1][0], "TOR", "TOR should be first in Eastern (col 1)");
+    }
+
+    #[test]
+    fn test_build_division_layout_eastern_first() {
+        let standings = create_sample_standings();
+        let layout = build_division_layout(&standings, false);
+
+        assert_eq!(layout.len(), 2, "Should have 2 columns");
+        assert_eq!(layout[0].len(), 8, "Eastern divisions should have 8 teams");
+        assert_eq!(layout[1].len(), 8, "Western divisions should have 8 teams");
+
+        let eastern_teams: Vec<&str> = layout[0].iter().map(|s| s.as_str()).collect();
+        assert!(eastern_teams.contains(&"TOR"), "Should contain Atlantic teams");
+        assert!(eastern_teams.contains(&"NYR"), "Should contain Metropolitan teams");
+
+        let western_teams: Vec<&str> = layout[1].iter().map(|s| s.as_str()).collect();
+        assert!(western_teams.contains(&"COL"), "Should contain Central teams");
+        assert!(western_teams.contains(&"VGK"), "Should contain Pacific teams");
+    }
+
+    #[test]
+    fn test_build_division_layout_western_first() {
+        let standings = create_sample_standings();
+        let layout = build_division_layout(&standings, true);
+
+        assert_eq!(layout.len(), 2, "Should have 2 columns");
+
+        let western_teams: Vec<&str> = layout[0].iter().map(|s| s.as_str()).collect();
+        assert!(western_teams.contains(&"COL"), "Col 0 should have Central teams");
+        assert!(western_teams.contains(&"VGK"), "Col 0 should have Pacific teams");
+
+        let eastern_teams: Vec<&str> = layout[1].iter().map(|s| s.as_str()).collect();
+        assert!(eastern_teams.contains(&"TOR"), "Col 1 should have Atlantic teams");
+        assert!(eastern_teams.contains(&"NYR"), "Col 1 should have Metropolitan teams");
+    }
+
+    #[test]
+    fn test_build_wildcard_layout_eastern_first() {
+        let standings = create_sample_standings();
+        let layout = build_wildcard_layout(&standings, false);
+
+        assert_eq!(layout.len(), 2, "Should have 2 columns");
+        assert_eq!(layout[0].len(), 8, "Eastern should have 8 teams");
+        assert_eq!(layout[1].len(), 8, "Western should have 8 teams");
+    }
+
+    #[test]
+    fn test_build_wildcard_layout_western_first() {
+        let standings = create_sample_standings();
+        let layout = build_wildcard_layout(&standings, true);
+
+        assert_eq!(layout.len(), 2, "Should have 2 columns");
+        assert_eq!(layout[0].len(), 8, "Western should be first");
+        assert_eq!(layout[1].len(), 8, "Eastern should be second");
+    }
+
+    #[test]
+    fn test_build_standings_layout_delegates_correctly() {
+        let standings = create_sample_standings();
+
+        let league = build_standings_layout(&standings, GroupBy::League, false);
+        assert_eq!(league.len(), 1, "League should have 1 column");
+
+        let conference = build_standings_layout(&standings, GroupBy::Conference, false);
+        assert_eq!(conference.len(), 2, "Conference should have 2 columns");
+
+        let division = build_standings_layout(&standings, GroupBy::Division, false);
+        assert_eq!(division.len(), 2, "Division should have 2 columns");
+
+        let wildcard = build_standings_layout(&standings, GroupBy::Wildcard, false);
+        assert_eq!(wildcard.len(), 2, "Wildcard should have 2 columns");
+    }
+
+    #[test]
+    fn test_count_teams_in_conference_column() {
+        let standings = create_sample_standings();
+
+        let col0_count = count_teams_in_conference_column(&standings, 0);
+        assert_eq!(col0_count, 8, "Column 0 should have 8 teams");
+
+        let col1_count = count_teams_in_conference_column(&standings, 1);
+        assert_eq!(col1_count, 8, "Column 1 should have 8 teams");
+
+        let invalid_count = count_teams_in_conference_column(&standings, 2);
+        assert_eq!(invalid_count, 0, "Invalid column should return 0");
+    }
+
+    #[test]
+    fn test_count_teams_in_conference_column_with_empty_standings() {
+        let standings = Vec::new();
+        let count = count_teams_in_conference_column(&standings, 0);
+        assert_eq!(count, 0, "Empty standings should return 0");
+    }
+
+    #[test]
+    fn test_count_teams_in_division_column() {
+        let standings = create_sample_standings();
+
+        let eastern_count = count_teams_in_division_column(&standings, 0, false);
+        assert_eq!(eastern_count, 8, "Eastern divisions should have 8 teams");
+
+        let western_count = count_teams_in_division_column(&standings, 1, false);
+        assert_eq!(western_count, 8, "Western divisions should have 8 teams");
+    }
+
+    #[test]
+    fn test_count_teams_in_division_column_with_western_first() {
+        let standings = create_sample_standings();
+
+        let western_count = count_teams_in_division_column(&standings, 0, true);
+        assert_eq!(western_count, 8, "Column 0 should be Western when western_first=true");
+
+        let eastern_count = count_teams_in_division_column(&standings, 1, true);
+        assert_eq!(eastern_count, 8, "Column 1 should be Eastern when western_first=true");
+    }
+
+    #[test]
+    fn test_count_teams_in_wildcard_column() {
+        let standings = create_sample_standings();
+
+        let eastern_count = count_teams_in_wildcard_column(&standings, 0, false);
+        assert_eq!(eastern_count, 8, "Eastern wildcard should have 8 teams");
+
+        let western_count = count_teams_in_wildcard_column(&standings, 1, false);
+        assert_eq!(western_count, 8, "Western wildcard should have 8 teams");
+    }
+
+    #[test]
+    fn test_count_teams_in_wildcard_column_with_western_first() {
+        let standings = create_sample_standings();
+
+        let western_count = count_teams_in_wildcard_column(&standings, 0, true);
+        assert_eq!(western_count, 8, "Column 0 should be Western");
+
+        let eastern_count = count_teams_in_wildcard_column(&standings, 1, true);
+        assert_eq!(eastern_count, 8, "Column 1 should be Eastern");
+    }
+
+    #[test]
+    fn test_wildcard_layout_with_fewer_than_3_teams_per_division() {
+        let standings = vec![
+            create_test_standing("TOR", "Atlantic", "Eastern", 100),
+            create_test_standing("BOS", "Atlantic", "Eastern", 95),
+            create_test_standing("NYR", "Metropolitan", "Eastern", 93),
+            create_test_standing("CAR", "Metropolitan", "Eastern", 88),
+            create_test_standing("COL", "Central", "Western", 102),
+            create_test_standing("DAL", "Central", "Western", 97),
+            create_test_standing("VGK", "Pacific", "Western", 99),
+            create_test_standing("EDM", "Pacific", "Western", 94),
+        ];
+
+        let layout = build_wildcard_layout(&standings, false);
+        assert_eq!(layout.len(), 2);
+        assert_eq!(layout[0].len(), 4, "Eastern should have 4 teams");
+        assert_eq!(layout[1].len(), 4, "Western should have 4 teams");
+    }
+
+    #[test]
+    fn test_conference_layout_with_non_standard_conferences() {
+        let standings = vec![
+            create_test_standing("TOR", "Atlantic", "Eastern", 100),
+            create_test_standing("BOS", "Atlantic", "Eastern", 95),
+        ];
+
+        let layout = build_conference_layout(&standings, false);
+        assert_eq!(layout.len(), 0, "Should return empty for less than 2 conferences");
+    }
+}

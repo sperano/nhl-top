@@ -298,4 +298,63 @@ mod tests {
             panic!("Expected PlayerLink");
         }
     }
+
+    #[test]
+    #[should_panic(expected = "ColumnDef cannot be cloned due to boxed closure")]
+    fn test_column_def_clone_panics() {
+        struct TestRow;
+
+        let col = ColumnDef::new(
+            "Test",
+            10,
+            Alignment::Left,
+            |_: &TestRow| CellValue::Text("test".to_string()),
+        );
+
+        let _cloned = col.clone();
+    }
+
+    #[test]
+    fn test_column_def_debug() {
+        struct TestRow;
+
+        let col = ColumnDef::new(
+            "Test Header",
+            15,
+            Alignment::Right,
+            |_: &TestRow| CellValue::Text("test".to_string()),
+        );
+
+        let debug_str = format!("{:?}", col);
+        assert!(debug_str.contains("Test Header"));
+        assert!(debug_str.contains("15"));
+        assert!(debug_str.contains("Right"));
+        assert!(debug_str.contains("<function>"));
+    }
+
+    #[test]
+    fn test_cell_value_equality() {
+        let text1 = CellValue::Text("Hello".to_string());
+        let text2 = CellValue::Text("Hello".to_string());
+        let text3 = CellValue::Text("World".to_string());
+
+        assert_eq!(text1, text2);
+        assert_ne!(text1, text3);
+
+        let player1 = CellValue::PlayerLink {
+            display: "Player".to_string(),
+            player_id: 123,
+        };
+        let player2 = CellValue::PlayerLink {
+            display: "Player".to_string(),
+            player_id: 123,
+        };
+        let player3 = CellValue::PlayerLink {
+            display: "Player".to_string(),
+            player_id: 456,
+        };
+
+        assert_eq!(player1, player2);
+        assert_ne!(player1, player3);
+    }
 }

@@ -319,4 +319,91 @@ mod tests {
         let expected_vertical_margin = (area.height - modal_area.height) / 2;
         assert_eq!(vertical_margin, expected_vertical_margin);
     }
+
+    #[test]
+    fn test_list_modal_widget_new() {
+        let options = vec!["Option 1".to_string(), "Option 2".to_string()];
+        let widget = ListModalWidget::new("Test Setting", options.clone(), 1);
+
+        assert_eq!(widget.setting_name, "Test Setting");
+        assert_eq!(widget.options, options);
+        assert_eq!(widget.selected_index, 1);
+    }
+
+    #[test]
+    fn test_list_modal_widget_render() {
+        let config = test_config();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
+        let area = Rect::new(0, 0, 80, 24);
+
+        let options = vec!["First".to_string(), "Second".to_string()];
+        let widget = ListModalWidget::new("Widget Test", options, 0);
+
+        widget.render(area, &mut buf, &config);
+
+        // Widget should have rendered via RenderableWidget trait
+        // Check that something was rendered in the buffer
+        let has_content = (0..buf.area.height).any(|y| {
+            (0..buf.area.width).any(|x| {
+                if let Some(cell) = buf.cell((x, y)) {
+                    !cell.symbol().trim().is_empty()
+                } else {
+                    false
+                }
+            })
+        });
+
+        assert!(has_content, "Widget should have rendered content");
+    }
+
+    #[test]
+    fn test_list_modal_widget_clone_box() {
+        let options = vec!["Option".to_string()];
+        let widget = ListModalWidget::new("Test", options, 0);
+
+        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        // If we get here, clone_box() worked
+    }
+
+    #[test]
+    fn test_list_modal_truncation_when_too_tall() {
+        let config = test_config();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 40, 8)); // Small height
+        let area = Rect::new(0, 0, 40, 8);
+
+        // Many options that won't fit
+        let options = vec![
+            "Option 1".to_string(),
+            "Option 2".to_string(),
+            "Option 3".to_string(),
+            "Option 4".to_string(),
+            "Option 5".to_string(),
+            "Option 6".to_string(),
+            "Option 7".to_string(),
+            "Option 8".to_string(),
+            "Option 9".to_string(),
+            "Option 10".to_string(),
+        ];
+
+        let modal_area = render_list_modal(
+            "Many Options",
+            &options,
+            0,
+            area,
+            &mut buf,
+            &config,
+        );
+
+        // Modal height should be limited by available area
+        assert!(modal_area.height <= area.height);
+
+        // Should render without panicking even when options are truncated
+    }
+
+    #[test]
+    fn test_list_modal_widget_with_string_ref() {
+        let options = vec!["Test".to_string()];
+        let widget = ListModalWidget::new("String ref test", options, 0);
+        assert_eq!(widget.setting_name, "String ref test");
+    }
 }

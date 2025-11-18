@@ -120,3 +120,31 @@ impl Action {
         !matches!(self, Self::Error(_))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_should_render_returns_true_for_most_actions() {
+        assert!(Action::NavigateTabLeft.should_render());
+        assert!(Action::NavigateTabRight.should_render());
+        assert!(Action::EnterContentFocus.should_render());
+        assert!(Action::ExitContentFocus.should_render());
+        assert!(Action::RefreshData.should_render());
+        assert!(Action::Quit.should_render());
+        assert!(Action::ToggleCommandPalette.should_render());
+        assert!(Action::PopPanel.should_render());
+        assert!(Action::ScrollUp(5).should_render());
+        assert!(Action::ScrollDown(10).should_render());
+        assert!(Action::FocusNext.should_render());
+        assert!(Action::FocusPrevious.should_render());
+    }
+
+    #[test]
+    fn test_should_render_returns_false_for_error_actions() {
+        assert!(!Action::Error("test error".to_string()).should_render());
+        assert!(!Action::Error("another error".to_string()).should_render());
+        assert!(!Action::Error(String::new()).should_render());
+    }
+}

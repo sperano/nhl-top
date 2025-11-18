@@ -260,3 +260,507 @@ fn clamp_row_to_column_bounds(state: &mut AppState) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cycle_view_wildcard_to_division() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Wildcard;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::CycleView);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Division);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_cycle_view_division_to_conference() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleView);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
+    }
+
+    #[test]
+    fn test_cycle_view_conference_to_league() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleView);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::League);
+    }
+
+    #[test]
+    fn test_cycle_view_league_to_wildcard() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleView);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_cycle_view_left_wildcard_to_league() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Wildcard;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::CycleViewLeft);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::League);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_cycle_view_left_division_to_wildcard() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewLeft);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_cycle_view_left_conference_to_division() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewLeft);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Division);
+    }
+
+    #[test]
+    fn test_cycle_view_left_league_to_conference() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewLeft);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
+    }
+
+    #[test]
+    fn test_cycle_view_right_wildcard_to_division() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Wildcard;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::CycleViewRight);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Division);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_cycle_view_right_division_to_conference() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewRight);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
+    }
+
+    #[test]
+    fn test_cycle_view_right_conference_to_league() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewRight);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::League);
+    }
+
+    #[test]
+    fn test_cycle_view_right_league_to_wildcard() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewRight);
+
+        assert_eq!(new_state.ui.standings.view, GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_enter_browse_mode() {
+        let mut state = AppState::default();
+        state.ui.standings.browse_mode = false;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::EnterBrowseMode);
+
+        assert!(new_state.ui.standings.browse_mode);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_exit_browse_mode() {
+        let mut state = AppState::default();
+        state.ui.standings.browse_mode = true;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::ExitBrowseMode);
+
+        assert!(!new_state.ui.standings.browse_mode);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_team_with_no_standings() {
+        let state = AppState::default();
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeam);
+
+        assert_eq!(new_state.navigation.panel_stack.len(), 0);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_team_by_position() {
+        let state = AppState::default();
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 5));
+
+        assert_eq!(new_state.ui.standings.selected_column, 1);
+        assert_eq!(new_state.ui.standings.selected_row, 5);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_up_with_no_standings() {
+        let state = AppState::default();
+        let initial_row = state.ui.standings.selected_row;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        // Should not change without standings data
+        assert_eq!(new_state.ui.standings.selected_row, initial_row);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_down_with_no_standings() {
+        let state = AppState::default();
+        let initial_row = state.ui.standings.selected_row;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        // Should not change without standings data
+        assert_eq!(new_state.ui.standings.selected_row, initial_row);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_left_in_conference_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        assert_eq!(new_state.ui.standings.selected_column, 1); // Wrapped to column 1
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_left_in_division_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 1;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        assert_eq!(new_state.ui.standings.selected_column, 0); // Moved to column 0
+    }
+
+    #[test]
+    fn test_move_selection_left_in_wildcard_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Wildcard;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        assert_eq!(new_state.ui.standings.selected_column, 1); // Wrapped
+    }
+
+    #[test]
+    fn test_move_selection_left_in_league_view_does_nothing() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        assert_eq!(new_state.ui.standings.selected_column, 0); // No change in League view
+    }
+
+    #[test]
+    fn test_move_selection_right_in_conference_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 1;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+
+        assert_eq!(new_state.ui.standings.selected_column, 0); // Wrapped to column 0
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_right_in_division_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+
+        assert_eq!(new_state.ui.standings.selected_column, 1); // Moved to column 1
+    }
+
+    #[test]
+    fn test_move_selection_right_in_wildcard_view() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Wildcard;
+        state.ui.standings.selected_column = 1;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+
+        assert_eq!(new_state.ui.standings.selected_column, 0); // Wrapped
+    }
+
+    #[test]
+    fn test_move_selection_right_in_league_view_does_nothing() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_column = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+
+        assert_eq!(new_state.ui.standings.selected_column, 0); // No change in League view
+    }
+
+    #[test]
+    fn test_cycle_view_resets_selection() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 1;
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 10;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleView);
+
+        // Selection should be reset
+        assert_eq!(new_state.ui.standings.selected_column, 0);
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+        assert_eq!(new_state.ui.standings.scroll_offset, 0);
+    }
+
+    // Tests with actual standings data
+    #[test]
+    fn test_select_team_with_standings() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 0;
+        state.ui.standings.selected_row = 0;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeam);
+
+        // Should push TeamDetail panel for first team (FLA in Atlantic)
+        assert_eq!(new_state.navigation.panel_stack.len(), 1);
+        match &new_state.navigation.panel_stack[0].panel {
+            Panel::TeamDetail { abbrev } => {
+                assert_eq!(abbrev, "FLA");
+            }
+            _ => panic!("Expected TeamDetail panel"),
+        }
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_team_by_position_with_standings() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Conference;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 3));
+
+        // Should set the selected position (no panel push)
+        assert_eq!(new_state.ui.standings.selected_column, 1);
+        assert_eq!(new_state.ui.standings.selected_row, 3);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_up_with_standings_from_middle() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 5;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        assert_eq!(new_state.ui.standings.selected_row, 4);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_up_with_standings_from_top() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 0;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        // Should wrap to last team (32 teams total, so max_row = 31)
+        assert_eq!(new_state.ui.standings.selected_row, 31);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_down_with_standings_from_middle() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 5;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 6);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_down_with_standings_from_bottom() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 31; // Last team
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        // Should wrap to first team
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_left_with_standings_clamps_row() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 1; // Western
+        state.ui.standings.selected_row = 10; // Row that exists in Western but maybe not in Eastern
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        // Should switch to Eastern column and clamp row if needed
+        assert_eq!(new_state.ui.standings.selected_column, 0);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_right_with_standings_clamps_row() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 0; // Eastern
+        state.ui.standings.selected_row = 10;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionRight);
+
+        // Should switch to Western column and clamp row if needed
+        assert_eq!(new_state.ui.standings.selected_column, 1);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_up_in_division_view() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 0; // Eastern divisions
+        state.ui.standings.selected_row = 2;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        assert_eq!(new_state.ui.standings.selected_row, 1);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_down_in_conference_view() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Conference;
+        state.ui.standings.selected_column = 0; // Eastern
+        state.ui.standings.selected_row = 5;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 6);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_in_wildcard_view() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Wildcard;
+        state.ui.standings.selected_column = 0; // Eastern
+        state.ui.standings.selected_row = 5;
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 6);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_selection_left_clamps_row_when_new_column_shorter() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Some(create_test_standings());
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 1; // Western divisions
+        state.ui.standings.selected_row = 20; // High row that might not exist in Eastern
+
+        let (new_state, effect) = reduce_standings(state, StandingsAction::MoveSelectionLeft);
+
+        // Should switch to Eastern column and clamp row to max available
+        assert_eq!(new_state.ui.standings.selected_column, 0);
+        // Row should be clamped to the max row available in Eastern column
+        assert!(new_state.ui.standings.selected_row <= 15); // At most 16 Eastern teams
+        assert!(matches!(effect, Effect::None));
+    }
+}

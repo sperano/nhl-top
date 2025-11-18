@@ -45,31 +45,43 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
             return Some(Action::PopPanel);
         }
 
-        // Priority 2: If in box selection mode on Scores tab, exit to date subtabs
+        // Priority 2: If in modal on Settings tab, cancel modal
+        if state.ui.settings.modal_open {
+            debug!("KEY: ESC pressed in modal - canceling modal");
+            return Some(Action::SettingsAction(SettingsAction::ModalCancel));
+        }
+
+        // Priority 2.5: If editing on Settings tab, cancel editing
+        if state.ui.settings.editing {
+            debug!("KEY: ESC pressed while editing - canceling edit");
+            return Some(Action::SettingsAction(SettingsAction::CancelEditing));
+        }
+
+        // Priority 3: If in box selection mode on Scores tab, exit to date subtabs
         if state.ui.scores.box_selection_active {
             debug!("KEY: ESC pressed in box selection - exiting to date subtabs");
             return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
         }
 
-        // Priority 3: If in browse mode on Standings tab, exit to view subtabs
+        // Priority 4: If in browse mode on Standings tab, exit to view subtabs
         if state.ui.standings.browse_mode {
             debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
             return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
         }
 
-        // Priority 3.5: If in settings mode on Settings tab, exit to category subtabs
+        // Priority 5: If in settings mode on Settings tab, exit to category subtabs
         if state.ui.settings.settings_mode {
             debug!("KEY: ESC pressed in settings mode - exiting to category subtabs");
             return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
         }
 
-        // Priority 4: If content is focused, return to tab bar
+        // Priority 6: If content is focused, return to tab bar
         if content_focused {
             debug!("KEY: ESC pressed in content - returning to tab bar");
             return Some(Action::ExitContentFocus);
         }
 
-        // Priority 5: At top level (tab bar), do nothing - use 'q' to quit
+        // Priority 7: At top level (tab bar), do nothing - use 'q' to quit
         debug!("KEY: ESC pressed at tab bar - ignoring (use 'q' to quit)");
         return None;
     }
@@ -238,9 +250,6 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                         KeyCode::Enter => {
                             return Some(Action::SettingsAction(SettingsAction::ModalConfirm))
                         }
-                        KeyCode::Esc => {
-                            return Some(Action::SettingsAction(SettingsAction::ModalCancel))
-                        }
                         _ => {}
                     }
                 } else if state.ui.settings.editing {
@@ -261,9 +270,6 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                             if let Some(key) = setting_key {
                                 return Some(Action::SettingsAction(SettingsAction::CommitEdit(key)));
                             }
-                        }
-                        KeyCode::Esc => {
-                            return Some(Action::SettingsAction(SettingsAction::CancelEditing))
                         }
                         _ => {}
                     }
@@ -574,5 +580,638 @@ mod tests {
             action,
             Some(Action::SettingsAction(SettingsAction::ModalMoveDown))
         ));
+    }
+
+    // Global keys tests
+    #[test]
+    fn test_slash_toggles_command_palette() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('/')), &state);
+        assert!(matches!(action, Some(Action::ToggleCommandPalette)));
+    }
+
+    #[test]
+    fn test_uppercase_q_quits() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('Q')), &state);
+        assert!(matches!(action, Some(Action::Quit)));
+    }
+
+    // ESC priority tests
+    #[test]
+    fn test_esc_exits_settings_mode() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = true;
+
+        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ExitSettingsMode))
+        ));
+    }
+
+    // Panel navigation tests
+    #[test]
+    fn test_panel_up_key_selects_previous() {
+        let mut state = AppState::default();
+        state.navigation.panel_stack.push(super::super::state::PanelState {
+            panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            scroll_offset: 0,
+            selected_index: Some(1),
+        });
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        assert!(matches!(action, Some(Action::PanelSelectPrevious)));
+    }
+
+    #[test]
+    fn test_panel_down_key_selects_next() {
+        let mut state = AppState::default();
+        state.navigation.panel_stack.push(super::super::state::PanelState {
+            panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            scroll_offset: 0,
+            selected_index: Some(0),
+        });
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(action, Some(Action::PanelSelectNext)));
+    }
+
+    #[test]
+    fn test_panel_enter_key_selects_item() {
+        let mut state = AppState::default();
+        state.navigation.panel_stack.push(super::super::state::PanelState {
+            panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            scroll_offset: 0,
+            selected_index: Some(0),
+        });
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(action, Some(Action::PanelSelectItem)));
+    }
+
+    // Number keys for all tabs
+    #[test]
+    fn test_number_key_2_navigates_to_standings() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('2')), &state);
+        assert!(matches!(action, Some(Action::NavigateTab(Tab::Standings))));
+    }
+
+    #[test]
+    fn test_number_key_3_navigates_to_stats() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('3')), &state);
+        assert!(matches!(action, Some(Action::NavigateTab(Tab::Stats))));
+    }
+
+    #[test]
+    fn test_number_key_4_navigates_to_players() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('4')), &state);
+        assert!(matches!(action, Some(Action::NavigateTab(Tab::Players))));
+    }
+
+    #[test]
+    fn test_number_key_5_navigates_to_settings() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('5')), &state);
+        assert!(matches!(action, Some(Action::NavigateTab(Tab::Settings))));
+    }
+
+    #[test]
+    fn test_number_key_6_navigates_to_browser() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::Char('6')), &state);
+        assert!(matches!(action, Some(Action::NavigateTab(Tab::Browser))));
+    }
+
+    // Tab bar navigation tests
+    #[test]
+    fn test_tab_bar_left_arrow_navigates_left() {
+        let mut state = AppState::default();
+        state.navigation.content_focused = false;
+
+        let action = key_to_action(make_key(KeyCode::Left), &state);
+        assert!(matches!(action, Some(Action::NavigateTabLeft)));
+    }
+
+    #[test]
+    fn test_tab_bar_right_arrow_navigates_right() {
+        let mut state = AppState::default();
+        state.navigation.content_focused = false;
+
+        let action = key_to_action(make_key(KeyCode::Right), &state);
+        assert!(matches!(action, Some(Action::NavigateTabRight)));
+    }
+
+    #[test]
+    fn test_tab_bar_down_arrow_enters_content_focus() {
+        let mut state = AppState::default();
+        state.navigation.content_focused = false;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(action, Some(Action::EnterContentFocus)));
+    }
+
+    // Content focus Up key returning to tab bar
+    #[test]
+    fn test_content_up_key_returns_to_tab_bar() {
+        let mut state = AppState::default();
+        state.navigation.content_focused = true;
+        state.navigation.current_tab = Tab::Scores;
+        // Not in box selection mode
+        state.ui.scores.box_selection_active = false;
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        assert!(matches!(action, Some(Action::ExitContentFocus)));
+    }
+
+    // Scores tab - box selection mode
+    #[test]
+    fn test_scores_box_selection_up() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = true;
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp))
+        ));
+    }
+
+    #[test]
+    fn test_scores_box_selection_down() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = true;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown))
+        ));
+    }
+
+    #[test]
+    fn test_scores_box_selection_left() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = true;
+
+        let action = key_to_action(make_key(KeyCode::Left), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft))
+        ));
+    }
+
+    #[test]
+    fn test_scores_box_selection_right() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = true;
+
+        let action = key_to_action(make_key(KeyCode::Right), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight))
+        ));
+    }
+
+    #[test]
+    fn test_scores_box_selection_enter() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = true;
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::SelectGame))
+        ));
+    }
+
+    // Scores tab - date mode
+    #[test]
+    fn test_scores_date_mode_left() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = false;
+
+        let action = key_to_action(make_key(KeyCode::Left), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::DateLeft))
+        ));
+    }
+
+    #[test]
+    fn test_scores_date_mode_right() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = false;
+
+        let action = key_to_action(make_key(KeyCode::Right), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::DateRight))
+        ));
+    }
+
+    #[test]
+    fn test_scores_date_mode_down_enters_box_selection() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = false;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::EnterBoxSelection))
+        ));
+    }
+
+    #[test]
+    fn test_scores_date_mode_enter() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+        state.ui.scores.box_selection_active = false;
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::ScoresAction(ScoresAction::SelectGame))
+        ));
+    }
+
+    // Standings tab
+    #[test]
+    fn test_standings_browse_mode_enter() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = true;
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::SelectTeam))
+        ));
+    }
+
+    #[test]
+    fn test_standings_view_mode_right_cycles_view() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Standings;
+        state.navigation.content_focused = true;
+        state.ui.standings.browse_mode = false;
+
+        let action = key_to_action(make_key(KeyCode::Right), &state);
+        assert!(matches!(
+            action,
+            Some(Action::StandingsAction(StandingsAction::CycleViewRight))
+        ));
+    }
+
+    // Settings tab - modal
+    #[test]
+    fn test_settings_modal_enter_confirms() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.modal_open = true;
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ModalConfirm))
+        ));
+    }
+
+    #[test]
+    fn test_settings_modal_esc_cancels() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.modal_open = true;
+
+        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ModalCancel))
+        ));
+    }
+
+    // Settings tab - editing mode
+    #[test]
+    fn test_settings_editing_char_input() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.editing = true;
+        state.ui.settings.selected_category = SettingsCategory::Logging;
+        state.ui.settings.selected_setting_index = 1; // log_file
+
+        let action = key_to_action(make_key(KeyCode::Char('a')), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::AppendChar('a')))
+        ));
+    }
+
+    #[test]
+    fn test_settings_editing_backspace() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.editing = true;
+
+        let action = key_to_action(make_key(KeyCode::Backspace), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::DeleteChar))
+        ));
+    }
+
+    #[test]
+    fn test_settings_editing_enter_commits() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.editing = true;
+        state.ui.settings.selected_category = SettingsCategory::Logging;
+        state.ui.settings.selected_setting_index = 1; // log_file
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::CommitEdit(_)))
+        ));
+    }
+
+    #[test]
+    fn test_settings_editing_esc_cancels() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.editing = true;
+
+        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::CancelEditing))
+        ));
+    }
+
+    // Settings tab - settings navigation mode
+    #[test]
+    fn test_settings_mode_up_at_top_exits_to_categories() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = true;
+        state.ui.settings.selected_setting_index = 0; // At top
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ExitSettingsMode))
+        ));
+    }
+
+    #[test]
+    fn test_settings_mode_up_navigates_settings() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = true;
+        state.ui.settings.selected_setting_index = 1; // Not at top
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::MoveSelectionUp))
+        ));
+    }
+
+    #[test]
+    fn test_settings_mode_down_navigates_settings() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = true;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::MoveSelectionDown))
+        ));
+    }
+
+    #[test]
+    fn test_settings_mode_enter_toggles_boolean() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = true;
+        state.ui.settings.selected_category = SettingsCategory::Display;
+        state.ui.settings.selected_setting_index = 0; // use_unicode
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::ToggleBoolean(_)))
+        ));
+    }
+
+    #[test]
+    fn test_settings_mode_enter_starts_editing() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = true;
+        state.ui.settings.selected_category = SettingsCategory::Logging;
+        state.ui.settings.selected_setting_index = 0; // log_level
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::StartEditing(_)))
+        ));
+    }
+
+    // Settings tab - category navigation
+    #[test]
+    fn test_settings_category_mode_left() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = false;
+
+        let action = key_to_action(make_key(KeyCode::Left), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::NavigateCategoryLeft))
+        ));
+    }
+
+    #[test]
+    fn test_settings_category_mode_right() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = false;
+
+        let action = key_to_action(make_key(KeyCode::Right), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::NavigateCategoryRight))
+        ));
+    }
+
+    #[test]
+    fn test_settings_category_mode_down_enters_settings() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.settings_mode = false;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::SettingsAction(SettingsAction::EnterSettingsMode))
+        ));
+    }
+
+    // Helper function tests - get_setting_key_for_index
+    #[test]
+    fn test_get_setting_key_logging_returns_none() {
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Logging, 0), None);
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Logging, 1), None);
+    }
+
+    #[test]
+    fn test_get_setting_key_display_use_unicode() {
+        assert_eq!(
+            get_setting_key_for_index(SettingsCategory::Display, 0),
+            Some("use_unicode".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_setting_key_display_other_indices() {
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 1), None);
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 2), None);
+    }
+
+    #[test]
+    fn test_get_setting_key_data_western_teams_first() {
+        assert_eq!(
+            get_setting_key_for_index(SettingsCategory::Data, 1),
+            Some("western_teams_first".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_setting_key_data_other_indices() {
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Data, 0), None);
+        assert_eq!(get_setting_key_for_index(SettingsCategory::Data, 2), None);
+    }
+
+    // Helper function tests - get_editable_setting_key_for_index
+    #[test]
+    fn test_get_editable_setting_key_logging_log_level() {
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Logging, 0),
+            Some("log_level".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_logging_log_file() {
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Logging, 1),
+            Some("log_file".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_logging_out_of_bounds() {
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Logging, 2), None);
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_display_returns_none() {
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 0), None);
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 1), None);
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_data_refresh_interval() {
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Data, 0),
+            Some("refresh_interval".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_data_time_format() {
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Data, 2),
+            Some("time_format".to_string())
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_data_other_indices() {
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Data, 1), None);
+        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Data, 3), None);
+    }
+
+    // Edge cases
+    #[test]
+    fn test_other_tabs_with_no_content_navigation() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Stats;
+        state.navigation.content_focused = true;
+
+        // Left/Right/Down should return None for tabs with no navigation
+        assert!(key_to_action(make_key(KeyCode::Left), &state).is_none());
+        assert!(key_to_action(make_key(KeyCode::Right), &state).is_none());
+        assert!(key_to_action(make_key(KeyCode::Down), &state).is_none());
+    }
+
+    #[test]
+    fn test_unknown_key_returns_none() {
+        let state = AppState::default();
+        let action = key_to_action(make_key(KeyCode::F(1)), &state);
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_settings_editing_enter_with_no_editable_key() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Settings;
+        state.navigation.content_focused = true;
+        state.ui.settings.editing = true;
+        state.ui.settings.selected_category = SettingsCategory::Display;
+        state.ui.settings.selected_setting_index = 0; // Not editable
+
+        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        // Should return None since display settings aren't editable
+        assert!(action.is_none());
     }
 }

@@ -173,4 +173,114 @@ mod tests {
 
         assert_buffer(&buf, &["Scores > Boxscore: Game 2024020001 > Player: 8471675"]);
     }
+
+    #[test]
+    fn test_breadcrumb_stats_tab() {
+        let widget = BreadcrumbWidget::new(Tab::Stats, Vec::new());
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        widget.render(buf.area, &mut buf, &config);
+
+        assert_buffer(&buf, &["Stats"]);
+    }
+
+    #[test]
+    fn test_breadcrumb_players_tab() {
+        let widget = BreadcrumbWidget::new(Tab::Players, Vec::new());
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        widget.render(buf.area, &mut buf, &config);
+
+        assert_buffer(&buf, &["Players"]);
+    }
+
+    #[test]
+    fn test_breadcrumb_settings_tab() {
+        let widget = BreadcrumbWidget::new(Tab::Settings, Vec::new());
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        widget.render(buf.area, &mut buf, &config);
+
+        assert_buffer(&buf, &["Settings"]);
+    }
+
+    #[test]
+    fn test_breadcrumb_browser_tab() {
+        let widget = BreadcrumbWidget::new(Tab::Browser, Vec::new());
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        widget.render(buf.area, &mut buf, &config);
+
+        assert_buffer(&buf, &["Browser"]);
+    }
+
+    #[test]
+    fn test_breadcrumb_zero_height_area() {
+        let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 0));
+        widget.render(buf.area, &mut buf, &config);
+
+        // Should render nothing for zero-height area
+    }
+
+    #[test]
+    fn test_breadcrumb_zero_width_area() {
+        let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 0, 1));
+        widget.render(buf.area, &mut buf, &config);
+
+        // Should render nothing for zero-width area
+    }
+
+    #[test]
+    fn test_breadcrumb_clone_box() {
+        let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
+        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        // If we get here, clone_box() worked
+    }
+
+    #[test]
+    fn test_breadcrumb_preferred_height_with_empty_stack() {
+        let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
+        assert_eq!(widget.preferred_height(), Some(0));
+    }
+
+    #[test]
+    fn test_breadcrumb_preferred_height_with_panels() {
+        let panel_stack = vec![PanelState {
+            panel: Panel::TeamDetail {
+                abbrev: "TOR".to_string(),
+            },
+            scroll_offset: 0,
+            selected_index: None,
+        }];
+
+        let widget = BreadcrumbWidget::new(Tab::Standings, panel_stack);
+        assert_eq!(widget.preferred_height(), Some(1));
+    }
+
+    #[test]
+    fn test_breadcrumb_with_player_detail() {
+        let panel_stack = vec![PanelState {
+            panel: Panel::PlayerDetail { player_id: 8478402 },
+            scroll_offset: 0,
+            selected_index: None,
+        }];
+
+        let widget = BreadcrumbWidget::new(Tab::Players, panel_stack);
+        let config = DisplayConfig::default();
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        widget.render(buf.area, &mut buf, &config);
+
+        assert_buffer(&buf, &["Players > Player: 8478402"]);
+    }
 }

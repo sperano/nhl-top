@@ -40,3 +40,84 @@ pub fn get_setting_values(key: &str) -> Vec<&'static str> {
         _ => vec![], // Empty for non-list settings
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_editable_setting_key_logging() {
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Logging, 0),
+            Some("log_level".to_string())
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Logging, 1),
+            Some("log_file".to_string())
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Logging, 2),
+            None
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Logging, 999),
+            None
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_display() {
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Display, 0),
+            None
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Display, 1),
+            None
+        );
+    }
+
+    #[test]
+    fn test_get_editable_setting_key_data() {
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Data, 0),
+            Some("refresh_interval".to_string())
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Data, 1),
+            None
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Data, 2),
+            Some("time_format".to_string())
+        );
+        assert_eq!(
+            get_editable_setting_key(SettingsCategory::Data, 3),
+            None
+        );
+    }
+
+    #[test]
+    fn test_get_setting_display_name() {
+        assert_eq!(get_setting_display_name("log_level"), "Log Level");
+        assert_eq!(get_setting_display_name("log_file"), "Log File");
+        assert_eq!(get_setting_display_name("refresh_interval"), "Refresh Interval");
+        assert_eq!(get_setting_display_name("time_format"), "Time Format");
+        assert_eq!(get_setting_display_name("unknown_key"), "Unknown");
+        assert_eq!(get_setting_display_name(""), "Unknown");
+    }
+
+    #[test]
+    fn test_get_setting_values_log_level() {
+        let values = get_setting_values("log_level");
+        assert_eq!(values, vec!["trace", "debug", "info", "warn", "error"]);
+    }
+
+    #[test]
+    fn test_get_setting_values_other_keys() {
+        assert_eq!(get_setting_values("log_file"), Vec::<&str>::new());
+        assert_eq!(get_setting_values("refresh_interval"), Vec::<&str>::new());
+        assert_eq!(get_setting_values("time_format"), Vec::<&str>::new());
+        assert_eq!(get_setting_values("unknown"), Vec::<&str>::new());
+    }
+}

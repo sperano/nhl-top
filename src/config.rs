@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use ratatui::style::Color;
+use phf::phf_map;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
@@ -13,6 +14,69 @@ pub struct Config {
     pub display_standings_western_first: bool,
     pub time_format: String,
     pub display: DisplayConfig,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(default)]
+pub struct Theme {
+    #[serde(skip)]
+    pub name: &'static str,
+    #[serde(deserialize_with = "deserialize_color")]
+    #[serde(serialize_with = "serialize_color")]
+    pub fg1: Color,
+    #[serde(deserialize_with = "deserialize_color")]
+    #[serde(serialize_with = "serialize_color")]
+    pub fg2: Color,
+    #[serde(deserialize_with = "deserialize_color")]
+    #[serde(serialize_with = "serialize_color")]
+    pub fg3: Color,
+}
+
+pub const THEME_ORANGE: Theme = Theme {
+    name: "Orange",
+    fg1: Color::Rgb(255, 214, 128),
+    fg2: Color::Rgb(255, 175, 64),
+    fg3: Color::Rgb(226, 108, 34),
+};
+
+pub const THEME_GREEN: Theme = Theme {
+    name: "Green",
+    fg1: Color::Rgb(175, 255, 135),
+    fg2: Color::Rgb(95, 255, 175),
+    fg3: Color::Rgb(0, 255, 0),
+};
+
+pub const THEME_BLUE: Theme = Theme {
+    name: "Blue",
+    fg1: Color::Rgb(175, 255, 255),
+    fg2: Color::Rgb(95, 135, 255),
+    fg3: Color::Rgb(0, 95, 255),
+};
+
+pub const THEME_PURPLE: Theme = Theme {
+    name: "Purple",
+    fg1: Color::Rgb(255, 175, 255),
+    fg2: Color::Rgb(175, 135, 255),
+    fg3: Color::Rgb(135, 95, 175),
+};
+
+pub const THEME_WHITE: Theme = Theme {
+    name: "White",
+    fg1: Color::White,
+    fg2: Color::Gray,
+    fg3: Color::DarkGray,
+};
+
+pub static THEMES: phf::Map<&'static str, &Theme> = phf_map! {
+    "orange" => &THEME_ORANGE,
+    "green"  => &THEME_GREEN,
+    "blue"   => &THEME_BLUE,
+    "purple" => &THEME_PURPLE,
+    "white"  => &THEME_WHITE,
+};
+
+impl Default for Theme {
+    fn default() -> Self { THEME_WHITE }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

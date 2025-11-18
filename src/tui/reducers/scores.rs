@@ -222,3 +222,216 @@ fn clear_schedule_data(state: &mut AppState) {
     state.data.game_info.clear();
     state.data.period_scores.clear();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nhl_api::GameDate;
+
+    #[test]
+    fn test_date_left_within_window() {
+        let mut state = AppState::default();
+        state.ui.scores.game_date = GameDate::from_ymd(2024, 11, 15).unwrap();
+        state.ui.scores.selected_date_index = 2;
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::DateLeft);
+
+        assert_eq!(new_state.ui.scores.selected_date_index, 1);
+        assert!(matches!(effect, Effect::Action(Action::RefreshData)));
+    }
+
+    #[test]
+    fn test_date_left_at_edge() {
+        let mut state = AppState::default();
+        state.ui.scores.game_date = GameDate::from_ymd(2024, 11, 15).unwrap();
+        state.ui.scores.selected_date_index = 0;
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::DateLeft);
+
+        assert_eq!(new_state.ui.scores.selected_date_index, 0);
+        assert_eq!(new_state.ui.scores.game_date, GameDate::from_ymd(2024, 11, 14).unwrap());
+        assert!(matches!(effect, Effect::Action(Action::RefreshData)));
+    }
+
+    #[test]
+    fn test_date_right_within_window() {
+        let mut state = AppState::default();
+        state.ui.scores.game_date = GameDate::from_ymd(2024, 11, 15).unwrap();
+        state.ui.scores.selected_date_index = 2;
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::DateRight);
+
+        assert_eq!(new_state.ui.scores.selected_date_index, 3);
+        assert!(matches!(effect, Effect::Action(Action::RefreshData)));
+    }
+
+    #[test]
+    fn test_date_right_at_edge() {
+        let mut state = AppState::default();
+        state.ui.scores.game_date = GameDate::from_ymd(2024, 11, 15).unwrap();
+        state.ui.scores.selected_date_index = 4;
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::DateRight);
+
+        assert_eq!(new_state.ui.scores.selected_date_index, 4);
+        assert_eq!(new_state.ui.scores.game_date, GameDate::from_ymd(2024, 11, 16).unwrap());
+        assert!(matches!(effect, Effect::Action(Action::RefreshData)));
+    }
+
+    #[test]
+    fn test_enter_box_selection_with_no_games() {
+        let state = AppState::default();
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::EnterBoxSelection);
+
+        assert!(new_state.ui.scores.box_selection_active);
+        assert_eq!(new_state.ui.scores.selected_game_index, None);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_enter_box_selection_preserves_existing_selection() {
+        let mut state = AppState::default();
+        state.ui.scores.selected_game_index = Some(2);
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::EnterBoxSelection);
+
+        assert!(new_state.ui.scores.box_selection_active);
+        // Should preserve existing selection
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(2));
+    }
+
+    #[test]
+    fn test_exit_box_selection() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = true;
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::ExitBoxSelection);
+
+        assert!(!new_state.ui.scores.box_selection_active);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_game_with_no_selection() {
+        let state = AppState::default();
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGame);
+
+        assert_eq!(new_state.navigation.panel_stack.len(), 0);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_game_with_no_schedule() {
+        let mut state = AppState::default();
+        state.ui.scores.selected_game_index = Some(0);
+        state.data.schedule = None;
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGame);
+
+        // Should not create panel if no schedule
+        assert_eq!(new_state.navigation.panel_stack.len(), 0);
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_select_game_by_id() {
+        let state = AppState::default();
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGameById(98765));
+
+        assert_eq!(new_state.navigation.panel_stack.len(), 1);
+        match &new_state.navigation.panel_stack[0].panel {
+            Panel::Boxscore { game_id } => {
+                assert_eq!(*game_id, 98765);
+            }
+            _ => panic!("Expected Boxscore panel"),
+        }
+        assert!(matches!(effect, Effect::None));
+    }
+
+    #[test]
+    fn test_move_game_selection_up_not_in_box_mode() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = false;
+        state.ui.scores.selected_game_index = Some(5);
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::MoveGameSelectionUp);
+
+        // Should not change since not in box selection mode
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(5));
+    }
+
+    #[test]
+    fn test_move_game_selection_down_not_in_box_mode() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = false;
+        state.ui.scores.selected_game_index = Some(0);
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::MoveGameSelectionDown);
+
+        // Should not change
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(0));
+    }
+
+    #[test]
+    fn test_move_game_selection_left_not_in_box_mode() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = false;
+        state.ui.scores.selected_game_index = Some(2);
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::MoveGameSelectionLeft);
+
+        // Should not change
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(2));
+    }
+
+    #[test]
+    fn test_move_game_selection_left_in_middle_of_row() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = true;
+        state.ui.scores.selected_game_index = Some(5); // Middle of row (col 2)
+        state.ui.scores.boxes_per_row = 3;
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::MoveGameSelectionLeft);
+
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(4));
+    }
+
+    #[test]
+    fn test_move_game_selection_left_at_start_of_row() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = true;
+        state.ui.scores.selected_game_index = Some(3); // Start of row (col 0)
+        state.ui.scores.boxes_per_row = 3;
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::MoveGameSelectionLeft);
+
+        // Should stay at 3 (can't move left from leftmost column)
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(3));
+    }
+
+    #[test]
+    fn test_move_game_selection_right_not_in_box_mode() {
+        let mut state = AppState::default();
+        state.ui.scores.box_selection_active = false;
+        state.ui.scores.selected_game_index = Some(0);
+
+        let (new_state, _) = reduce_scores(state, ScoresAction::MoveGameSelectionRight);
+
+        // Should not change
+        assert_eq!(new_state.ui.scores.selected_game_index, Some(0));
+    }
+
+
+    #[test]
+    fn test_update_boxes_per_row() {
+        let state = AppState::default();
+
+        let (new_state, effect) = reduce_scores(state, ScoresAction::UpdateBoxesPerRow(5));
+
+        assert_eq!(new_state.ui.scores.boxes_per_row, 5);
+        assert!(matches!(effect, Effect::None));
+    }
+}

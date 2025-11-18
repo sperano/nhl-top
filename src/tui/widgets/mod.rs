@@ -70,3 +70,29 @@ pub trait RenderableWidget {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestWidget;
+
+    impl RenderableWidget for TestWidget {
+        fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
+            // Minimal implementation for testing
+        }
+    }
+
+    #[test]
+    fn test_default_preferred_height_returns_none() {
+        let widget = TestWidget;
+        assert_eq!(widget.preferred_height(), None);
+    }
+
+    #[test]
+    fn test_default_preferred_width_returns_none() {
+        let widget = TestWidget;
+        assert_eq!(widget.preferred_width(), None);
+    }
+}

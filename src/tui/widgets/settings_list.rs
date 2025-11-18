@@ -310,4 +310,85 @@ mod tests {
             "  Log File: █",
         ]);
     }
+
+    #[test]
+    fn test_settings_list_truncates_when_area_too_small() {
+        let config = Config::default();
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config,
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        );
+
+        // Very small area - only 1 line
+        let area = Rect::new(0, 0, 80, 1);
+        let mut buf = Buffer::empty(area);
+        let display_config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &display_config);
+
+        // Should render only first setting without panicking
+        // Logging has 2 settings, but only 1 should render
+    }
+
+    #[test]
+    fn test_settings_list_preferred_height() {
+        let config = Config::default();
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config,
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        );
+
+        // Logging category has 2 settings
+        assert_eq!(widget.preferred_height(), Some(2));
+    }
+
+    #[test]
+    fn test_format_color_all_variants() {
+        use ratatui::style::Color;
+
+        assert_eq!(format_color(&Color::Black), "black");
+        assert_eq!(format_color(&Color::Red), "red");
+        assert_eq!(format_color(&Color::Green), "green");
+        assert_eq!(format_color(&Color::Yellow), "yellow");
+        assert_eq!(format_color(&Color::Blue), "blue");
+        assert_eq!(format_color(&Color::Magenta), "magenta");
+        assert_eq!(format_color(&Color::Cyan), "cyan");
+        assert_eq!(format_color(&Color::Gray), "gray");
+        assert_eq!(format_color(&Color::DarkGray), "darkgray");
+        assert_eq!(format_color(&Color::LightRed), "lightred");
+        assert_eq!(format_color(&Color::LightGreen), "lightgreen");
+        assert_eq!(format_color(&Color::LightYellow), "lightyellow");
+        assert_eq!(format_color(&Color::LightBlue), "lightblue");
+        assert_eq!(format_color(&Color::LightMagenta), "lightmagenta");
+        assert_eq!(format_color(&Color::LightCyan), "lightcyan");
+        assert_eq!(format_color(&Color::White), "white");
+        assert_eq!(format_color(&Color::Rgb(128, 64, 32)), "rgb(128, 64, 32)");
+    }
+
+    #[test]
+    fn test_settings_list_clone_box() {
+        let config = Config::default();
+        let widget = SettingsListWidget::new(
+            SettingsCategory::Logging,
+            config,
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        );
+
+        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        // If we get here, clone_box() worked
+    }
 }

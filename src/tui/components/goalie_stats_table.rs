@@ -328,4 +328,100 @@ mod tests {
         // Verify rendering completed
         assert_eq!(*buf.area(), area);
     }
+
+    #[test]
+    fn test_unknown_decision_type() {
+        let mut goalie = create_test_goalie(8471679, "Unknown Decision", Some("X"), 30, 28);
+        goalie.decision = Some("X".to_string());
+
+        let goalies = vec![goalie];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies).with_margin(0);
+
+        let area = Rect::new(0, 0, 80, 6);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        table.render(area, &mut buf, &config);
+
+        // Verify it rendered without panic (unknown decision shows as "-")
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_null_save_percentage() {
+        let mut goalie = create_test_goalie(8471679, "No SV%", Some("W"), 0, 0);
+        goalie.save_pctg = None;
+
+        let goalies = vec![goalie];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies).with_margin(0);
+
+        let area = Rect::new(0, 0, 80, 6);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        table.render(area, &mut buf, &config);
+
+        // Verify it rendered without panic (null SV% shows as "-")
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_with_selection_opt() {
+        let goalies = vec![create_test_goalie(8471679, "Test", Some("W"), 30, 28)];
+
+        let table = GoalieStatsTableWidget::from_game_stats(goalies)
+            .with_selection_opt(Some(0), Some(0));
+
+        let area = Rect::new(0, 0, 80, 6);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        table.render(area, &mut buf, &config);
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_find_next_link_column() {
+        let goalies = vec![create_test_goalie(8471679, "Test", Some("W"), 30, 28)];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
+
+        // Player is column 0 (only link column), so there's no next link
+        assert_eq!(table.find_next_link_column(0), None);
+    }
+
+    #[test]
+    fn test_find_previous_link_column() {
+        let goalies = vec![create_test_goalie(8471679, "Test", Some("W"), 30, 28)];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
+
+        // Column 0 is the first link, so no previous link
+        assert_eq!(table.find_previous_link_column(0), None);
+    }
+
+    #[test]
+    fn test_clone_box() {
+        let goalies = vec![create_test_goalie(8471679, "Test", Some("W"), 30, 28)];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
+
+        let _cloned: Box<dyn RenderableWidget> = table.clone_box();
+        // If we get here, clone_box() worked
+    }
+
+    #[test]
+    fn test_preferred_height() {
+        let goalies = vec![create_test_goalie(8471679, "Test", Some("W"), 30, 28)];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
+
+        // Delegate to inner table, just verify it returns something
+        let _ = table.preferred_height();
+    }
+
+    #[test]
+    fn test_preferred_width() {
+        let goalies = vec![create_test_goalie(8471679, "Test", Some("W"), 30, 28)];
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
+
+        // Delegate to inner table, just verify it returns something
+        let _ = table.preferred_width();
+    }
 }

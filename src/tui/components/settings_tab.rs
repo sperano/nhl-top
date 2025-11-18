@@ -257,4 +257,127 @@ mod tests {
             "data"
         );
     }
+
+    #[test]
+    fn test_modal_open_renders_overlay() {
+        let settings_tab = SettingsTab;
+        let props = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Logging,
+            selected_setting_index: 0, // log_level setting
+            settings_mode: true,
+            focused: true,
+            editing: false,
+            edit_buffer: String::new(),
+            modal_open: true,
+            modal_selected_index: 0,
+        };
+
+        let element = settings_tab.view(&props, &());
+
+        // Should create an overlay element
+        match element {
+            Element::Overlay { .. } => {
+                // Overlay created successfully
+            }
+            _ => panic!("Expected overlay element when modal_open=true"),
+        }
+    }
+
+    #[test]
+    fn test_modal_with_invalid_setting_returns_base() {
+        let settings_tab = SettingsTab;
+        let props = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Display, // Display has no editable settings
+            selected_setting_index: 0,
+            settings_mode: true,
+            focused: true,
+            editing: false,
+            edit_buffer: String::new(),
+            modal_open: true,
+            modal_selected_index: 0,
+        };
+
+        let element = settings_tab.view(&props, &());
+
+        // Should return base element (Container), not overlay, since Display has no editable settings
+        match element {
+            Element::Container { .. } => {
+                // Base element returned as expected
+            }
+            _ => panic!("Expected container element when no valid setting"),
+        }
+    }
+
+    #[test]
+    fn test_render_with_modal_logging_category() {
+        let settings_tab = SettingsTab;
+        let base = Element::Widget(Box::new(crate::tui::widgets::SettingsListWidget::new(
+            SettingsCategory::Logging,
+            Config::default(),
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        )));
+
+        let props = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Logging,
+            selected_setting_index: 0, // log_level
+            settings_mode: true,
+            focused: true,
+            editing: false,
+            edit_buffer: String::new(),
+            modal_open: true,
+            modal_selected_index: 2,
+        };
+
+        let result = settings_tab.render_with_modal(base, &props);
+
+        // Should return an overlay
+        match result {
+            Element::Overlay { .. } => {}
+            _ => panic!("Expected overlay element"),
+        }
+    }
+
+    #[test]
+    fn test_render_with_modal_data_category() {
+        let settings_tab = SettingsTab;
+        let base = Element::Widget(Box::new(crate::tui::widgets::SettingsListWidget::new(
+            SettingsCategory::Data,
+            Config::default(),
+            2,
+            None,
+            false,
+            false,
+            String::new(),
+        )));
+
+        let props = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Data,
+            selected_setting_index: 0, // refresh_interval
+            settings_mode: true,
+            focused: true,
+            editing: false,
+            edit_buffer: String::new(),
+            modal_open: true,
+            modal_selected_index: 0,
+        };
+
+        let result = settings_tab.render_with_modal(base.clone(), &props);
+
+        // Data category settings that aren't list-based should return base
+        // (refresh_interval is not a list setting, only log_level is)
+        // Actually, get_setting_values returns empty vec for non-list settings
+        // So this should still create overlay with empty options
+        match result {
+            Element::Overlay { .. } => {}
+            _ => panic!("Should handle refresh_interval"),
+        }
+    }
 }
