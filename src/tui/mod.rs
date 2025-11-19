@@ -1,9 +1,8 @@
 // Module declarations
 pub mod widgets;
-mod context;
 pub mod components;
 
-// Core modules (formerly framework/)
+// Core modules
 pub mod action;
 pub mod component;
 pub mod effects;
@@ -24,9 +23,6 @@ pub mod testing;
 
 #[cfg(test)]
 mod integration_tests;
-
-#[cfg(test)]
-mod experimental_tests;
 
 pub use action::{Action, ScoresAction};
 pub use component::{Component, Effect, Element};

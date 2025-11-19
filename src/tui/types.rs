@@ -42,13 +42,4 @@ impl Panel {
             Self::PlayerDetail { player_id } => format!("Player {}", player_id),
         }
     }
-
-    /// Get a cache key for this panel (for data caching)
-    pub fn cache_key(&self) -> String {
-        match self {
-            Self::Boxscore { game_id } => format!("boxscore:{}", game_id),
-            Self::TeamDetail { abbrev } => format!("team:{}", abbrev),
-            Self::PlayerDetail { player_id } => format!("player:{}", player_id),
-        }
-    }
 }

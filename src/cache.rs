@@ -5,6 +5,7 @@ use nhl_api::{
 
 pub use cached::Cached;
 
+#[cfg(test)]
 pub async fn clear_all_caches() {
     STANDINGS_CACHE.lock().await.cache_clear();
     SCHEDULE_CACHE.lock().await.cache_clear();
@@ -14,6 +15,7 @@ pub async fn clear_all_caches() {
     PLAYER_INFO_CACHE.lock().await.cache_clear();
 }
 
+#[cfg(test)]
 #[derive(Debug)]
 pub struct CacheStats {
     pub standings_entries: usize,
@@ -24,6 +26,7 @@ pub struct CacheStats {
     pub player_info_entries: usize,
 }
 
+#[cfg(test)]
 pub async fn cache_stats() -> CacheStats {
     CacheStats {
         standings_entries: STANDINGS_CACHE.lock().await.cache_size(),

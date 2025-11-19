@@ -17,8 +17,6 @@ pub enum Action {
     NavigateTabRight,
     EnterContentFocus,  // Down key: move focus from tab bar to content
     ExitContentFocus,   // Up key: move focus from content back to tab bar
-    EnterSubtabMode,    // Deprecated alias for EnterContentFocus
-    ExitSubtabMode,     // Deprecated alias for ExitContentFocus
     PushPanel(Panel),
     PopPanel,
     ToggleCommandPalette,

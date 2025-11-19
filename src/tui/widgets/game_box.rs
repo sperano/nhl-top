@@ -9,7 +9,6 @@ use crate::tui::widgets::{RenderableWidget, ScoreTable};
 /// Constants for game box layout
 const GAME_BOX_WIDTH: usize = 37;
 const GAME_BOX_HEIGHT: usize = 7;
-const HEADER_LEFT_PADDING: usize = 1;
 const HEADER_CONTENT_WIDTH: usize = 36;
 
 /// Game state determines what header to display

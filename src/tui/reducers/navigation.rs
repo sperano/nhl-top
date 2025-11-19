@@ -13,14 +13,6 @@ pub fn reduce_navigation(state: &AppState, action: &Action) -> Option<(AppState,
         Action::NavigateTabRight => Some(navigate_tab_right(state.clone())),
         Action::EnterContentFocus => Some(enter_content_focus(state.clone())),
         Action::ExitContentFocus => Some(exit_content_focus(state.clone())),
-        Action::EnterSubtabMode => {
-            debug!("FOCUS: EnterSubtabMode (deprecated, using EnterContentFocus)");
-            Some(enter_content_focus(state.clone()))
-        }
-        Action::ExitSubtabMode => {
-            debug!("FOCUS: ExitSubtabMode (deprecated, using ExitContentFocus)");
-            Some(exit_content_focus(state.clone()))
-        }
         Action::ToggleCommandPalette => {
             // TODO: Implement command palette toggling
             Some((state.clone(), Effect::None))

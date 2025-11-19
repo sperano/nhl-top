@@ -62,20 +62,6 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_cache_key() {
-        let boxscore = Panel::Boxscore { game_id: 2024020001 };
-        assert_eq!(boxscore.cache_key(), "boxscore:2024020001");
-
-        let team = Panel::TeamDetail {
-            abbrev: "TOR".to_string(),
-        };
-        assert_eq!(team.cache_key(), "team:TOR");
-
-        let player = Panel::PlayerDetail { player_id: 8478402 };
-        assert_eq!(player.cache_key(), "player:8478402");
-    }
-
-    #[test]
     fn test_breadcrumb_trail_empty() {
         let stack: Vec<PanelState> = vec![];
         let trail = breadcrumb_trail(&stack);

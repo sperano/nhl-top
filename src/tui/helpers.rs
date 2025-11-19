@@ -1,9 +1,6 @@
 /// Helper methods and extension traits for common TUI operations
 use nhl_api::{ClubGoalieStats, ClubSkaterStats, SeasonTotal, Standing};
 
-use super::state::{AppState, PanelState};
-use super::types::Panel;
-
 /// Extension trait for sorting standings by points (descending)
 pub trait StandingsSorting {
     fn sort_by_points_desc(&mut self);
@@ -57,45 +54,6 @@ impl SeasonSorting for Vec<SeasonTotal> {
 impl SeasonSorting for Vec<&SeasonTotal> {
     fn sort_by_season_desc(&mut self) {
         self.sort_by(|a, b| b.season.cmp(&a.season));
-    }
-}
-
-/// Helper methods for AppState panel management
-impl AppState {
-    /// Push a panel onto the panel stack with default initialization
-    pub fn push_panel(&mut self, panel: Panel, with_selection: bool) {
-        self.navigation.panel_stack.push(PanelState {
-            panel,
-            scroll_offset: 0,
-            selected_index: if with_selection { Some(0) } else { None },
-        });
-    }
-}
-
-/// Helper methods for PanelState scroll and selection operations
-impl PanelState {
-    /// Scroll up by the given amount (saturating at 0)
-    pub fn scroll_up(&mut self, amount: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(amount);
-    }
-
-    /// Scroll down by the given amount
-    pub fn scroll_down(&mut self, amount: usize) {
-        self.scroll_offset = self.scroll_offset.saturating_add(amount);
-    }
-
-    /// Move selection up by 1 (saturating at 0)
-    pub fn select_previous(&mut self) {
-        if let Some(idx) = self.selected_index {
-            self.selected_index = Some(idx.saturating_sub(1));
-        }
-    }
-
-    /// Move selection down by 1
-    pub fn select_next(&mut self) {
-        if let Some(idx) = self.selected_index {
-            self.selected_index = Some(idx.saturating_add(1));
-        }
     }
 }
 
@@ -263,91 +221,5 @@ mod tests {
             plus_minus: None,
             pim: None,
         }
-    }
-
-    #[test]
-    fn test_app_state_push_panel_with_selection() {
-        let mut state = AppState::default();
-        let panel = Panel::TeamDetail { abbrev: "BOS".to_string() };
-
-        state.push_panel(panel, true);
-
-        assert_eq!(state.navigation.panel_stack.len(), 1);
-        assert_eq!(state.navigation.panel_stack[0].scroll_offset, 0);
-        assert_eq!(state.navigation.panel_stack[0].selected_index, Some(0));
-    }
-
-    #[test]
-    fn test_app_state_push_panel_without_selection() {
-        let mut state = AppState::default();
-        let panel = Panel::Boxscore { game_id: 2024020001 };
-
-        state.push_panel(panel, false);
-
-        assert_eq!(state.navigation.panel_stack.len(), 1);
-        assert_eq!(state.navigation.panel_stack[0].scroll_offset, 0);
-        assert_eq!(state.navigation.panel_stack[0].selected_index, None);
-    }
-
-    #[test]
-    fn test_panel_state_scroll_up() {
-        let mut panel = PanelState {
-            panel: Panel::TeamDetail { abbrev: "BOS".to_string() },
-            scroll_offset: 10,
-            selected_index: None,
-        };
-
-        panel.scroll_up(3);
-        assert_eq!(panel.scroll_offset, 7);
-
-        panel.scroll_up(10);
-        assert_eq!(panel.scroll_offset, 0); // Saturates at 0
-    }
-
-    #[test]
-    fn test_panel_state_scroll_down() {
-        let mut panel = PanelState {
-            panel: Panel::TeamDetail { abbrev: "BOS".to_string() },
-            scroll_offset: 5,
-            selected_index: None,
-        };
-
-        panel.scroll_down(3);
-        assert_eq!(panel.scroll_offset, 8);
-
-        panel.scroll_down(10);
-        assert_eq!(panel.scroll_offset, 18);
-    }
-
-    #[test]
-    fn test_panel_state_select_previous() {
-        let mut panel = PanelState {
-            panel: Panel::TeamDetail { abbrev: "BOS".to_string() },
-            scroll_offset: 0,
-            selected_index: Some(5),
-        };
-
-        panel.select_previous();
-        assert_eq!(panel.selected_index, Some(4));
-
-        // Set to 0 and try again - should saturate
-        panel.selected_index = Some(0);
-        panel.select_previous();
-        assert_eq!(panel.selected_index, Some(0));
-    }
-
-    #[test]
-    fn test_panel_state_select_next() {
-        let mut panel = PanelState {
-            panel: Panel::TeamDetail { abbrev: "BOS".to_string() },
-            scroll_offset: 0,
-            selected_index: Some(5),
-        };
-
-        panel.select_next();
-        assert_eq!(panel.selected_index, Some(6));
-
-        panel.select_next();
-        assert_eq!(panel.selected_index, Some(7));
     }
 }
