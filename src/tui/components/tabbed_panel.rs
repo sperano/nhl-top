@@ -1,6 +1,6 @@
-use crate::config::DisplayConfig;
+use crate::config::{DisplayConfig, SELECTION_STYLE_MODIFIER};
 use crate::tui::component::{vertical, Component, Constraint, Element};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 
 /// A single tab item containing its label and content
 #[derive(Clone)]
@@ -139,14 +139,14 @@ impl TabBarWidget {
                 };
                 let base = Style::default().fg(fg_color);
                 if label.active {
-                    base.add_modifier(Modifier::REVERSED)
+                    base.add_modifier(SELECTION_STYLE_MODIFIER)
                 } else {
                     base
                 }
             } else {
-                // No theme: use default style, reverse for active
+                // No theme: use default style, reverse and bold for active
                 if label.active {
-                    Style::default().add_modifier(Modifier::REVERSED)
+                    Style::default().add_modifier(SELECTION_STYLE_MODIFIER)
                 } else {
                     Style::default()
                 }
@@ -242,7 +242,7 @@ mod tests {
     use crate::tui::component::Element;
     use crate::config::DisplayConfig;
     use crate::formatting::BoxChars;
-    use ratatui::{buffer::Buffer, layout::Rect, style::Color};
+    use ratatui::{buffer::Buffer, layout::Rect, style::{Color, Modifier}};
     use crate::tui::testing::{RENDER_WIDTH, assert_buffer};
 
     // Helper functions for testing framework widgets

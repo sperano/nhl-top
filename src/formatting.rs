@@ -37,7 +37,7 @@ impl BoxChars {
             cross: "┼".to_string(),
             connector2: "┴".to_string(),
             connector3: "┬".to_string(),
-            selector: "▸".to_string(),
+            selector: "►".to_string(),
         }
     }
 

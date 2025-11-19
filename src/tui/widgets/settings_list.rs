@@ -4,7 +4,7 @@
 /// Settings are displayed as "Setting Name: Current Value" pairs.
 
 use ratatui::{buffer::Buffer, layout::Rect, text::Line, style::Style};
-use crate::config::{Config, DisplayConfig};
+use crate::config::{Config, DisplayConfig, SELECTION_STYLE_MODIFIER};
 use crate::tui::component::RenderableWidget;
 use crate::tui::SettingsCategory;
 
@@ -113,20 +113,11 @@ impl RenderableWidget for SettingsListWidget {
             let key_with_colon = format!("{}:", key);
             let line_text = format!("{}{:width$}  {}", selector, key_with_colon, display_value, width = max_key_len);
 
-            // Apply fg2 style from theme (or default if no theme), with REVERSED for selection
+            // Apply fg2 style from theme (or default if no theme), with REVERSED and BOLD for selection
             let style = if let Some(theme) = &config.theme {
-                let base = Style::default().fg(theme.fg2);
-                if is_selected {
-                    base.add_modifier(ratatui::style::Modifier::REVERSED)
-                } else {
-                    base
-                }
+                Style::default().fg(theme.fg2)
             } else {
-                if is_selected {
-                    Style::default().add_modifier(ratatui::style::Modifier::REVERSED)
-                } else {
-                    Style::default()
-                }
+                Style::default()
             };
 
             let line = Line::from(line_text).style(style);
@@ -281,7 +272,7 @@ mod tests {
         assert_buffer(&buf, &[
             "",
             &format!("    Log Level:  {}", config.log_level),
-            "  ▸ Log File:   /tmp/test.log█",
+            "  ► Log File:   /tmp/test.log█",
         ]);
     }
 
@@ -310,7 +301,7 @@ mod tests {
         assert_buffer(&buf, &[
             "",
             &format!("    Log Level:  {}", config.log_level),
-            &format!("  ▸ Log File:   {}", config.log_file),
+            &format!("  ► Log File:   {}", config.log_file),
         ]);
     }
 
@@ -339,7 +330,7 @@ mod tests {
         assert_buffer(&buf, &[
             "",
             "    Log Level:  info",
-            "  ▸ Log File:   █",
+            "  ► Log File:   █",
         ]);
     }
 

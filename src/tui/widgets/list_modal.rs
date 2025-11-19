@@ -109,6 +109,13 @@ pub fn render_list_modal(
         Style::default()
     };
 
+    // Determine selector style based on theme
+    let selector_style = if let Some(theme) = &config.theme {
+        Style::default().fg(theme.fg2)
+    } else {
+        Style::default()
+    };
+
     // Render options
     for (idx, option) in options.iter().enumerate() {
         if y >= inner.bottom() {
@@ -118,7 +125,8 @@ pub fn render_list_modal(
         let is_selected = idx == selected_index;
 
         if is_selected {
-            buf.set_string(inner.x, y, " ► ", Style::default().fg(config.selection_fg));
+            let selector = format!(" {} ", config.box_chars.selector);
+            buf.set_string(inner.x, y, &selector, selector_style);
             buf.set_string(inner.x + 3, y, option, text_style);
         } else {
             buf.set_string(inner.x, y, "   ", Style::default());
@@ -211,7 +219,7 @@ mod tests {
             &config,
         );
 
-        // First option should have selection indicator (►)
+        // First option should have selection indicator (▸)
         assert_buffer(&buf, &[
             "",
             "     ┌──────────┐",
@@ -242,7 +250,7 @@ mod tests {
             &config,
         );
 
-        // Second option should have selection indicator (►)
+        // Second option should have selection indicator (▸)
         assert_buffer(&buf, &[
             "",
             "     ┌──────────┐",

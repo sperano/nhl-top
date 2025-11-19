@@ -3,11 +3,14 @@ use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
 use std::fs;
 use std::path::PathBuf;
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier};
 use phf::phf_map;
 
 /// Factor used to darken theme colors (0.5 = 50% darker)
 const DARKENING_FACTOR: f32 = 0.5;
+
+/// Style modifier for selected items (reversed and bold)
+pub const SELECTION_STYLE_MODIFIER: Modifier = Modifier::REVERSED.union(Modifier::BOLD);
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(default)]
