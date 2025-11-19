@@ -5,13 +5,13 @@
 /// - Clear background behind modal
 /// - Border with selection color
 /// - Selection indicator for current option
-
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Style,
     widgets::{Block, Borders, Clear, Widget},
 };
+use unicode_width::UnicodeWidthStr;
 use crate::config::DisplayConfig;
 use crate::tui::component::RenderableWidget;
 
@@ -67,7 +67,7 @@ pub fn render_list_modal(
 ) -> Rect {
     // Calculate modal size
     let modal_height = options.len() as u16 + 2; // +2 for borders
-    let max_option_len = options.iter().map(|s| s.len()).max().unwrap_or(20);
+    let max_option_len = options.iter().map(|s| s.width()).max().unwrap_or(20);
     let modal_width = max_option_len as u16 + 6;
 
     // Position modal at specified coordinates
@@ -425,5 +425,82 @@ mod tests {
         let widget = ListModalWidget::new(options, 0, 15, 8);
         assert_eq!(widget.position_x, 15);
         assert_eq!(widget.position_y, 8);
+    }
+
+    #[test]
+    fn test_list_modal_with_emoji() {
+        let config = test_config();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 40, 8));
+        let area = Rect::new(0, 0, 40, 8);
+
+        // Emoji have display width of 2 but byte length > 1
+        let options = vec!["Hockey 🏒".to_string(), "Goal 🥅".to_string()];
+
+        let modal_area = render_list_modal(
+            &options,
+            0,
+            5,  // position_x
+            2,  // position_y
+            area,
+            &mut buf,
+            &config,
+        );
+
+        // Modal should accommodate the display width properly
+        // "Hockey 🏒" has display width of 9 (6 + 1 space + 2 for emoji)
+        // With +6 for borders and margins, modal should be ~15 wide
+        assert!(modal_area.width >= 15, "Modal width should accommodate emoji display width");
+    }
+
+    #[test]
+    fn test_list_modal_with_cjk_characters() {
+        let config = test_config();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 8));
+        let area = Rect::new(0, 0, 50, 8);
+
+        // CJK characters have display width of 2 but byte length of 3
+        let options = vec!["日本語".to_string(), "中文".to_string()];
+
+        let modal_area = render_list_modal(
+            &options,
+            0,
+            5,  // position_x
+            2,  // position_y
+            area,
+            &mut buf,
+            &config,
+        );
+
+        // "日本語" has display width of 6 (3 chars × 2 width each)
+        // With +6 for borders and margins, modal should be ~12 wide
+        assert!(modal_area.width >= 12, "Modal width should accommodate CJK character display width");
+    }
+
+    #[test]
+    fn test_list_modal_with_mixed_unicode() {
+        let config = test_config();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 10));
+        let area = Rect::new(0, 0, 50, 10);
+
+        // Mix of ASCII, emoji, and CJK
+        let options = vec![
+            "Player 🏒".to_string(),
+            "選手".to_string(),
+            "Goalie 🥅".to_string(),
+        ];
+
+        let modal_area = render_list_modal(
+            &options,
+            1,
+            5,  // position_x
+            2,  // position_y
+            area,
+            &mut buf,
+            &config,
+        );
+
+        // Should render without panic or overflow
+        assert!(modal_area.width > 0);
+        assert!(modal_area.height == 5); // 3 options + 2 borders
     }
 }

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use nhl_api::Standing;
 use crate::commands::standings::GroupBy;
+use crate::tui::helpers::StandingsSorting;
 
 /// Build standings layout: layout[column][row] = team_abbrev
 ///
@@ -111,7 +112,7 @@ pub fn count_teams_in_wildcard_column(
 
     // Sort teams within each division by points
     for teams in grouped.values_mut() {
-        teams.sort_by(|a, b| b.points.cmp(&a.points));
+        teams.sort_by_points_desc();
     }
 
     // Extract divisions
@@ -138,9 +139,7 @@ pub fn count_teams_in_wildcard_column(
     // Determine which conference is in which column based on western_first
     if western_first {
         if column == 0 { western_count } else { eastern_count }
-    } else {
-        if column == 0 { eastern_count } else { western_count }
-    }
+    } else if column == 0 { eastern_count } else { western_count }
 }
 
 // Private helper functions for building layouts
@@ -148,7 +147,7 @@ pub fn count_teams_in_wildcard_column(
 fn build_league_layout(standings: &[Standing]) -> Vec<Vec<String>> {
     // Single column, sorted by points
     let mut sorted = standings.to_vec();
-    sorted.sort_by(|a, b| b.points.cmp(&a.points));
+    sorted.sort_by_points_desc();
     vec![sorted.iter().map(|s| s.team_abbrev.default.clone()).collect()]
 }
 
@@ -161,7 +160,7 @@ fn build_conference_layout(standings: &[Standing], western_first: bool) -> Vec<V
     }
 
     for teams in grouped.values_mut() {
-        teams.sort_by(|a, b| b.points.cmp(&a.points));
+        teams.sort_by_points_desc();
     }
 
     let groups: Vec<_> = grouped.into_iter().collect();
@@ -187,7 +186,7 @@ fn build_division_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
     }
 
     for teams in grouped.values_mut() {
-        teams.sort_by(|a, b| b.points.cmp(&a.points));
+        teams.sort_by_points_desc();
     }
 
     let mut eastern_divs = Vec::new();
@@ -231,7 +230,7 @@ fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
     }
 
     for teams in grouped.values_mut() {
-        teams.sort_by(|a, b| b.points.cmp(&a.points));
+        teams.sort_by_points_desc();
     }
 
     let atlantic = grouped.get("Atlantic").cloned().unwrap_or_default();
@@ -244,7 +243,7 @@ fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
         teams.extend(atlantic.iter().take(3).cloned());
         teams.extend(metropolitan.iter().take(3).cloned());
         let mut wildcards: Vec<_> = atlantic.iter().skip(3).chain(metropolitan.iter().skip(3)).cloned().collect();
-        wildcards.sort_by(|a, b| b.points.cmp(&a.points));
+        wildcards.sort_by_points_desc();
         teams.extend(wildcards);
         teams.iter().map(|s| s.team_abbrev.default.clone()).collect()
     };
@@ -254,7 +253,7 @@ fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
         teams.extend(central.iter().take(3).cloned());
         teams.extend(pacific.iter().take(3).cloned());
         let mut wildcards: Vec<_> = central.iter().skip(3).chain(pacific.iter().skip(3)).cloned().collect();
-        wildcards.sort_by(|a, b| b.points.cmp(&a.points));
+        wildcards.sort_by_points_desc();
         teams.extend(wildcards);
         teams.iter().map(|s| s.team_abbrev.default.clone()).collect()
     };

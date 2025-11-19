@@ -2,7 +2,6 @@
 ///
 /// This is a composition widget that combines a header line with a ScoreTable.
 /// Fixed dimensions: 37 columns × 7 rows (1 for header + 6 for score table)
-
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::{RenderableWidget, ScoreTable};
@@ -123,7 +122,7 @@ impl RenderableWidget for GameBox {
             let header = self.generate_header();
             let header_line = format!(
                 "{}{:<width$}",
-                " ".repeat(HEADER_LEFT_PADDING),
+                " ".to_string(),
                 header,
                 width = HEADER_CONTENT_WIDTH
             );

@@ -8,6 +8,7 @@ use ratatui::{
 use nhl_api::{ClubStats, Standing};
 
 use crate::config::DisplayConfig;
+use crate::tui::helpers::{ClubSkaterStatsSorting, ClubGoalieStatsSorting};
 use crate::tui::{
     component::{Component, Element, RenderableWidget},
     Alignment, CellValue, ColumnDef,
@@ -100,11 +101,11 @@ impl RenderableWidget for TeamDetailPanelWidget {
 
         // Sort skaters by points descending
         let mut sorted_skaters = stats.skaters.clone();
-        sorted_skaters.sort_by(|a, b| b.points.cmp(&a.points));
+        sorted_skaters.sort_by_points_desc();
 
         // Sort goalies by games played descending
         let mut sorted_goalies = stats.goalies.clone();
-        sorted_goalies.sort_by(|a, b| b.games_played.cmp(&a.games_played));
+        sorted_goalies.sort_by_games_played_desc();
 
         let total_skaters = sorted_skaters.len();
         let total_players = total_skaters + sorted_goalies.len();

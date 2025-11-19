@@ -2,7 +2,6 @@
 ///
 /// This module contains type definitions that are shared between
 /// the library (commands, tui) and the binary (main.rs).
-
 use nhl_api::{Standing, DailySchedule};
 use std::sync::Arc;
 use std::collections::HashMap;

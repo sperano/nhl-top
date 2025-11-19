@@ -15,6 +15,7 @@ use super::types::{Panel, SettingsCategory, Tab};
 /// All state changes happen through the reducer.
 /// Components receive slices of this state as props.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct AppState {
     /// Navigation state (which tab, panel stack)
     pub navigation: NavigationState,
@@ -29,16 +30,6 @@ pub struct AppState {
     pub system: SystemState,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self {
-            navigation: NavigationState::default(),
-            data: DataState::default(),
-            ui: UiState::default(),
-            system: SystemState::default(),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct NavigationState {
@@ -68,6 +59,7 @@ pub struct PanelState {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct DataState {
     // API data
     pub standings: Option<Vec<Standing>>,
@@ -85,21 +77,6 @@ pub struct DataState {
     pub errors: HashMap<String, String>,
 }
 
-impl Default for DataState {
-    fn default() -> Self {
-        Self {
-            standings: None,
-            schedule: None,
-            game_info: HashMap::new(),
-            period_scores: HashMap::new(),
-            boxscores: HashMap::new(),
-            team_roster_stats: HashMap::new(),
-            player_data: HashMap::new(),
-            loading: HashSet::new(),
-            errors: HashMap::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoadingKey {
@@ -112,21 +89,13 @@ pub enum LoadingKey {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct UiState {
     pub scores: ScoresUiState,
     pub standings: StandingsUiState,
     pub settings: SettingsUiState,
 }
 
-impl Default for UiState {
-    fn default() -> Self {
-        Self {
-            scores: ScoresUiState::default(),
-            standings: StandingsUiState::default(),
-            settings: SettingsUiState::default(),
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct ScoresUiState {
@@ -175,6 +144,7 @@ impl Default for StandingsUiState {
 }
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct SettingsUiState {
     pub selected_category: SettingsCategory,
     pub selected_setting_index: usize,
@@ -185,21 +155,9 @@ pub struct SettingsUiState {
     pub modal_selected_index: usize, // Selected index within the modal
 }
 
-impl Default for SettingsUiState {
-    fn default() -> Self {
-        Self {
-            selected_category: SettingsCategory::default(),
-            selected_setting_index: 0,
-            settings_mode: false,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: false,
-            modal_selected_index: 0,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct SystemState {
     pub last_refresh: Option<SystemTime>,
     pub config: Config,
@@ -207,13 +165,3 @@ pub struct SystemState {
     pub status_is_error: bool,
 }
 
-impl Default for SystemState {
-    fn default() -> Self {
-        Self {
-            last_refresh: None,
-            config: Config::default(),
-            status_message: None,
-            status_is_error: false,
-        }
-    }
-}

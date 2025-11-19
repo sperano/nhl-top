@@ -16,7 +16,7 @@ pub fn format_schedule(schedule: &DailySchedule) -> String {
         // Display each game in a box
         for (i, game) in schedule.games.iter().enumerate() {
             if i > 0 {
-                output.push_str("\n");
+                output.push('\n');
             }
             output.push_str(&format!("┌{:─<62}┐\n", ""));
             let team_line = format!("{} @ {}", game.away_team.abbrev, game.home_team.abbrev);

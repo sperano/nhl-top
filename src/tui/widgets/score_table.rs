@@ -2,7 +2,6 @@
 ///
 /// This widget renders a table showing scores for each period of a hockey game,
 /// with support for regular periods (1st, 2nd, 3rd), overtime, and shootout.
-
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::RenderableWidget;
@@ -83,16 +82,12 @@ impl ScoreTable {
         let total_cols = self.total_columns();
         // Current width = 1 (left border) + 5 (team) + (total_cols-1) * (1 sep + 4 data) + 1 (right border)
         let current_width = 1 + TEAM_ABBREV_COL_WIDTH + (total_cols - 1) * (1 + PERIOD_COL_WIDTH) + 1;
-        if current_width < TABLE_WIDTH {
-            TABLE_WIDTH - current_width
-        } else {
-            0
-        }
+        TABLE_WIDTH.saturating_sub(current_width)
     }
 
     /// Check if a period should show score or dash (for live games)
     fn should_show_period(&self, period: i32) -> bool {
-        self.current_period.map_or(true, |current| period <= current)
+        self.current_period.is_none_or(|current| period <= current)
     }
 
     /// Get period score at given index

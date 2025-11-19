@@ -177,7 +177,7 @@ impl App {
     /// Render Standings tab content
     fn render_standings_tab(&self, state: &AppState) -> Element {
         let props = StandingsTabProps {
-            view: state.ui.standings.view.clone(),
+            view: state.ui.standings.view,
             browse_mode: state.ui.standings.browse_mode,
             selected_column: state.ui.standings.selected_column,
             selected_row: state.ui.standings.selected_row,

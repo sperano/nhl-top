@@ -48,17 +48,17 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
     // Each returns Option<(AppState, Effect)> - None means it didn't handle the action
 
     // Navigation actions
-    if let Some(result) = reduce_navigation(state.clone(), &action) {
+    if let Some(result) = reduce_navigation(&state, &action) {
         return result;
     }
 
     // Panel management actions
-    if let Some(result) = reduce_panels(state.clone(), &action) {
+    if let Some(result) = reduce_panels(&state, &action) {
         return result;
     }
 
     // Data loading actions
-    if let Some(result) = reduce_data_loading(state.clone(), &action) {
+    if let Some(result) = reduce_data_loading(&state, &action) {
         return result;
     }
 

@@ -229,7 +229,7 @@ impl RenderableWidget for GameListWidget {
                     .collect();
 //
                 // Render in grid layout
-                let rows = (game_boxes.len() as u16 + boxes_per_row - 1) / boxes_per_row;
+                let rows = (game_boxes.len() as u16).div_ceil(boxes_per_row);
 //
                 for row_idx in 0..rows {
                     let row_y = area.y + row_idx * (GAME_BOX_HEIGHT + 1);

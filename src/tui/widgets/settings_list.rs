@@ -2,9 +2,8 @@
 ///
 /// This widget renders a simple key-value table for configuration settings.
 /// Settings are displayed as "Setting Name: Current Value" pairs.
-
 use ratatui::{buffer::Buffer, layout::Rect, text::Line, style::Style};
-use crate::config::{Config, DisplayConfig, SELECTION_STYLE_MODIFIER};
+use crate::config::{Config, DisplayConfig};
 use crate::tui::component::RenderableWidget;
 use crate::tui::SettingsCategory;
 

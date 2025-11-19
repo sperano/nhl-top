@@ -7,6 +7,7 @@ pub mod components;
 pub mod action;
 pub mod component;
 pub mod effects;
+pub mod helpers;
 pub mod keys;
 pub mod navigation;
 pub mod reducer;
@@ -170,7 +171,7 @@ pub async fn run(
                 let action = key_to_action(key, runtime.state());
 
                 // Check for quit action before handling
-                let should_quit = action.as_ref().map_or(false, is_quit_action);
+                let should_quit = action.as_ref().is_some_and(is_quit_action);
 
                 // Dispatch action if we have one
                 if let Some(act) = action {

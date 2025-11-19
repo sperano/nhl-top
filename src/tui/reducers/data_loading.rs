@@ -6,24 +6,24 @@ use crate::tui::component::Effect;
 use crate::tui::state::{AppState, LoadingKey};
 
 /// Handle all data loading actions (API responses)
-pub fn reduce_data_loading(state: AppState, action: &Action) -> Option<(AppState, Effect)> {
+pub fn reduce_data_loading(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
     match action {
-        Action::StandingsLoaded(result) => Some(handle_standings_loaded(state, result.clone())),
-        Action::ScheduleLoaded(result) => Some(handle_schedule_loaded(state, result.clone())),
+        Action::StandingsLoaded(result) => Some(handle_standings_loaded(state.clone(), result.clone())),
+        Action::ScheduleLoaded(result) => Some(handle_schedule_loaded(state.clone(), result.clone())),
         Action::GameDetailsLoaded(game_id, result) => {
-            Some(handle_game_details_loaded(state, *game_id, result.clone()))
+            Some(handle_game_details_loaded(state.clone(), *game_id, result.clone()))
         }
         Action::BoxscoreLoaded(game_id, result) => {
-            Some(handle_boxscore_loaded(state, *game_id, result.clone()))
+            Some(handle_boxscore_loaded(state.clone(), *game_id, result.clone()))
         }
         Action::TeamRosterStatsLoaded(team_abbrev, result) => {
-            Some(handle_team_roster_loaded(state, team_abbrev.clone(), result.clone()))
+            Some(handle_team_roster_loaded(state.clone(), team_abbrev.clone(), result.clone()))
         }
         Action::PlayerStatsLoaded(player_id, result) => {
-            Some(handle_player_stats_loaded(state, *player_id, result.clone()))
+            Some(handle_player_stats_loaded(state.clone(), *player_id, result.clone()))
         }
-        Action::RefreshData => Some(handle_refresh_data(state)),
-        Action::SetGameDate(date) => Some(handle_set_game_date(state, date.clone())),
+        Action::RefreshData => Some(handle_refresh_data(state.clone())),
+        Action::SetGameDate(date) => Some(handle_set_game_date(state.clone(), date.clone())),
         _ => None,
     }
 }

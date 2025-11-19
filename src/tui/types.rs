@@ -24,17 +24,14 @@ pub enum Panel {
 
 /// Settings category enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum SettingsCategory {
+    #[default]
     Logging,
     Display,
     Data,
 }
 
-impl Default for SettingsCategory {
-    fn default() -> Self {
-        Self::Logging
-    }
-}
 
 impl Panel {
     /// Get the display label for this panel (for breadcrumbs)

@@ -44,34 +44,34 @@ pub enum GroupBy {
 impl GroupBy {
     pub fn name(&self) -> &str {
         match self {
-            GroupBy::Division => "Division",
-            GroupBy::Conference => "Conference",
-            GroupBy::League => "League",
-            GroupBy::Wildcard => "Wildcard",
+            Self::Division => "Division",
+            Self::Conference => "Conference",
+            Self::League => "League",
+            Self::Wildcard => "Wildcard",
         }
     }
 
-    pub fn all() -> [GroupBy; 4] {
-        [GroupBy::Wildcard, GroupBy::Division, GroupBy::Conference, GroupBy::League]
+    pub fn all() -> [Self; 4] {
+        [Self::Wildcard, Self::Division, Self::Conference, Self::League]
     }
 
     /// Get the next view in the cycle (Wildcard → Division → Conference → League → Wildcard)
     pub fn next(&self) -> Self {
         match self {
-            GroupBy::Wildcard => GroupBy::Division,
-            GroupBy::Division => GroupBy::Conference,
-            GroupBy::Conference => GroupBy::League,
-            GroupBy::League => GroupBy::Wildcard,
+            Self::Wildcard => Self::Division,
+            Self::Division => Self::Conference,
+            Self::Conference => Self::League,
+            Self::League => Self::Wildcard,
         }
     }
 
     /// Get the previous view in the cycle (Wildcard → League → Conference → Division → Wildcard)
     pub fn prev(&self) -> Self {
         match self {
-            GroupBy::Wildcard => GroupBy::League,
-            GroupBy::Division => GroupBy::Wildcard,
-            GroupBy::Conference => GroupBy::Division,
-            GroupBy::League => GroupBy::Conference,
+            Self::Wildcard => Self::League,
+            Self::Division => Self::Wildcard,
+            Self::Conference => Self::Division,
+            Self::League => Self::Conference,
         }
     }
 }
@@ -304,7 +304,7 @@ fn format_wildcard_conference(
             // Header has 3 lines (title, underline, blank) + table header (2 lines) + teams
             let cutoff_line_idx = 3 + 2 + 2; // After 2nd team row
             if lines.len() > cutoff_line_idx {
-                lines.insert(cutoff_line_idx, format!("{}", display.box_chars.horizontal.repeat(SEPARATOR_LINE_WIDTH)));
+                lines.insert(cutoff_line_idx, display.box_chars.horizontal.repeat(SEPARATOR_LINE_WIDTH).to_string());
             }
         }
     }
@@ -431,6 +431,64 @@ mod tests {
         assert_eq!(all[1], GroupBy::Division);
         assert_eq!(all[2], GroupBy::Conference);
         assert_eq!(all[3], GroupBy::League);
+    }
+
+    #[test]
+    fn test_groupby_next_full_cycle() {
+        // Test full cycle: Wildcard → Division → Conference → League → Wildcard
+        let wildcard = GroupBy::Wildcard;
+        let division = wildcard.next();
+        assert_eq!(division, GroupBy::Division);
+
+        let conference = division.next();
+        assert_eq!(conference, GroupBy::Conference);
+
+        let league = conference.next();
+        assert_eq!(league, GroupBy::League);
+
+        let back_to_wildcard = league.next();
+        assert_eq!(back_to_wildcard, GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_groupby_prev_full_cycle() {
+        // Test full cycle: Wildcard → League → Conference → Division → Wildcard
+        let wildcard = GroupBy::Wildcard;
+        let league = wildcard.prev();
+        assert_eq!(league, GroupBy::League);
+
+        let conference = league.prev();
+        assert_eq!(conference, GroupBy::Conference);
+
+        let division = conference.prev();
+        assert_eq!(division, GroupBy::Division);
+
+        let back_to_wildcard = division.prev();
+        assert_eq!(back_to_wildcard, GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_groupby_next_from_each_variant() {
+        assert_eq!(GroupBy::Wildcard.next(), GroupBy::Division);
+        assert_eq!(GroupBy::Division.next(), GroupBy::Conference);
+        assert_eq!(GroupBy::Conference.next(), GroupBy::League);
+        assert_eq!(GroupBy::League.next(), GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_groupby_prev_from_each_variant() {
+        assert_eq!(GroupBy::Wildcard.prev(), GroupBy::League);
+        assert_eq!(GroupBy::Division.prev(), GroupBy::Wildcard);
+        assert_eq!(GroupBy::Conference.prev(), GroupBy::Division);
+        assert_eq!(GroupBy::League.prev(), GroupBy::Conference);
+    }
+
+    #[test]
+    fn test_groupby_name_all_variants() {
+        assert_eq!(GroupBy::Wildcard.name(), "Wildcard");
+        assert_eq!(GroupBy::Division.name(), "Division");
+        assert_eq!(GroupBy::Conference.name(), "Conference");
+        assert_eq!(GroupBy::League.name(), "League");
     }
 
     #[test]

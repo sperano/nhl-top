@@ -2,13 +2,226 @@
 ///
 /// This module handles converting crossterm KeyEvents into framework Actions.
 /// It contains all the keyboard navigation logic for the TUI.
-
 use crossterm::event::{KeyCode, KeyEvent};
 use tracing::{debug, trace};
 
 use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
 use super::state::AppState;
 use super::types::{SettingsCategory, Tab};
+
+/// Handle global keys that work regardless of tab or focus state
+fn handle_global_keys(key_code: KeyCode) -> Option<Action> {
+    match key_code {
+        KeyCode::Char('q') | KeyCode::Char('Q') => Some(Action::Quit),
+        KeyCode::Char('/') => Some(Action::ToggleCommandPalette),
+        _ => None,
+    }
+}
+
+/// Handle ESC key with priority-based navigation up through focus hierarchy
+fn handle_esc_key(state: &AppState) -> Option<Action> {
+    // Priority 1: If there's a panel open, close it
+    if !state.navigation.panel_stack.is_empty() {
+        debug!("KEY: ESC pressed with panel open - popping panel");
+        return Some(Action::PopPanel);
+    }
+
+    // Priority 2: If in modal on Settings tab, cancel modal
+    if state.ui.settings.modal_open {
+        debug!("KEY: ESC pressed in modal - canceling modal");
+        return Some(Action::SettingsAction(SettingsAction::ModalCancel));
+    }
+
+    // Priority 2.5: If editing on Settings tab, cancel editing
+    if state.ui.settings.editing {
+        debug!("KEY: ESC pressed while editing - canceling edit");
+        return Some(Action::SettingsAction(SettingsAction::CancelEditing));
+    }
+
+    // Priority 3: If in box selection mode on Scores tab, exit to date subtabs
+    if state.ui.scores.box_selection_active {
+        debug!("KEY: ESC pressed in box selection - exiting to date subtabs");
+        return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
+    }
+
+    // Priority 4: If in browse mode on Standings tab, exit to view subtabs
+    if state.ui.standings.browse_mode {
+        debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
+        return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
+    }
+
+    // Priority 5: If in settings mode on Settings tab, exit to category subtabs
+    if state.ui.settings.settings_mode {
+        debug!("KEY: ESC pressed in settings mode - exiting to category subtabs");
+        return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
+    }
+
+    // Priority 6: If content is focused, return to tab bar
+    if state.navigation.content_focused {
+        debug!("KEY: ESC pressed in content - returning to tab bar");
+        return Some(Action::ExitContentFocus);
+    }
+
+    // Priority 7: At top level (tab bar), do nothing - use 'q' to quit
+    debug!("KEY: ESC pressed at tab bar - ignoring (use 'q' to quit)");
+    None
+}
+
+/// Handle navigation when a panel is open
+fn handle_panel_navigation(key_code: KeyCode) -> Option<Action> {
+    match key_code {
+        KeyCode::Up => {
+            debug!("KEY: Up pressed in panel - moving selection up");
+            Some(Action::PanelSelectPrevious)
+        }
+        KeyCode::Down => {
+            debug!("KEY: Down pressed in panel - moving selection down");
+            Some(Action::PanelSelectNext)
+        }
+        KeyCode::Enter => {
+            debug!("KEY: Enter pressed in panel - selecting item");
+            Some(Action::PanelSelectItem)
+        }
+        _ => None,
+    }
+}
+
+/// Handle direct tab switching via number keys (1-6)
+fn handle_number_keys(key_code: KeyCode) -> Option<Action> {
+    match key_code {
+        KeyCode::Char('1') => Some(Action::NavigateTab(Tab::Scores)),
+        KeyCode::Char('2') => Some(Action::NavigateTab(Tab::Standings)),
+        KeyCode::Char('3') => Some(Action::NavigateTab(Tab::Stats)),
+        KeyCode::Char('4') => Some(Action::NavigateTab(Tab::Players)),
+        KeyCode::Char('5') => Some(Action::NavigateTab(Tab::Settings)),
+        KeyCode::Char('6') => Some(Action::NavigateTab(Tab::Browser)),
+        _ => None,
+    }
+}
+
+/// Handle navigation when tab bar is focused (Left/Right/Down)
+fn handle_tab_bar_navigation(key_code: KeyCode) -> Option<Action> {
+    match key_code {
+        KeyCode::Left => Some(Action::NavigateTabLeft),
+        KeyCode::Right => Some(Action::NavigateTabRight),
+        KeyCode::Down => {
+            debug!("KEY: Down pressed on tab bar - entering content focus");
+            Some(Action::EnterContentFocus)
+        }
+        _ => None,
+    }
+}
+
+/// Handle Scores tab navigation (box selection mode vs date mode)
+fn handle_scores_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Action> {
+    if state.ui.scores.box_selection_active {
+        // Box selection mode - arrows navigate within game grid
+        match key_code {
+            KeyCode::Down => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown)),
+            KeyCode::Left => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft)),
+            KeyCode::Right => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight)),
+            KeyCode::Enter => Some(Action::ScoresAction(ScoresAction::SelectGame)),
+            _ => None,
+        }
+    } else {
+        // Date navigation mode - arrows navigate dates
+        match key_code {
+            KeyCode::Left => Some(Action::ScoresAction(ScoresAction::DateLeft)),
+            KeyCode::Right => Some(Action::ScoresAction(ScoresAction::DateRight)),
+            KeyCode::Down => Some(Action::ScoresAction(ScoresAction::EnterBoxSelection)),
+            KeyCode::Enter => Some(Action::ScoresAction(ScoresAction::SelectGame)),
+            _ => None,
+        }
+    }
+}
+
+/// Handle Standings tab navigation (browse mode vs view selection mode)
+fn handle_standings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Action> {
+    if state.ui.standings.browse_mode {
+        // Browse mode - navigate teams and columns
+        match key_code {
+            KeyCode::Down => Some(Action::StandingsAction(StandingsAction::MoveSelectionDown)),
+            KeyCode::Left => Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft)),
+            KeyCode::Right => Some(Action::StandingsAction(StandingsAction::MoveSelectionRight)),
+            KeyCode::Enter => Some(Action::StandingsAction(StandingsAction::SelectTeam)),
+            _ => None,
+        }
+    } else {
+        // View selection mode - arrows navigate views (Division/Conference/League)
+        match key_code {
+            KeyCode::Left => Some(Action::StandingsAction(StandingsAction::CycleViewLeft)),
+            KeyCode::Right => Some(Action::StandingsAction(StandingsAction::CycleViewRight)),
+            KeyCode::Down => Some(Action::StandingsAction(StandingsAction::EnterBrowseMode)),
+            _ => None,
+        }
+    }
+}
+
+/// Handle Settings tab navigation (modal, editing, settings mode, or category mode)
+fn handle_settings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Action> {
+    // Check if modal is open
+    if state.ui.settings.modal_open {
+        // In modal mode - handle modal navigation
+        return match key_code {
+            KeyCode::Up => Some(Action::SettingsAction(SettingsAction::ModalMoveUp)),
+            KeyCode::Down => Some(Action::SettingsAction(SettingsAction::ModalMoveDown)),
+            KeyCode::Enter => Some(Action::SettingsAction(SettingsAction::ModalConfirm)),
+            _ => None,
+        };
+    }
+
+    // Check if editing
+    if state.ui.settings.editing {
+        // In editing mode - handle text input
+        return match key_code {
+            KeyCode::Char(ch) => Some(Action::SettingsAction(SettingsAction::AppendChar(ch))),
+            KeyCode::Backspace => Some(Action::SettingsAction(SettingsAction::DeleteChar)),
+            KeyCode::Enter => {
+                // Commit the edit
+                let setting_key = get_editable_setting_key_for_index(
+                    state.ui.settings.selected_category,
+                    state.ui.settings.selected_setting_index,
+                );
+                setting_key.map(|key| Action::SettingsAction(SettingsAction::CommitEdit(key)))
+            }
+            _ => None,
+        };
+    }
+
+    // Check if in settings navigation mode
+    if state.ui.settings.settings_mode {
+        // In settings navigation mode - arrows navigate settings, Enter activates
+        return match key_code {
+            KeyCode::Up => Some(Action::SettingsAction(SettingsAction::MoveSelectionUp)),
+            KeyCode::Down => Some(Action::SettingsAction(SettingsAction::MoveSelectionDown)),
+            KeyCode::Enter => {
+                // Check if it's a boolean setting (toggle) or editable setting (start edit)
+                let boolean_key = get_setting_key_for_index(
+                    state.ui.settings.selected_category,
+                    state.ui.settings.selected_setting_index,
+                );
+                if let Some(key) = boolean_key {
+                    return Some(Action::SettingsAction(SettingsAction::ToggleBoolean(key)));
+                }
+
+                let editable_key = get_editable_setting_key_for_index(
+                    state.ui.settings.selected_category,
+                    state.ui.settings.selected_setting_index,
+                );
+                editable_key.map(|key| Action::SettingsAction(SettingsAction::StartEditing(key)))
+            }
+            _ => None,
+        };
+    }
+
+    // In category navigation mode - arrows navigate categories, Down enters settings
+    match key_code {
+        KeyCode::Left => Some(Action::SettingsAction(SettingsAction::NavigateCategoryLeft)),
+        KeyCode::Right => Some(Action::SettingsAction(SettingsAction::NavigateCategoryRight)),
+        KeyCode::Down => Some(Action::SettingsAction(SettingsAction::EnterSettingsMode)),
+        _ => None,
+    }
+}
 
 /// Convert a KeyEvent into an Action based on current application state
 ///
@@ -30,301 +243,72 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
         state.navigation.panel_stack.len()
     );
 
-    // Global keys (work regardless of tab/focus)
-    match key.code {
-        KeyCode::Char('q') | KeyCode::Char('Q') => return Some(Action::Quit),
-        KeyCode::Char('/') => return Some(Action::ToggleCommandPalette),
-        _ => {}
+    // 1. Check global keys (q/Q, /)
+    if let Some(action) = handle_global_keys(key.code) {
+        return Some(action);
     }
 
-    // ESC key handling - navigate up through focus hierarchy
+    // 2. Check ESC key (7-priority hierarchy)
     if key.code == KeyCode::Esc {
-        // Priority 1: If there's a panel open, close it
-        if !state.navigation.panel_stack.is_empty() {
-            debug!("KEY: ESC pressed with panel open - popping panel");
-            return Some(Action::PopPanel);
-        }
+        return handle_esc_key(state);
+    }
 
-        // Priority 2: If in modal on Settings tab, cancel modal
-        if state.ui.settings.modal_open {
-            debug!("KEY: ESC pressed in modal - canceling modal");
-            return Some(Action::SettingsAction(SettingsAction::ModalCancel));
+    // 3. Check panel navigation (when panel is open)
+    if !state.navigation.panel_stack.is_empty() {
+        if let Some(action) = handle_panel_navigation(key.code) {
+            return Some(action);
         }
+    }
 
-        // Priority 2.5: If editing on Settings tab, cancel editing
-        if state.ui.settings.editing {
-            debug!("KEY: ESC pressed while editing - canceling edit");
-            return Some(Action::SettingsAction(SettingsAction::CancelEditing));
-        }
+    // 4. Check number keys for direct tab switching
+    if let Some(action) = handle_number_keys(key.code) {
+        return Some(action);
+    }
 
-        // Priority 3: If in box selection mode on Scores tab, exit to date subtabs
+    // 5. Handle navigation based on focus level
+    if !content_focused {
+        // TAB BAR FOCUSED: delegate to tab bar handler
+        return handle_tab_bar_navigation(key.code);
+    }
+
+    // CONTENT FOCUSED: context-sensitive navigation
+
+    // 6. Handle Up key with special logic (returns to tab bar unless in nested mode)
+    if key.code == KeyCode::Up {
+        // Check if we're in a nested mode first
         if state.ui.scores.box_selection_active {
-            debug!("KEY: ESC pressed in box selection - exiting to date subtabs");
-            return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
-        }
-
-        // Priority 4: If in browse mode on Standings tab, exit to view subtabs
-        if state.ui.standings.browse_mode {
-            debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
-            return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
-        }
-
-        // Priority 5: If in settings mode on Settings tab, exit to category subtabs
-        if state.ui.settings.settings_mode {
-            debug!("KEY: ESC pressed in settings mode - exiting to category subtabs");
-            return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
-        }
-
-        // Priority 6: If content is focused, return to tab bar
-        if content_focused {
-            debug!("KEY: ESC pressed in content - returning to tab bar");
+            // In box selection - Up navigates within grid
+            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp));
+        } else if state.ui.standings.browse_mode {
+            // In browse mode - Up navigates teams
+            return Some(Action::StandingsAction(StandingsAction::MoveSelectionUp));
+        } else if state.ui.settings.modal_open || state.ui.settings.editing {
+            // Modal or editing active - let tab-specific handler deal with it
+            // Fall through to tab-specific handling below
+        } else if state.ui.settings.settings_mode {
+            // In settings navigation - Up navigates settings (unless at top)
+            if state.ui.settings.selected_setting_index == 0 {
+                // At top - return to category tabs
+                debug!("KEY: Up pressed at top of settings - returning to category tabs");
+                return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
+            } else {
+                // Navigate settings
+                return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp));
+            }
+        } else {
+            // Not in nested mode - Up returns to tab bar
+            debug!("KEY: Up pressed in content - returning to tab bar");
             return Some(Action::ExitContentFocus);
         }
-
-        // Priority 7: At top level (tab bar), do nothing - use 'q' to quit
-        debug!("KEY: ESC pressed at tab bar - ignoring (use 'q' to quit)");
-        return None;
     }
 
-    // Panel navigation - handle Up/Down/Enter when a panel is open
-    if !state.navigation.panel_stack.is_empty() {
-        match key.code {
-            KeyCode::Up => {
-                debug!("KEY: Up pressed in panel - moving selection up");
-                return Some(Action::PanelSelectPrevious);
-            }
-            KeyCode::Down => {
-                debug!("KEY: Down pressed in panel - moving selection down");
-                return Some(Action::PanelSelectNext);
-            }
-            KeyCode::Enter => {
-                debug!("KEY: Enter pressed in panel - selecting item");
-                return Some(Action::PanelSelectItem);
-            }
-            _ => {}
-        }
+    // 7. Delegate to tab-specific handlers
+    match current_tab {
+        Tab::Scores => handle_scores_tab_keys(key.code, state),
+        Tab::Standings => handle_standings_tab_keys(key.code, state),
+        Tab::Settings => handle_settings_tab_keys(key.code, state),
+        _ => None, // Other tabs: no special content navigation yet
     }
-
-    // Number keys for direct tab switching
-    match key.code {
-        KeyCode::Char('1') => return Some(Action::NavigateTab(Tab::Scores)),
-        KeyCode::Char('2') => return Some(Action::NavigateTab(Tab::Standings)),
-        KeyCode::Char('3') => return Some(Action::NavigateTab(Tab::Stats)),
-        KeyCode::Char('4') => return Some(Action::NavigateTab(Tab::Players)),
-        KeyCode::Char('5') => return Some(Action::NavigateTab(Tab::Settings)),
-        KeyCode::Char('6') => return Some(Action::NavigateTab(Tab::Browser)),
-        _ => {}
-    }
-
-    // Arrow key handling based on focus level
-    if !content_focused {
-        // TAB BAR FOCUSED: Left/Right navigate tabs, Down enters content
-        match key.code {
-            KeyCode::Left => return Some(Action::NavigateTabLeft),
-            KeyCode::Right => return Some(Action::NavigateTabRight),
-            KeyCode::Down => {
-                debug!("KEY: Down pressed on tab bar - entering content focus");
-                return Some(Action::EnterContentFocus);
-            }
-            _ => {}
-        }
-    } else {
-        // CONTENT FOCUSED: Context-sensitive navigation based on current tab
-
-        // Up key returns to tab bar (works on all tabs)
-        if key.code == KeyCode::Up {
-            // Check if we're in a nested mode first
-            if state.ui.scores.box_selection_active {
-                // In box selection - Up navigates within grid
-                return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp));
-            } else if state.ui.standings.browse_mode {
-                // In browse mode - Up navigates teams
-                return Some(Action::StandingsAction(StandingsAction::MoveSelectionUp));
-            } else if state.ui.settings.modal_open || state.ui.settings.editing {
-                // Modal or editing active - let tab-specific handler deal with it
-                // Fall through to tab-specific handling below
-            } else if state.ui.settings.settings_mode {
-                // In settings navigation - Up navigates settings (unless at top)
-                if state.ui.settings.selected_setting_index == 0 {
-                    // At top - return to category tabs
-                    debug!("KEY: Up pressed at top of settings - returning to category tabs");
-                    return Some(Action::SettingsAction(SettingsAction::ExitSettingsMode));
-                } else {
-                    // Navigate settings
-                    return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp));
-                }
-            } else {
-                // Not in nested mode - Up returns to tab bar
-                debug!("KEY: Up pressed in content - returning to tab bar");
-                return Some(Action::ExitContentFocus);
-            }
-        }
-
-        // Context-sensitive navigation based on current tab
-        match current_tab {
-            Tab::Scores => {
-                // On Scores tab: check if in box selection mode
-                if state.ui.scores.box_selection_active {
-                    // Box selection mode - arrows navigate within game grid
-                    match key.code {
-                        KeyCode::Down => {
-                            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown))
-                        }
-                        KeyCode::Left => {
-                            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft))
-                        }
-                        KeyCode::Right => {
-                            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight))
-                        }
-                        KeyCode::Enter => {
-                            return Some(Action::ScoresAction(ScoresAction::SelectGame))
-                        }
-                        _ => {}
-                    }
-                } else {
-                    // Date navigation mode - arrows navigate dates
-                    match key.code {
-                        KeyCode::Left => {
-                            return Some(Action::ScoresAction(ScoresAction::DateLeft))
-                        }
-                        KeyCode::Right => {
-                            return Some(Action::ScoresAction(ScoresAction::DateRight))
-                        }
-                        KeyCode::Down => {
-                            return Some(Action::ScoresAction(ScoresAction::EnterBoxSelection))
-                        }
-                        KeyCode::Enter => {
-                            return Some(Action::ScoresAction(ScoresAction::SelectGame))
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Tab::Standings => {
-                // On Standings tab: check if in browse mode
-                if state.ui.standings.browse_mode {
-                    // Browse mode - navigate teams and columns
-                    match key.code {
-                        KeyCode::Down => {
-                            return Some(Action::StandingsAction(StandingsAction::MoveSelectionDown))
-                        }
-                        KeyCode::Left => {
-                            // In Conference view, left/right switch between conferences
-                            return Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft))
-                        }
-                        KeyCode::Right => {
-                            return Some(Action::StandingsAction(StandingsAction::MoveSelectionRight))
-                        }
-                        KeyCode::Enter => {
-                            return Some(Action::StandingsAction(StandingsAction::SelectTeam))
-                        }
-                        _ => {}
-                    }
-                } else {
-                    // View selection mode - arrows navigate views (Division/Conference/League)
-                    match key.code {
-                        KeyCode::Left => {
-                            return Some(Action::StandingsAction(StandingsAction::CycleViewLeft))
-                        }
-                        KeyCode::Right => {
-                            return Some(Action::StandingsAction(StandingsAction::CycleViewRight))
-                        }
-                        KeyCode::Down => {
-                            return Some(Action::StandingsAction(StandingsAction::EnterBrowseMode))
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Tab::Settings => {
-                // Check if modal is open
-                if state.ui.settings.modal_open {
-                    // In modal mode - handle modal navigation
-                    match key.code {
-                        KeyCode::Up => {
-                            return Some(Action::SettingsAction(SettingsAction::ModalMoveUp))
-                        }
-                        KeyCode::Down => {
-                            return Some(Action::SettingsAction(SettingsAction::ModalMoveDown))
-                        }
-                        KeyCode::Enter => {
-                            return Some(Action::SettingsAction(SettingsAction::ModalConfirm))
-                        }
-                        _ => {}
-                    }
-                } else if state.ui.settings.editing {
-                    // In editing mode - handle text input (for non-list settings)
-                    match key.code {
-                        KeyCode::Char(ch) => {
-                            return Some(Action::SettingsAction(SettingsAction::AppendChar(ch)))
-                        }
-                        KeyCode::Backspace => {
-                            return Some(Action::SettingsAction(SettingsAction::DeleteChar))
-                        }
-                        KeyCode::Enter => {
-                            // Commit the edit
-                            let setting_key = get_editable_setting_key_for_index(
-                                state.ui.settings.selected_category,
-                                state.ui.settings.selected_setting_index,
-                            );
-                            if let Some(key) = setting_key {
-                                return Some(Action::SettingsAction(SettingsAction::CommitEdit(key)));
-                            }
-                        }
-                        _ => {}
-                    }
-                } else if state.ui.settings.settings_mode {
-                    // In settings navigation mode - arrows navigate settings, Enter activates
-                    match key.code {
-                        KeyCode::Up => {
-                            return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp))
-                        }
-                        KeyCode::Down => {
-                            return Some(Action::SettingsAction(SettingsAction::MoveSelectionDown))
-                        }
-                        KeyCode::Enter => {
-                            // Check if it's a boolean setting (toggle) or editable setting (start edit)
-                            let boolean_key = get_setting_key_for_index(
-                                state.ui.settings.selected_category,
-                                state.ui.settings.selected_setting_index,
-                            );
-                            if let Some(key) = boolean_key {
-                                return Some(Action::SettingsAction(SettingsAction::ToggleBoolean(key)));
-                            }
-
-                            let editable_key = get_editable_setting_key_for_index(
-                                state.ui.settings.selected_category,
-                                state.ui.settings.selected_setting_index,
-                            );
-                            if let Some(key) = editable_key {
-                                return Some(Action::SettingsAction(SettingsAction::StartEditing(key)));
-                            }
-                        }
-                        _ => {}
-                    }
-                } else {
-                    // In category navigation mode - arrows navigate categories, Down enters settings
-                    match key.code {
-                        KeyCode::Left => {
-                            return Some(Action::SettingsAction(SettingsAction::NavigateCategoryLeft))
-                        }
-                        KeyCode::Right => {
-                            return Some(Action::SettingsAction(SettingsAction::NavigateCategoryRight))
-                        }
-                        KeyCode::Down => {
-                            return Some(Action::SettingsAction(SettingsAction::EnterSettingsMode))
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {
-                // Other tabs: no special content navigation yet
-            }
-        }
-    }
-
-    None
 }
 
 /// Get the setting key for a given category and index (for boolean toggling)

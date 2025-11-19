@@ -6,24 +6,24 @@ use crate::tui::component::Effect;
 use crate::tui::state::AppState;
 
 /// Handle all navigation-related actions
-pub fn reduce_navigation(state: AppState, action: &Action) -> Option<(AppState, Effect)> {
+pub fn reduce_navigation(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
     match action {
-        Action::NavigateTab(tab) => Some(navigate_to_tab(state, *tab)),
-        Action::NavigateTabLeft => Some(navigate_tab_left(state)),
-        Action::NavigateTabRight => Some(navigate_tab_right(state)),
-        Action::EnterContentFocus => Some(enter_content_focus(state)),
-        Action::ExitContentFocus => Some(exit_content_focus(state)),
+        Action::NavigateTab(tab) => Some(navigate_to_tab(state.clone(), *tab)),
+        Action::NavigateTabLeft => Some(navigate_tab_left(state.clone())),
+        Action::NavigateTabRight => Some(navigate_tab_right(state.clone())),
+        Action::EnterContentFocus => Some(enter_content_focus(state.clone())),
+        Action::ExitContentFocus => Some(exit_content_focus(state.clone())),
         Action::EnterSubtabMode => {
             debug!("FOCUS: EnterSubtabMode (deprecated, using EnterContentFocus)");
-            Some(enter_content_focus(state))
+            Some(enter_content_focus(state.clone()))
         }
         Action::ExitSubtabMode => {
             debug!("FOCUS: ExitSubtabMode (deprecated, using ExitContentFocus)");
-            Some(exit_content_focus(state))
+            Some(exit_content_focus(state.clone()))
         }
         Action::ToggleCommandPalette => {
             // TODO: Implement command palette toggling
-            Some((state, Effect::None))
+            Some((state.clone(), Effect::None))
         }
         _ => None,
     }

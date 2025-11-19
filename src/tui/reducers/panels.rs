@@ -4,17 +4,18 @@ use crate::tui::action::Action;
 use crate::tui::types::Panel;
 use crate::tui::component::Effect;
 use crate::tui::state::{AppState, LoadingKey, PanelState};
+use crate::tui::helpers::{ClubSkaterStatsSorting, ClubGoalieStatsSorting, SeasonSorting};
 
 /// Handle all panel management actions
-pub fn reduce_panels(state: AppState, action: &Action) -> Option<(AppState, Effect)> {
+pub fn reduce_panels(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
     match action {
-        Action::PushPanel(panel) => Some(push_panel(state, panel.clone())),
-        Action::PopPanel => Some(pop_panel(state)),
-        Action::ScrollUp(amount) => Some(scroll_panel_up(state, *amount)),
-        Action::ScrollDown(amount) => Some(scroll_panel_down(state, *amount)),
-        Action::PanelSelectNext => Some(panel_select_next(state)),
-        Action::PanelSelectPrevious => Some(panel_select_previous(state)),
-        Action::PanelSelectItem => Some(panel_select_item(state)),
+        Action::PushPanel(panel) => Some(push_panel(state.clone(), panel.clone())),
+        Action::PopPanel => Some(pop_panel(state.clone())),
+        Action::ScrollUp(amount) => Some(scroll_panel_up(state.clone(), *amount)),
+        Action::ScrollDown(amount) => Some(scroll_panel_down(state.clone(), *amount)),
+        Action::PanelSelectNext => Some(panel_select_next(state.clone())),
+        Action::PanelSelectPrevious => Some(panel_select_previous(state.clone())),
+        Action::PanelSelectItem => Some(panel_select_item(state.clone())),
         _ => None,
     }
 }
@@ -116,173 +117,193 @@ fn panel_select_previous(state: AppState) -> (AppState, Effect) {
     (new_state, Effect::None)
 }
 
+/// Handle selecting a player from a team roster panel
+fn handle_team_roster_selection(
+    state: AppState,
+    abbrev: &str,
+    selected_index: usize,
+) -> Option<(AppState, Effect)> {
+    if let Some(roster) = state.data.team_roster_stats.get(abbrev) {
+        // CRITICAL: Must sort the same way as team_detail_panel.rs does for display
+        // Otherwise visual position won't match data array index
+
+        // Sort skaters by points descending (matching team_detail_panel.rs:103)
+        let mut sorted_skaters = roster.skaters.clone();
+        sorted_skaters.sort_by_points_desc();
+
+        // Sort goalies by games played descending (matching team_detail_panel.rs:107)
+        let mut sorted_goalies = roster.goalies.clone();
+        sorted_goalies.sort_by_games_played_desc();
+
+        let num_skaters = sorted_skaters.len();
+
+        // Check if selecting a skater
+        if selected_index < num_skaters {
+            if let Some(player) = sorted_skaters.get(selected_index) {
+                let player_id = player.player_id;
+                debug!(
+                    "PANEL: Selected skater {} (index {} in sorted list) from team {}",
+                    player_id, selected_index, abbrev
+                );
+
+                // Push PlayerDetail panel
+                let mut new_state = state;
+                new_state.navigation.panel_stack.push(PanelState {
+                    panel: Panel::PlayerDetail { player_id },
+                    scroll_offset: 0,
+                    selected_index: None,
+                });
+
+                return Some((new_state, Effect::None));
+            }
+        } else {
+            // Check if selecting a goalie
+            let goalie_idx = selected_index - num_skaters;
+            if let Some(goalie) = sorted_goalies.get(goalie_idx) {
+                let player_id = goalie.player_id;
+                debug!(
+                    "PANEL: Selected goalie {} (index {} in sorted list) from team {}",
+                    player_id, goalie_idx, abbrev
+                );
+
+                // Push PlayerDetail panel
+                let mut new_state = state;
+                new_state.navigation.panel_stack.push(PanelState {
+                    panel: Panel::PlayerDetail { player_id },
+                    scroll_offset: 0,
+                    selected_index: None,
+                });
+
+                return Some((new_state, Effect::None));
+            }
+        }
+    }
+    None
+}
+
+/// Handle selecting a player from a boxscore panel
+fn handle_boxscore_selection(
+    state: AppState,
+    game_id: i64,
+    selected_index: usize,
+) -> Option<(AppState, Effect)> {
+    if let Some(boxscore) = state.data.boxscores.get(&game_id) {
+        let away_stats = &boxscore.player_by_game_stats.away_team;
+        let home_stats = &boxscore.player_by_game_stats.home_team;
+
+        // Calculate section boundaries (same as boxscore_panel.rs)
+        let away_forwards_count = away_stats.forwards.len();
+        let away_defense_count = away_stats.defense.len();
+        let away_goalies_count = away_stats.goalies.len();
+
+        let away_total = away_forwards_count + away_defense_count + away_goalies_count;
+        let home_forwards_count = home_stats.forwards.len();
+        let home_defense_count = home_stats.defense.len();
+
+        // Determine which player was selected
+        let player_id = if selected_index < away_forwards_count {
+            // Away forward
+            away_stats.forwards.get(selected_index).map(|p| p.player_id)
+        } else if selected_index < away_forwards_count + away_defense_count {
+            // Away defense
+            let defense_idx = selected_index - away_forwards_count;
+            away_stats.defense.get(defense_idx).map(|p| p.player_id)
+        } else if selected_index < away_total {
+            // Away goalie
+            let goalie_idx = selected_index - away_forwards_count - away_defense_count;
+            away_stats.goalies.get(goalie_idx).map(|p| p.player_id)
+        } else if selected_index < away_total + home_forwards_count {
+            // Home forward
+            let forward_idx = selected_index - away_total;
+            home_stats.forwards.get(forward_idx).map(|p| p.player_id)
+        } else if selected_index < away_total + home_forwards_count + home_defense_count {
+            // Home defense
+            let defense_idx = selected_index - away_total - home_forwards_count;
+            home_stats.defense.get(defense_idx).map(|p| p.player_id)
+        } else {
+            // Home goalie
+            let goalie_idx = selected_index - away_total - home_forwards_count - home_defense_count;
+            home_stats.goalies.get(goalie_idx).map(|p| p.player_id)
+        };
+
+        if let Some(player_id) = player_id {
+            debug!(
+                "PANEL: Selected player {} (index {}) from boxscore game {}",
+                player_id, selected_index, game_id
+            );
+
+            // Push PlayerDetail panel
+            let mut new_state = state;
+            new_state.navigation.panel_stack.push(PanelState {
+                panel: Panel::PlayerDetail { player_id },
+                scroll_offset: 0,
+                selected_index: None,
+            });
+
+            return Some((new_state, Effect::None));
+        }
+    }
+    None
+}
+
+/// Handle selecting a season from a player detail panel
+fn handle_player_season_selection(
+    state: AppState,
+    player_id: i64,
+    selected_index: usize,
+) -> Option<(AppState, Effect)> {
+    if let Some(player) = state.data.player_data.get(&player_id) {
+        if let Some(seasons) = &player.season_totals {
+            // Filter to NHL regular season only and sort by season descending (latest first)
+            let mut nhl_seasons: Vec<_> = seasons.iter()
+                .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
+                .collect();
+            nhl_seasons.sort_by_season_desc();
+
+            if let Some(season) = nhl_seasons.get(selected_index) {
+                // Extract team abbreviation from common name
+                if let Some(ref common_name) = season.team_common_name {
+                    if let Some(abbrev) = crate::team_abbrev::common_name_to_abbrev(&common_name.default) {
+                        debug!(
+                            "PANEL: Selected season {} (index {}) from player {}, navigating to team {}",
+                            season.season, selected_index, player_id, abbrev
+                        );
+
+                        // Push TeamDetail panel
+                        let mut new_state = state;
+                        new_state.navigation.panel_stack.push(PanelState {
+                            panel: Panel::TeamDetail {
+                                abbrev: abbrev.to_string(),
+                            },
+                            scroll_offset: 0,
+                            selected_index: Some(0),
+                        });
+
+                        return Some((new_state, Effect::None));
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 fn panel_select_item(state: AppState) -> (AppState, Effect) {
     // Get information about the current panel
     let panel_info = state.navigation.panel_stack.last().map(|p| {
         (p.panel.clone(), p.selected_index)
     });
 
-    if let Some((panel, selected_index)) = panel_info {
-        match panel {
-            Panel::TeamDetail { abbrev } => {
-                // Select a player from the team roster
-                if let Some(idx) = selected_index {
-                    if let Some(roster) = state.data.team_roster_stats.get(&abbrev) {
-                        // CRITICAL: Must sort the same way as team_detail_panel.rs does for display
-                        // Otherwise visual position won't match data array index
+    if let Some((panel, Some(idx))) = panel_info {
+        // Delegate to panel-specific handlers
+        let result = match panel {
+            Panel::TeamDetail { ref abbrev } => handle_team_roster_selection(state.clone(), abbrev, idx),
+            Panel::Boxscore { game_id } => handle_boxscore_selection(state.clone(), game_id, idx),
+            Panel::PlayerDetail { player_id } => handle_player_season_selection(state.clone(), player_id, idx),
+        };
 
-                        // Sort skaters by points descending (matching team_detail_panel.rs:103)
-                        let mut sorted_skaters = roster.skaters.clone();
-                        sorted_skaters.sort_by(|a, b| b.points.cmp(&a.points));
-
-                        // Sort goalies by games played descending (matching team_detail_panel.rs:107)
-                        let mut sorted_goalies = roster.goalies.clone();
-                        sorted_goalies.sort_by(|a, b| b.games_played.cmp(&a.games_played));
-
-                        let num_skaters = sorted_skaters.len();
-
-                        // Check if selecting a skater
-                        if idx < num_skaters {
-                            if let Some(player) = sorted_skaters.get(idx) {
-                                let player_id = player.player_id;
-                                debug!(
-                                    "PANEL: Selected skater {} (index {} in sorted list) from team {}",
-                                    player_id, idx, abbrev
-                                );
-
-                                // Push PlayerDetail panel
-                                let mut new_state = state;
-                                new_state.navigation.panel_stack.push(PanelState {
-                                    panel: Panel::PlayerDetail { player_id },
-                                    scroll_offset: 0,
-                                    selected_index: None,
-                                });
-
-                                return (new_state, Effect::None);
-                            }
-                        } else {
-                            // Check if selecting a goalie
-                            let goalie_idx = idx - num_skaters;
-                            if let Some(goalie) = sorted_goalies.get(goalie_idx) {
-                                let player_id = goalie.player_id;
-                                debug!(
-                                    "PANEL: Selected goalie {} (index {} in sorted list) from team {}",
-                                    player_id, goalie_idx, abbrev
-                                );
-
-                                // Push PlayerDetail panel
-                                let mut new_state = state;
-                                new_state.navigation.panel_stack.push(PanelState {
-                                    panel: Panel::PlayerDetail { player_id },
-                                    scroll_offset: 0,
-                                    selected_index: None,
-                                });
-
-                                return (new_state, Effect::None);
-                            }
-                        }
-                    }
-                }
-            }
-            Panel::Boxscore { game_id } => {
-                // Select a player from the boxscore
-                if let Some(idx) = selected_index {
-                    if let Some(boxscore) = state.data.boxscores.get(&game_id) {
-                        let away_stats = &boxscore.player_by_game_stats.away_team;
-                        let home_stats = &boxscore.player_by_game_stats.home_team;
-
-                        // Calculate section boundaries (same as boxscore_panel.rs)
-                        let away_forwards_count = away_stats.forwards.len();
-                        let away_defense_count = away_stats.defense.len();
-                        let away_goalies_count = away_stats.goalies.len();
-
-                        let away_total = away_forwards_count + away_defense_count + away_goalies_count;
-                        let home_forwards_count = home_stats.forwards.len();
-                        let home_defense_count = home_stats.defense.len();
-
-                        // Determine which player was selected
-                        let player_id = if idx < away_forwards_count {
-                            // Away forward
-                            away_stats.forwards.get(idx).map(|p| p.player_id)
-                        } else if idx < away_forwards_count + away_defense_count {
-                            // Away defense
-                            let defense_idx = idx - away_forwards_count;
-                            away_stats.defense.get(defense_idx).map(|p| p.player_id)
-                        } else if idx < away_total {
-                            // Away goalie
-                            let goalie_idx = idx - away_forwards_count - away_defense_count;
-                            away_stats.goalies.get(goalie_idx).map(|p| p.player_id)
-                        } else if idx < away_total + home_forwards_count {
-                            // Home forward
-                            let forward_idx = idx - away_total;
-                            home_stats.forwards.get(forward_idx).map(|p| p.player_id)
-                        } else if idx < away_total + home_forwards_count + home_defense_count {
-                            // Home defense
-                            let defense_idx = idx - away_total - home_forwards_count;
-                            home_stats.defense.get(defense_idx).map(|p| p.player_id)
-                        } else {
-                            // Home goalie
-                            let goalie_idx = idx - away_total - home_forwards_count - home_defense_count;
-                            home_stats.goalies.get(goalie_idx).map(|p| p.player_id)
-                        };
-
-                        if let Some(player_id) = player_id {
-                            debug!(
-                                "PANEL: Selected player {} (index {}) from boxscore game {}",
-                                player_id, idx, game_id
-                            );
-
-                            // Push PlayerDetail panel
-                            let mut new_state = state;
-                            new_state.navigation.panel_stack.push(PanelState {
-                                panel: Panel::PlayerDetail { player_id },
-                                scroll_offset: 0,
-                                selected_index: None,
-                            });
-
-                            return (new_state, Effect::None);
-                        }
-                    }
-                }
-            }
-            Panel::PlayerDetail { player_id } => {
-                // Select a season and navigate to team detail
-                if let Some(idx) = selected_index {
-                    if let Some(player) = state.data.player_data.get(&player_id) {
-                        if let Some(seasons) = &player.season_totals {
-                            // Filter to NHL regular season only and sort by season descending (latest first)
-                            let mut nhl_seasons: Vec<_> = seasons.iter()
-                                .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
-                                .collect();
-                            nhl_seasons.sort_by(|a, b| b.season.cmp(&a.season));
-
-                            if let Some(season) = nhl_seasons.get(idx) {
-                                // Extract team abbreviation from common name
-                                if let Some(ref common_name) = season.team_common_name {
-                                    if let Some(abbrev) = crate::team_abbrev::common_name_to_abbrev(&common_name.default) {
-                                        debug!(
-                                            "PANEL: Selected season {} (index {}) from player {}, navigating to team {}",
-                                            season.season, idx, player_id, abbrev
-                                        );
-
-                                        // Push TeamDetail panel
-                                        let mut new_state = state;
-                                        new_state.navigation.panel_stack.push(PanelState {
-                                            panel: Panel::TeamDetail {
-                                                abbrev: abbrev.to_string(),
-                                            },
-                                            scroll_offset: 0,
-                                            selected_index: Some(0),
-                                        });
-
-                                        return (new_state, Effect::None);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+        if let Some((new_state, effect)) = result {
+            return (new_state, effect);
         }
     }
 

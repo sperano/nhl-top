@@ -156,7 +156,6 @@
 /// - `find_first_link_column()` - Find first focusable column
 /// - `get_cell_value(row, col)` - Get CellValue at position
 /// - `row_count()` / `column_count()` - Get table dimensions
-
 use crate::config::DisplayConfig;
 use crate::tui::{
     Alignment, CellValue, ColumnDef, Component, Element,

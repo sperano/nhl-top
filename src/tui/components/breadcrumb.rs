@@ -2,7 +2,6 @@
 ///
 /// Displays a breadcrumb trail showing the user's current location in the panel stack.
 /// Example: "Standings > Team: TOR > Player: Sidney Crosby"
-
 use ratatui::{
     buffer::Buffer,
     layout::Rect,

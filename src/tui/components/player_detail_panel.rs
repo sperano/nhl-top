@@ -8,6 +8,7 @@ use ratatui::{
 use nhl_api::{PlayerLanding, SeasonTotal};
 
 use crate::config::DisplayConfig;
+use crate::tui::helpers::SeasonSorting;
 use crate::team_abbrev::common_name_to_abbrev;
 use crate::tui::{
     component::{Component, Element, RenderableWidget},
@@ -178,7 +179,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         // TODO: This sorting should be done in nhl_api's player_landing() call
         // to ensure consistent ordering across all consumers
         // Sort by season descending (latest first)
-        season_stats.sort_by(|a, b| b.season.cmp(&a.season));
+        season_stats.sort_by_season_desc();
 
         if !season_stats.is_empty() {
             // Create season-by-season table

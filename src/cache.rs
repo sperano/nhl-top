@@ -35,6 +35,7 @@ pub async fn cache_stats() -> CacheStats {
     }
 }
 
+#[allow(clippy::unused_unit)]
 #[cached(
     name = "STANDINGS_CACHE",
     type = "cached::TimedSizedCache<(), Vec<Standing>>",

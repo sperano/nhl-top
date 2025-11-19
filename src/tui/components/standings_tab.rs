@@ -7,6 +7,7 @@ use ratatui::{
 use nhl_api::Standing;
 
 use crate::commands::standings::GroupBy;
+use crate::tui::helpers::StandingsSorting;
 use crate::config::DisplayConfig;
 use crate::config::Config;
 use crate::tui::{
@@ -236,6 +237,51 @@ impl StandingsTab {
         )
     }
 
+    /// Render a column of divisions with tables and spacing
+    fn render_division_column(
+        divisions: &[(String, Vec<Standing>)],
+        column_index: usize,
+        selected_column: usize,
+        selected_row: usize,
+        browse_mode: bool,
+    ) -> Vec<Element> {
+        let mut elements = Vec::new();
+        let mut team_offset = 0;
+
+        for (idx, (div_name, teams)) in divisions.iter().enumerate() {
+            let teams_count = teams.len();
+
+            // Calculate selection for this division
+            // selected_row is a flat index (0-15) for the entire column
+            // We need to check if selected_row falls within this division's range
+            let row_in_division = if selected_column == column_index
+                && selected_row >= team_offset
+                && selected_row < team_offset + teams_count {
+                // Selection is in this division
+                selected_row - team_offset
+            } else {
+                // Selection is not in this division
+                usize::MAX
+            };
+
+            let table = TableWidget::from_data(Self::create_standings_columns(), teams.clone())
+                .with_header(div_name)
+                .with_selection(row_in_division, 0)
+                .with_focused(browse_mode && selected_column == column_index)
+                .with_margin(2);
+
+            elements.push(Element::Widget(Box::new(table)));
+            team_offset += teams_count;
+
+            // Add spacing between divisions (except after the last one)
+            if idx < divisions.len() - 1 {
+                elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
+            }
+        }
+
+        elements
+    }
+
     fn render_division_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
         use std::collections::BTreeMap;
 
@@ -272,70 +318,22 @@ impl StandingsTab {
         };
 
         // Create tables for left column divisions
-        let mut left_elements = Vec::new();
-        let mut team_offset = 0;
-        for (idx, (div_name, teams)) in col1_divs.iter().enumerate() {
-            let teams_count = teams.len();
-
-            // Calculate selection for this division
-            // selected_row is a flat index (0-15) for the entire column
-            // We need to check if selected_row falls within this division's range
-            let row_in_division = if props.selected_column == 0
-                && props.selected_row >= team_offset
-                && props.selected_row < team_offset + teams_count {
-                // Selection is in this division
-                props.selected_row - team_offset
-            } else {
-                // Selection is not in this division
-                usize::MAX
-            };
-
-            let table = TableWidget::from_data(Self::create_standings_columns(), teams.clone())
-                .with_header(div_name)
-                .with_selection(row_in_division, 0)
-                .with_focused(props.browse_mode && props.selected_column == 0)
-                .with_margin(2);
-
-            left_elements.push(Element::Widget(Box::new(table)));
-            team_offset += teams_count;
-
-            // Add spacing between divisions (except after the last one)
-            if idx < col1_divs.len() - 1 {
-                left_elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
-            }
-        }
+        let left_elements = Self::render_division_column(
+            &col1_divs,
+            0,
+            props.selected_column,
+            props.selected_row,
+            props.browse_mode,
+        );
 
         // Create tables for right column divisions
-        let mut right_elements = Vec::new();
-        team_offset = 0;
-        for (idx, (div_name, teams)) in col2_divs.iter().enumerate() {
-            let teams_count = teams.len();
-
-            // Calculate selection for this division
-            let row_in_division = if props.selected_column == 1
-                && props.selected_row >= team_offset
-                && props.selected_row < team_offset + teams_count {
-                // Selection is in this division
-                props.selected_row - team_offset
-            } else {
-                // Selection is not in this division
-                usize::MAX
-            };
-
-            let table = TableWidget::from_data(Self::create_standings_columns(), teams.clone())
-                .with_header(div_name)
-                .with_selection(row_in_division, 0)
-                .with_focused(props.browse_mode && props.selected_column == 1)
-                .with_margin(2);
-
-            right_elements.push(Element::Widget(Box::new(table)));
-            team_offset += teams_count;
-
-            // Add spacing between divisions (except after the last one)
-            if idx < col2_divs.len() - 1 {
-                right_elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
-            }
-        }
+        let right_elements = Self::render_division_column(
+            &col2_divs,
+            1,
+            props.selected_column,
+            props.selected_row,
+            props.browse_mode,
+        );
 
         // Create vertical layouts for each column
         // Each column has 2 divisions + 1 spacer = 3 elements
@@ -391,7 +389,7 @@ impl StandingsTab {
 
         // Sort teams within each division by points
         for teams in grouped.values_mut() {
-            teams.sort_by(|a, b| b.points.cmp(&a.points));
+            teams.sort_by_points_desc();
         }
 
         // Extract divisions
@@ -496,7 +494,7 @@ impl StandingsTab {
             .into_iter()
             .chain(div2_remaining)
             .collect();
-        wildcard_teams.sort_by(|a, b| b.points.cmp(&a.points));
+        wildcard_teams.sort_by_points_desc();
 
         if !wildcard_teams.is_empty() {
             let table = self.create_wildcard_table(

@@ -98,7 +98,7 @@ pub fn build_score_table(
 
     // Helper to check if a period should show score or dash
     let should_show_period = |period: i32| -> bool {
-        current_period_num.map_or(true, |current| period <= current)
+        current_period_num.is_none_or(|current| period <= current)
     };
 
     // Build table components
@@ -136,11 +136,7 @@ pub fn build_score_table(
 fn calculate_padding(total_cols: usize, max_width: usize) -> usize {
     // Calculate actual width: 1 (left border) + 5 (team column) + (total_cols-1) * (1 separator + 4 chars) + 1 (right border)
     let current_width = 1 + 5 + (total_cols - 1) * 5 + 1;
-    if current_width < max_width {
-        max_width - current_width
-    } else {
-        0
-    }
+    max_width.saturating_sub(current_width)
 }
 
 /// Build top border for the score table
@@ -328,14 +324,14 @@ pub fn build_shots_table(
     let max_width = SCORE_TABLE_MAX_WIDTH;
 
     // Build table components
-    output.push_str(&build_top_border(total_cols, max_width, &box_chars));
-    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width, &box_chars));
-    output.push_str(&build_middle_border(total_cols, max_width, &box_chars));
+    output.push_str(&build_top_border(total_cols, max_width, box_chars));
+    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width, box_chars));
+    output.push_str(&build_middle_border(total_cols, max_width, box_chars));
 
     // Build team rows with dashes for period data (not available from API)
-    output.push_str(&build_shots_team_row(away_team, away_shots, has_ot, has_so, total_cols, max_width, &box_chars));
-    output.push_str(&build_shots_team_row(home_team, home_shots, has_ot, has_so, total_cols, max_width, &box_chars));
-    output.push_str(&build_bottom_border(total_cols, max_width, &box_chars));
+    output.push_str(&build_shots_team_row(away_team, away_shots, has_ot, has_so, total_cols, max_width, box_chars));
+    output.push_str(&build_shots_team_row(home_team, home_shots, has_ot, has_so, total_cols, max_width, box_chars));
+    output.push_str(&build_bottom_border(total_cols, max_width, box_chars));
 
     output
 }

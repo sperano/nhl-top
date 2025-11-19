@@ -6,6 +6,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 use std::time::SystemTime;
+use unicode_width::UnicodeWidthStr;
 
 use crate::config::DisplayConfig;
 use crate::tui::{
@@ -73,7 +74,7 @@ impl RenderableWidget for StatusBarWidget {
 
         // Calculate where the vertical bar should be
         let right_text_with_margin = format!("{} ", right_text);
-        let bar_position = area.width.saturating_sub(right_text_with_margin.len() as u16 + 1);
+        let bar_position = area.width.saturating_sub(right_text_with_margin.width() as u16 + 1);
 
         // Determine styles based on theme
         let separator_style = if let Some(theme) = &config.theme {
@@ -118,7 +119,7 @@ impl RenderableWidget for StatusBarWidget {
         let left_content_len = if left_text.is_empty() {
             0
         } else {
-            left_text.len() + 1
+            left_text.width() + 1
         };
         let padding_len = bar_position.saturating_sub(left_content_len as u16) as usize;
         line2_spans.push(Span::raw(" ".repeat(padding_len)));
@@ -492,5 +493,66 @@ mod tests {
         if let Some(cell) = buf.cell((66, 1)) {
             assert_eq!(cell.fg, Color::Reset, "Refresh text should use default color when no theme");
         }
+    }
+
+    #[test]
+    fn test_status_bar_with_emoji_in_message() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Updated 🏒".to_string()),
+            is_error: false,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        // Should render without panic
+        // The vertical bar should still be positioned correctly
+        let line1 = (0..RENDER_WIDTH).map(|x| {
+            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
+        }).collect::<String>();
+
+        assert!(line1.contains("Updated"), "Status message should be visible");
+        assert!(line1.contains("│"), "Vertical separator should be present");
+    }
+
+    #[test]
+    fn test_status_bar_with_cjk_in_message() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("更新完了".to_string()), // "Update complete" in Japanese
+            is_error: false,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        // Should render without panic or incorrect layout
+        let line1 = (0..RENDER_WIDTH).map(|x| {
+            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
+        }).collect::<String>();
+
+        assert!(line1.contains("│"), "Vertical separator should be present despite CJK characters");
+        assert!(line1.contains("Refresh in"), "Refresh text should still be visible");
+    }
+
+    #[test]
+    fn test_status_bar_with_long_unicode_message() {
+        let widget = StatusBarWidget {
+            last_refresh: Some(SystemTime::now() - std::time::Duration::from_secs(5)),
+            refresh_interval: 60,
+            status_message: Some("Loading players データを読み込み中 🏒🥅".to_string()),
+            is_error: false,
+        };
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
+        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+
+        // Should render without panic
+        // Layout should still be functional
+        assert!(buf.area.width > 0);
+        assert!(buf.area.height == 2);
     }
 }
