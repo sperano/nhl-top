@@ -102,6 +102,9 @@ pub async fn run(
         }
 
         // Render
+        #[cfg(feature = "development")]
+        let mut screenshot_buffer: Option<ratatui::buffer::Buffer> = None;
+
         terminal.draw(|f| {
             let area = f.area();
 
@@ -122,14 +125,21 @@ pub async fn run(
             let config = &runtime.state().system.config.display;
             let mut renderer = Renderer::new();
             renderer.render(element, area, f.buffer_mut(), config);
+
+            // Clone buffer if screenshot requested
+            #[cfg(feature = "development")]
+            if screenshot_requested {
+                screenshot_buffer = Some(f.buffer_mut().clone());
+            }
         })?;
 
         #[cfg(feature = "development")]
-        if screenshot_requested {
+        if let Some(buffer) = screenshot_buffer {
             screenshot_requested = false;
             let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
             let filename = format!("nhl-screenshot-{}.txt", timestamp);
-            if let Err(e) = crate::dev::screenshot::save_terminal_screenshot(&mut terminal, &filename) {
+            let area = ratatui::layout::Rect::new(0, 0, buffer.area().width, buffer.area().height);
+            if let Err(e) = crate::dev::screenshot::save_buffer_screenshot(&buffer, area, &filename) {
                 tracing::error!("Failed to save screenshot: {}", e);
             } else {
                 tracing::info!("Screenshot saved to {}", filename);
