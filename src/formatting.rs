@@ -17,6 +17,7 @@ pub struct BoxChars {
     pub cross: String,
     pub connector2: String,
     pub connector3: String,
+    pub selector: String,
 }
 
 impl BoxChars {
@@ -36,6 +37,7 @@ impl BoxChars {
             cross: "┼".to_string(),
             connector2: "┴".to_string(),
             connector3: "┬".to_string(),
+            selector: "▸".to_string(),
         }
     }
 
@@ -55,6 +57,7 @@ impl BoxChars {
             cross: "+".to_string(),
             connector2: "-".to_string(),
             connector3: "-".to_string(),
+            selector: ">".to_string(),
         }
     }
 

@@ -115,16 +115,24 @@ impl SettingsTab {
         );
 
         if let Some(key) = setting_key {
-            let setting_name = settings_helpers::get_setting_display_name(&key);
-            let options: Vec<String> = settings_helpers::get_setting_values(&key)
-                .iter()
-                .map(|s| s.to_string())
-                .collect();
+            let options = settings_helpers::get_setting_display_values(&key);
+
+            // Calculate modal position to align with value column of selected setting
+            const MARGIN: u16 = 2;
+            const SELECTOR_WIDTH: u16 = 2;
+            const TOP_MARGIN: u16 = 1;
+            const TAB_BAR_HEIGHT: u16 = 2; // Tab labels line + separator line
+            const NUM_TAB_BARS: u16 = 2; // Main tabs + settings category tabs
+
+            let max_key_len = settings_helpers::get_max_key_length(props.selected_category, &props.config) as u16;
+            let position_x = MARGIN + SELECTOR_WIDTH + max_key_len + 1 + 2; // +1 for colon, +2 for spacing
+            let position_y = TAB_BAR_HEIGHT * NUM_TAB_BARS + TOP_MARGIN + props.selected_setting_index as u16;
 
             let modal = Element::Widget(Box::new(ListModalWidget::new(
-                setting_name,
                 options,
                 props.modal_selected_index,
+                position_x,
+                position_y,
             )));
 
             Element::Overlay {

@@ -3,7 +3,7 @@
 /// This widget renders a simple key-value table for configuration settings.
 /// Settings are displayed as "Setting Name: Current Value" pairs.
 
-use ratatui::{buffer::Buffer, layout::Rect, text::Line};
+use ratatui::{buffer::Buffer, layout::Rect, text::Line, style::Style};
 use crate::config::{Config, DisplayConfig};
 use crate::tui::component::RenderableWidget;
 use crate::tui::SettingsCategory;
@@ -57,7 +57,7 @@ impl SettingsListWidget {
                 ("Log File".to_string(), self.config.log_file.clone()),
             ],
             SettingsCategory::Display => vec![
-                ("Theme".to_string(), self.config.display.theme_name.clone().unwrap_or_else(|| "none".to_string())),
+                ("Theme".to_string(), self.config.display.theme.as_ref().map(|t| t.name.to_string()).unwrap_or_else(|| "none".to_string())),
                 ("Use Unicode".to_string(), self.config.display.use_unicode.to_string()),
                 ("Selection Color".to_string(), format_color(&self.config.display.selection_fg)),
                 ("Division Header Color".to_string(), format_color(&self.config.display.division_header_fg)),
@@ -76,7 +76,13 @@ impl RenderableWidget for SettingsListWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let settings = self.get_settings();
         let x = area.x + self.margin;
-        let mut y = area.y;
+        let mut y = area.y + 1;
+
+        // Calculate max key length (including colon) for alignment
+        let max_key_len = settings.iter()
+            .map(|(key, _)| key.len() + 1) // +1 for the colon
+            .max()
+            .unwrap_or(0);
 
         for (index, (key, value)) in settings.iter().enumerate() {
             if y >= area.y + area.height {
@@ -93,14 +99,34 @@ impl RenderableWidget for SettingsListWidget {
                 value.clone()
             };
 
-            // Format as "Key: Value"
-            let line_text = format!("{}: {}", key, display_value);
+            // Check if this setting is selected
+            let is_selected = self.settings_mode && self.selected_index == Some(index);
 
-            // Apply selection highlighting if this is the selected setting
-            let style = if self.settings_mode && self.selected_index == Some(index) {
-                ratatui::style::Style::default().fg(config.selection_fg)
+            // Format selector indicator
+            let selector = if is_selected {
+                format!("{} ", config.box_chars.selector)
             } else {
-                ratatui::style::Style::default()
+                "  ".to_string()
+            };
+
+            // Format as "Key:  Value" with padding for alignment
+            let key_with_colon = format!("{}:", key);
+            let line_text = format!("{}{:width$}  {}", selector, key_with_colon, display_value, width = max_key_len);
+
+            // Apply fg2 style from theme (or default if no theme), with REVERSED for selection
+            let style = if let Some(theme) = &config.theme {
+                let base = Style::default().fg(theme.fg2);
+                if is_selected {
+                    base.add_modifier(ratatui::style::Modifier::REVERSED)
+                } else {
+                    base
+                }
+            } else {
+                if is_selected {
+                    Style::default().add_modifier(ratatui::style::Modifier::REVERSED)
+                } else {
+                    Style::default()
+                }
             };
 
             let line = Line::from(line_text).style(style);
@@ -120,7 +146,7 @@ impl RenderableWidget for SettingsListWidget {
     }
 
     fn preferred_height(&self) -> Option<u16> {
-        Some(self.get_settings().len() as u16)
+        Some(self.get_settings().len() as u16 + 1)
     }
 }
 
@@ -156,6 +182,8 @@ mod tests {
 
     #[test]
     fn test_settings_list_logging_category() {
+        use crate::tui::testing::assert_buffer;
+
         let config = Config::default();
         let widget = SettingsListWidget::new(
             SettingsCategory::Logging,
@@ -167,19 +195,18 @@ mod tests {
             String::new(),
         );
 
-        let area = Rect::new(0, 0, 50, 10);
+        let area = Rect::new(0, 0, 80, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
         widget.render(area, &mut buf, &display_config);
 
-        // Verify log level is rendered
-        let expected = format!("Log Level: {}", config.log_level);
-        let line = buf.content[buf.index_of(2, 0)..buf.index_of(2 + expected.len() as u16, 0)]
-            .iter()
-            .map(|cell| cell.symbol())
-            .collect::<String>();
-        assert!(line.contains("Log Level:"));
+        // Verify both settings are rendered with aligned values (margin + selector space)
+        assert_buffer(&buf, &[
+            "",
+            &format!("    Log Level:  {}", config.log_level),
+            &format!("    Log File:   {}", config.log_file),
+        ]);
     }
 
     #[test]
@@ -244,7 +271,7 @@ mod tests {
             "/tmp/test.log".to_string(),
         );
 
-        let area = Rect::new(0, 0, 80, 2);
+        let area = Rect::new(0, 0, 80, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
@@ -252,8 +279,9 @@ mod tests {
 
         // Log File should show with edit cursor
         assert_buffer(&buf, &[
-            &format!("  Log Level: {}", config.log_level),
-            "  Log File: /tmp/test.log█",
+            "",
+            &format!("    Log Level:  {}", config.log_level),
+            "  ▸ Log File:   /tmp/test.log█",
         ]);
     }
 
@@ -272,7 +300,7 @@ mod tests {
             String::new(),
         );
 
-        let area = Rect::new(0, 0, 80, 2);
+        let area = Rect::new(0, 0, 80, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
@@ -280,8 +308,9 @@ mod tests {
 
         // Log File should show without edit cursor
         assert_buffer(&buf, &[
-            &format!("  Log Level: {}", config.log_level),
-            &format!("  Log File: {}", config.log_file),
+            "",
+            &format!("    Log Level:  {}", config.log_level),
+            &format!("  ▸ Log File:   {}", config.log_file),
         ]);
     }
 
@@ -300,7 +329,7 @@ mod tests {
             String::new(), // Empty buffer
         );
 
-        let area = Rect::new(0, 0, 80, 2);
+        let area = Rect::new(0, 0, 80, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
@@ -308,8 +337,9 @@ mod tests {
 
         // Log File should show with just cursor
         assert_buffer(&buf, &[
-            "  Log Level: info",
-            "  Log File: █",
+            "",
+            "    Log Level:  info",
+            "  ▸ Log File:   █",
         ]);
     }
 
@@ -350,8 +380,8 @@ mod tests {
             String::new(),
         );
 
-        // Logging category has 2 settings
-        assert_eq!(widget.preferred_height(), Some(2));
+        // Logging category has 2 settings + 1 top margin
+        assert_eq!(widget.preferred_height(), Some(3));
     }
 
     #[test]

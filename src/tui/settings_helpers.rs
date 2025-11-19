@@ -42,7 +42,32 @@ pub fn get_setting_display_name(key: &str) -> String {
 pub fn get_setting_values(key: &str) -> Vec<&'static str> {
     match key {
         "log_level" => vec!["trace", "debug", "info", "warn", "error"],
-        "theme" => vec!["none", "orange", "green", "blue", "purple", "white"],
+        "theme" => vec!["none", "orange", "green", "blue", "purple", "white", "red", "yellow", "cyan"],
+        _ => vec![], // Empty for non-list settings
+    }
+}
+
+/// Get the list of display values for a setting (for showing in modals)
+pub fn get_setting_display_values(key: &str) -> Vec<String> {
+    match key {
+        "log_level" => vec!["trace", "debug", "info", "warn", "error"]
+            .into_iter()
+            .map(String::from)
+            .collect(),
+        "theme" => {
+            use crate::config::{THEME_ORANGE, THEME_GREEN, THEME_BLUE, THEME_PURPLE, THEME_WHITE, THEME_RED, THEME_YELLOW, THEME_CYAN};
+            vec![
+                "none".to_string(),
+                THEME_ORANGE.name.to_string(),
+                THEME_GREEN.name.to_string(),
+                THEME_BLUE.name.to_string(),
+                THEME_PURPLE.name.to_string(),
+                THEME_WHITE.name.to_string(),
+                THEME_RED.name.to_string(),
+                THEME_YELLOW.name.to_string(),
+                THEME_CYAN.name.to_string(),
+            ]
+        }
         _ => vec![], // Empty for non-list settings
     }
 }
@@ -65,6 +90,37 @@ pub fn find_initial_modal_index(config: &Config, key: &str) -> usize {
 
     values.iter()
         .position(|&v| v == current_value)
+        .unwrap_or(0)
+}
+
+/// Get the setting keys and values for display in a category
+pub fn get_category_settings(category: SettingsCategory, config: &Config) -> Vec<(String, String)> {
+    match category {
+        SettingsCategory::Logging => vec![
+            ("Log Level".to_string(), config.log_level.clone()),
+            ("Log File".to_string(), config.log_file.clone()),
+        ],
+        SettingsCategory::Display => vec![
+            ("Theme".to_string(), config.display.theme.as_ref().map(|t| t.name.to_string()).unwrap_or_else(|| "none".to_string())),
+            ("Use Unicode".to_string(), config.display.use_unicode.to_string()),
+            ("Selection Color".to_string(), "...".to_string()), // Placeholder
+            ("Division Header Color".to_string(), "...".to_string()),
+            ("Error Color".to_string(), "...".to_string()),
+        ],
+        SettingsCategory::Data => vec![
+            ("Refresh Interval".to_string(), format!("{} seconds", config.refresh_interval)),
+            ("Western Teams First".to_string(), config.display_standings_western_first.to_string()),
+            ("Time Format".to_string(), config.time_format.clone()),
+        ],
+    }
+}
+
+/// Calculate the maximum key length for a category (used for alignment)
+pub fn get_max_key_length(category: SettingsCategory, config: &Config) -> usize {
+    get_category_settings(category, config)
+        .iter()
+        .map(|(key, _)| key.len())
+        .max()
         .unwrap_or(0)
 }
 
@@ -144,7 +200,7 @@ mod tests {
     #[test]
     fn test_get_setting_values_theme() {
         let values = get_setting_values("theme");
-        assert_eq!(values, vec!["none", "orange", "green", "blue", "purple", "white"]);
+        assert_eq!(values, vec!["none", "orange", "green", "blue", "purple", "white", "red", "yellow", "cyan"]);
     }
 
     #[test]

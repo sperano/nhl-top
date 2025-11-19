@@ -269,16 +269,43 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
 
         SettingsAction::ModalMoveUp => {
             let mut new_state = state;
-            if new_state.ui.settings.modal_selected_index > 0 {
-                new_state.ui.settings.modal_selected_index -= 1;
+            let setting_key = crate::tui::settings_helpers::get_editable_setting_key(
+                new_state.ui.settings.selected_category,
+                new_state.ui.settings.selected_setting_index,
+            );
+
+            if let Some(key) = setting_key {
+                let values = crate::tui::settings_helpers::get_setting_values(&key);
+                if !values.is_empty() {
+                    if new_state.ui.settings.modal_selected_index == 0 {
+                        // Wrap to bottom
+                        new_state.ui.settings.modal_selected_index = values.len() - 1;
+                    } else {
+                        new_state.ui.settings.modal_selected_index -= 1;
+                    }
+                }
             }
             (new_state, Effect::None)
         }
 
         SettingsAction::ModalMoveDown => {
             let mut new_state = state;
-            // We'll validate max based on the setting's options in the UI layer
-            new_state.ui.settings.modal_selected_index += 1;
+            let setting_key = crate::tui::settings_helpers::get_editable_setting_key(
+                new_state.ui.settings.selected_category,
+                new_state.ui.settings.selected_setting_index,
+            );
+
+            if let Some(key) = setting_key {
+                let values = crate::tui::settings_helpers::get_setting_values(&key);
+                if !values.is_empty() {
+                    if new_state.ui.settings.modal_selected_index >= values.len() - 1 {
+                        // Wrap to top
+                        new_state.ui.settings.modal_selected_index = 0;
+                    } else {
+                        new_state.ui.settings.modal_selected_index += 1;
+                    }
+                }
+            }
             (new_state, Effect::None)
         }
 
