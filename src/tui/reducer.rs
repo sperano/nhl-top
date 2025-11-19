@@ -99,8 +99,11 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
         Action::SetStatusMessage { message, is_error } => {
             let mut new_state = state;
-            new_state.system.status_message = Some(message);
-            new_state.system.status_is_error = is_error;
+            if is_error {
+                new_state.system.set_status_error_message(message);
+            } else {
+                new_state.system.set_status_message(message);
+            }
             (new_state, Effect::None)
         }
 

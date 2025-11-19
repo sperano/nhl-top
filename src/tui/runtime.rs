@@ -56,15 +56,6 @@ impl Runtime {
         &self.state
     }
 
-    /// Get mutable reference to state (for bridge/migration only)
-    ///
-    /// **WARNING**: This bypasses the action/reducer pattern and should only be used
-    /// during migration for syncing with SharedData. Prefer using `dispatch()` for
-    /// normal state updates.
-    pub fn state_mut(&mut self) -> &mut AppState {
-        &mut self.state
-    }
-
     /// Dispatch an action to be processed by the reducer
     pub fn dispatch(&mut self, action: Action) {
         trace!("ACTION: Dispatching {:?}", action);

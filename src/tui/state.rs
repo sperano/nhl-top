@@ -165,3 +165,68 @@ pub struct SystemState {
     pub status_is_error: bool,
 }
 
+impl SystemState {
+    pub fn set_status_message(&mut self, message: String) {
+        self.status_message = Some(message);
+        self.status_is_error = false;
+    }
+
+    pub fn set_status_error_message(&mut self, message: String) {
+        self.status_message = Some(message);
+        self.status_is_error = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_status_message() {
+        let mut state = SystemState::default();
+
+        state.set_status_message("Test message".to_string());
+
+        assert_eq!(state.status_message, Some("Test message".to_string()));
+        assert!(!state.status_is_error);
+    }
+
+    #[test]
+    fn test_set_status_error_message() {
+        let mut state = SystemState::default();
+
+        state.set_status_error_message("Error message".to_string());
+
+        assert_eq!(state.status_message, Some("Error message".to_string()));
+        assert!(state.status_is_error);
+    }
+
+    #[test]
+    fn test_set_status_message_overwrites_error_flag() {
+        let mut state = SystemState::default();
+
+        // First set an error
+        state.set_status_error_message("Error".to_string());
+        assert!(state.status_is_error);
+
+        // Then set a normal message - should clear error flag
+        state.set_status_message("Normal message".to_string());
+        assert_eq!(state.status_message, Some("Normal message".to_string()));
+        assert!(!state.status_is_error);
+    }
+
+    #[test]
+    fn test_set_status_error_message_overwrites_normal_message() {
+        let mut state = SystemState::default();
+
+        // First set a normal message
+        state.set_status_message("Normal".to_string());
+        assert!(!state.status_is_error);
+
+        // Then set an error - should set error flag
+        state.set_status_error_message("Error message".to_string());
+        assert_eq!(state.status_message, Some("Error message".to_string()));
+        assert!(state.status_is_error);
+    }
+}
+
