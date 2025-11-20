@@ -169,11 +169,10 @@ fn format_color(color: &ratatui::style::Color) -> String {
 mod tests {
     use super::*;
     use ratatui::{buffer::Buffer, layout::Rect};
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
 
     #[test]
     fn test_settings_list_logging_category() {
-        use crate::tui::testing::assert_buffer;
-
         let config = Config::default();
         let widget = SettingsListWidget::new(
             SettingsCategory::Logging,
@@ -185,7 +184,7 @@ mod tests {
             String::new(),
         );
 
-        let area = Rect::new(0, 0, 80, 3);
+        let area = Rect::new(0, 0, RENDER_WIDTH, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
@@ -261,7 +260,7 @@ mod tests {
             "/tmp/test.log".to_string(),
         );
 
-        let area = Rect::new(0, 0, 80, 3);
+        let area = Rect::new(0, 0, RENDER_WIDTH, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
@@ -290,7 +289,7 @@ mod tests {
             String::new(),
         );
 
-        let area = Rect::new(0, 0, 80, 3);
+        let area = Rect::new(0, 0, RENDER_WIDTH, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 
@@ -319,7 +318,7 @@ mod tests {
             String::new(), // Empty buffer
         );
 
-        let area = Rect::new(0, 0, 80, 3);
+        let area = Rect::new(0, 0, RENDER_WIDTH, 3);
         let mut buf = Buffer::empty(area);
         let display_config = DisplayConfig::default();
 

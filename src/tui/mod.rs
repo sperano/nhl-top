@@ -49,12 +49,11 @@ use ratatui::{
 };
 use nhl_api::Client;
 use crate::config::Config;
+use crate::layout_constants::GAME_BOX_WITH_MARGIN;
 
 /// Calculate how many game boxes fit per row based on terminal width
-/// GameBox dimensions: 37 wide + 2 margin = 39 per box
 fn calculate_boxes_per_row(terminal_width: u16) -> u16 {
-    const BOX_WIDTH_WITH_MARGIN: u16 = 39;
-    (terminal_width / BOX_WIDTH_WITH_MARGIN).max(1)
+    (terminal_width / GAME_BOX_WITH_MARGIN).max(1)
 }
 
 /// Check if an action is a quit action

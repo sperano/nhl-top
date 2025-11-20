@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use nhl_api::{DailySchedule, GameDate, GameMatchup};
 //
 use crate::config::DisplayConfig;
+use crate::layout_constants::SCORE_BOX_WIDTH;
 use crate::tui::{
     component::{Component, Element, RenderableWidget},
 };
@@ -209,13 +210,11 @@ impl RenderableWidget for GameListWidget {
                 ratatui::widgets::Widget::render(widget, area, buf);
             }
             Some(schedule) => {
-                // GameBox dimensions: 37 wide × 7 tall
-                const GAME_BOX_WIDTH: u16 = 37;
                 const GAME_BOX_HEIGHT: u16 = 7;
                 const GAME_BOX_MARGIN: u16 = 2;
 //
                 // Calculate how many game boxes fit in a row
-                let boxes_per_row = (area.width / (GAME_BOX_WIDTH + GAME_BOX_MARGIN)).max(1);
+                let boxes_per_row = (area.width / (SCORE_BOX_WIDTH + GAME_BOX_MARGIN)).max(1);
 //
                 // Create game boxes
                 let game_boxes: Vec<(GameBox, usize)> = schedule
@@ -243,8 +242,8 @@ impl RenderableWidget for GameListWidget {
                             break;
                         }
 //
-                        let col_x = area.x + col_idx * (GAME_BOX_WIDTH + GAME_BOX_MARGIN);
-                        let box_area = Rect::new(col_x, row_y, GAME_BOX_WIDTH, GAME_BOX_HEIGHT);
+                        let col_x = area.x + col_idx * (SCORE_BOX_WIDTH + GAME_BOX_MARGIN);
+                        let box_area = Rect::new(col_x, row_y, SCORE_BOX_WIDTH, GAME_BOX_HEIGHT);
 //
                         if box_area.x + box_area.width <= area.x + area.width {
                             let (game_box, _) = &game_boxes[game_idx];

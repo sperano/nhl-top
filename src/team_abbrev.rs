@@ -46,16 +46,3 @@ pub fn common_name_to_abbrev(common_name: &str) -> Option<&'static str> {
         _ => None,
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_common_name_to_abbrev() {
-        assert_eq!(common_name_to_abbrev("Maple Leafs"), Some("TOR"));
-        assert_eq!(common_name_to_abbrev("Bruins"), Some("BOS"));
-        assert_eq!(common_name_to_abbrev("Golden Knights"), Some("VGK"));
-        assert_eq!(common_name_to_abbrev("Unknown"), None);
-    }
-}

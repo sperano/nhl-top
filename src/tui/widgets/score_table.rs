@@ -5,11 +5,7 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::RenderableWidget;
-
-/// Constants for score table layout
-const TEAM_ABBREV_COL_WIDTH: usize = 5;
-const PERIOD_COL_WIDTH: usize = 4;
-const TABLE_WIDTH: usize = 37; // Fixed width to accommodate all 5 periods
+use crate::layout_constants::{SCORE_BOX_WIDTH, PERIOD_COL_WIDTH, TEAM_ABBREV_COL_WIDTH};
 
 /// Widget for displaying period-by-period scores
 #[derive(Debug, Clone)]
@@ -82,7 +78,7 @@ impl ScoreTable {
         let total_cols = self.total_columns();
         // Current width = 1 (left border) + 5 (team) + (total_cols-1) * (1 sep + 4 data) + 1 (right border)
         let current_width = 1 + TEAM_ABBREV_COL_WIDTH + (total_cols - 1) * (1 + PERIOD_COL_WIDTH) + 1;
-        TABLE_WIDTH.saturating_sub(current_width)
+        (SCORE_BOX_WIDTH as usize).saturating_sub(current_width)
     }
 
     /// Check if a period should show score or dash (for live games)
@@ -110,7 +106,7 @@ impl ScoreTable {
 
 impl RenderableWidget for ScoreTable {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        if area.height < 6 || area.width < TABLE_WIDTH as u16 {
+        if area.height < 6 || area.width < SCORE_BOX_WIDTH {
             return; // Not enough space
         }
 
@@ -180,7 +176,7 @@ impl RenderableWidget for ScoreTable {
     }
 
     fn preferred_width(&self) -> Option<u16> {
-        Some(TABLE_WIDTH as u16) // Fixed width
+        Some(SCORE_BOX_WIDTH)
     }
 }
 

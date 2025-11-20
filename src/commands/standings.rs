@@ -9,9 +9,6 @@ use anyhow::{Context, Result};
 /// Width of standings table column (for two-column layout)
 const STANDINGS_COLUMN_WIDTH: usize = 46;
 
-/// Width of the separator line (matches the table header width)
-const SEPARATOR_LINE_WIDTH: usize = 46;
-
 /// Width of team name column
 const TEAM_NAME_COL_WIDTH: usize = 25;
 
@@ -90,7 +87,7 @@ pub fn format_standings_table(standings: &[Standing], display: &DisplayConfig) -
         ot_width = OT_COL_WIDTH,
         pts_width = PTS_COL_WIDTH
     ));
-    output.push_str(&format!("{}\n", display.box_chars.horizontal.repeat(SEPARATOR_LINE_WIDTH)));
+    output.push_str(&format!("{}\n", display.box_chars.horizontal.repeat(STANDINGS_COLUMN_WIDTH)));
 
     // Print each team's stats
     for standing in standings {
@@ -304,7 +301,7 @@ fn format_wildcard_conference(
             // Header has 3 lines (title, underline, blank) + table header (2 lines) + teams
             let cutoff_line_idx = 3 + 2 + 2; // After 2nd team row
             if lines.len() > cutoff_line_idx {
-                lines.insert(cutoff_line_idx, display.box_chars.horizontal.repeat(SEPARATOR_LINE_WIDTH).to_string());
+                lines.insert(cutoff_line_idx, display.box_chars.horizontal.repeat(STANDINGS_COLUMN_WIDTH).to_string());
             }
         }
     }

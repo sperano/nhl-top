@@ -143,13 +143,13 @@ pub fn render_list_modal(
 mod tests {
     use super::*;
     use crate::tui::widgets::testing::test_config;
-    use crate::tui::testing::assert_buffer;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
 
     #[test]
     fn test_list_modal_basic_render() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
-        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 24));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 24);
 
         let options = vec!["Option 1".to_string(), "Option 2".to_string()];
 
@@ -266,8 +266,8 @@ mod tests {
     #[test]
     fn test_list_modal_sizing() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
-        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 24));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 24);
 
         let options = vec![
             "Short".to_string(),
@@ -295,8 +295,8 @@ mod tests {
     #[test]
     fn test_list_modal_empty_options() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
-        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 24));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 24);
 
         let options: Vec<String> = vec![];
 
@@ -351,8 +351,8 @@ mod tests {
     #[test]
     fn test_list_modal_widget_render() {
         let config = test_config();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 24));
-        let area = Rect::new(0, 0, 80, 24);
+        let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 24));
+        let area = Rect::new(0, 0, RENDER_WIDTH, 24);
 
         let options = vec!["First".to_string(), "Second".to_string()];
         let widget = ListModalWidget::new(options, 0, 10, 5);

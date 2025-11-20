@@ -5,9 +5,9 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
 use crate::config::DisplayConfig;
 use crate::tui::widgets::{RenderableWidget, ScoreTable};
+use crate::layout_constants::SCORE_BOX_WIDTH;
 
 /// Constants for game box layout
-const GAME_BOX_WIDTH: usize = 37;
 const GAME_BOX_HEIGHT: usize = 7;
 const HEADER_CONTENT_WIDTH: usize = 36;
 
@@ -109,7 +109,7 @@ impl GameBox {
 
 impl RenderableWidget for GameBox {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        if area.height < GAME_BOX_HEIGHT as u16 || area.width < GAME_BOX_WIDTH as u16 {
+        if area.height < GAME_BOX_HEIGHT as u16 || area.width < SCORE_BOX_WIDTH {
             return; // Not enough space
         }
 
@@ -144,7 +144,7 @@ impl RenderableWidget for GameBox {
                 self.selected,
             );
 
-            let table_area = Rect::new(area.x, y, GAME_BOX_WIDTH as u16, 6);
+            let table_area = Rect::new(area.x, y, SCORE_BOX_WIDTH, 6);
             score_table.render(table_area, buf, config);
         }
     }
@@ -154,7 +154,7 @@ impl RenderableWidget for GameBox {
     }
 
     fn preferred_width(&self) -> Option<u16> {
-        Some(GAME_BOX_WIDTH as u16)
+        Some(SCORE_BOX_WIDTH)
     }
 }
 

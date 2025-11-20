@@ -5,3 +5,10 @@
 
 /// Global constants
 pub const NHL_LEAGUE_ABBREV: &str = "NHL";
+
+enum TeamNameFormat {
+    Abbreviated,
+    City,
+    Common,
+    Full,
+}

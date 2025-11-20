@@ -9,6 +9,9 @@ use phf::phf_map;
 /// Factor used to darken theme colors (0.5 = 50% darker)
 const DARKENING_FACTOR: f32 = 0.5;
 
+/// Default refresh interval in seconds for background data fetching
+pub const DEFAULT_REFRESH_INTERVAL_SECONDS: u32 = 60;
+
 /// Style modifier for selected items (reversed and bold)
 pub const SELECTION_STYLE_MODIFIER: Modifier = Modifier::REVERSED.union(Modifier::BOLD);
 
@@ -182,7 +185,7 @@ impl Default for Config {
         Config {
             log_level: "info".to_string(),
             log_file: "/dev/null".to_string(),
-            refresh_interval: 60,
+            refresh_interval: DEFAULT_REFRESH_INTERVAL_SECONDS,
             display_standings_western_first: false,
             time_format: "%H:%M:%S".to_string(),
             display: DisplayConfig::default(),
