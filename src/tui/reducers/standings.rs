@@ -34,12 +34,10 @@ pub fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, 
 
 fn handle_cycle_view(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
-    new_state.ui.standings.view = match new_state.ui.standings.view {
-        GroupBy::Wildcard => GroupBy::Division,
-        GroupBy::Division => GroupBy::Conference,
-        GroupBy::Conference => GroupBy::League,
-        GroupBy::League => GroupBy::Wildcard,
-    };
+    new_state.ui.standings.view = new_state.ui.standings.view.next();
+
+    // Rebuild layout cache when view changes
+    rebuild_standings_layout_cache(&mut new_state);
 
     // Reset selection when changing views
     reset_standings_selection(&mut new_state);
@@ -48,23 +46,19 @@ fn handle_cycle_view(state: AppState) -> (AppState, Effect) {
 
 fn handle_cycle_view_left(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
-    new_state.ui.standings.view = match new_state.ui.standings.view {
-        GroupBy::Wildcard => GroupBy::League,
-        GroupBy::Division => GroupBy::Wildcard,
-        GroupBy::Conference => GroupBy::Division,
-        GroupBy::League => GroupBy::Conference,
-    };
+    new_state.ui.standings.view = new_state.ui.standings.view.prev();
+
+    // Rebuild layout cache when view changes
+    rebuild_standings_layout_cache(&mut new_state);
     (new_state, Effect::None)
 }
 
 fn handle_cycle_view_right(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
-    new_state.ui.standings.view = match new_state.ui.standings.view {
-        GroupBy::Wildcard => GroupBy::Division,
-        GroupBy::Division => GroupBy::Conference,
-        GroupBy::Conference => GroupBy::League,
-        GroupBy::League => GroupBy::Wildcard,
-    };
+    new_state.ui.standings.view = new_state.ui.standings.view.next();
+
+    // Rebuild layout cache when view changes
+    rebuild_standings_layout_cache(&mut new_state);
     (new_state, Effect::None)
 }
 
@@ -81,47 +75,42 @@ fn handle_exit_browse_mode(state: AppState) -> (AppState, Effect) {
 }
 
 fn handle_select_team(state: AppState) -> (AppState, Effect) {
-    // Build layout map from standings data (same logic as renderer)
-    if let Some(ref standings) = state.data.standings {
-        let layout = build_standings_layout(
-            standings,
-            state.ui.standings.view,
-            state.system.config.display_standings_western_first,
+    // Use cached layout instead of rebuilding
+    // Extract team_abbrev from cached layout before moving state
+    let team_abbrev_opt = state.ui.standings.layout
+        .get(state.ui.standings.selected_column)
+        .and_then(|col| col.get(state.ui.standings.selected_row))
+        .cloned();
+
+    if let Some(team_abbrev) = team_abbrev_opt {
+        debug!(
+            "STANDINGS: Selected team: {} (row={}, col={})",
+            team_abbrev,
+            state.ui.standings.selected_row,
+            state.ui.standings.selected_column
         );
 
-        // Lookup team at selected position
-        if let Some(col) = layout.get(state.ui.standings.selected_column) {
-            if let Some(team_abbrev) = col.get(state.ui.standings.selected_row) {
-                debug!(
-                    "STANDINGS: Selected team: {} (row={}, col={})",
-                    team_abbrev,
-                    state.ui.standings.selected_row,
-                    state.ui.standings.selected_column
-                );
+        // Push TeamDetail panel onto navigation stack
+        let panel = Panel::TeamDetail {
+            abbrev: team_abbrev.clone(),
+        };
 
-                // Push TeamDetail panel onto navigation stack
-                let panel = Panel::TeamDetail {
-                    abbrev: team_abbrev.clone(),
-                };
+        let mut new_state = state;
+        new_state.navigation.panel_stack.push(PanelState {
+            panel,
+            scroll_offset: 0,
+            selected_index: Some(0), // Start with first player selected
+        });
 
-                let mut new_state = state;
-                new_state.navigation.panel_stack.push(PanelState {
-                    panel,
-                    scroll_offset: 0,
-                    selected_index: Some(0), // Start with first player selected
-                });
+        debug!("STANDINGS: Pushed TeamDetail panel for {}", team_abbrev);
 
-                debug!("STANDINGS: Pushed TeamDetail panel for {}", team_abbrev);
-
-                return (new_state, Effect::None);
-            } else {
-                debug!(
-                    "STANDINGS: No team at position (row={}, col={})",
-                    state.ui.standings.selected_row,
-                    state.ui.standings.selected_column
-                );
-            }
-        }
+        return (new_state, Effect::None);
+    } else {
+        debug!(
+            "STANDINGS: No team at position (row={}, col={})",
+            state.ui.standings.selected_row,
+            state.ui.standings.selected_column
+        );
     }
 
     (state, Effect::None)
@@ -138,7 +127,7 @@ fn handle_move_selection_up(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Get team count (respects column in Conference/Division/Wildcard views)
-    if let Some(ref standings) = new_state.data.standings {
+    if let Some(standings) = new_state.data.standings.as_ref().as_ref() {
         let team_count = get_team_count_for_column(
             standings,
             new_state.ui.standings.view,
@@ -164,7 +153,7 @@ fn handle_move_selection_down(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Get team count (respects column in Conference/Division/Wildcard views)
-    if let Some(ref standings) = new_state.data.standings {
+    if let Some(standings) = new_state.data.standings.as_ref().as_ref() {
         let team_count = get_team_count_for_column(
             standings,
             new_state.ui.standings.view,
@@ -226,6 +215,17 @@ fn handle_move_selection_right(state: AppState) -> (AppState, Effect) {
 
 // Helper functions
 
+/// Rebuild the standings layout cache from current standings data
+fn rebuild_standings_layout_cache(state: &mut AppState) {
+    if let Some(standings) = state.data.standings.as_ref().as_ref() {
+        state.ui.standings.layout = build_standings_layout(
+            standings,
+            state.ui.standings.view,
+            state.system.config.display_standings_western_first,
+        );
+    }
+}
+
 fn reset_standings_selection(state: &mut AppState) {
     state.ui.standings.selected_column = 0;
     state.ui.standings.selected_row = 0;
@@ -247,7 +247,7 @@ fn get_team_count_for_column(
 }
 
 fn clamp_row_to_column_bounds(state: &mut AppState) {
-    if let Some(ref standings) = state.data.standings {
+    if let Some(standings) = state.data.standings.as_ref().as_ref() {
         let team_count = get_team_count_for_column(
             standings,
             state.ui.standings.view,
@@ -264,6 +264,7 @@ fn clamp_row_to_column_bounds(state: &mut AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_cycle_view_wildcard_to_division() {
@@ -567,10 +568,18 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        let standings = create_test_standings();
+        state.data.standings = Arc::new(Some(standings.clone()));
         state.ui.standings.view = GroupBy::Division;
         state.ui.standings.selected_column = 0;
         state.ui.standings.selected_row = 0;
+
+        // Build layout cache (normally done when standings are loaded or view changes)
+        state.ui.standings.layout = build_standings_layout(
+            &standings,
+            state.ui.standings.view,
+            false, // western_first = false
+        );
 
         let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeam);
 
@@ -590,7 +599,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Conference;
 
         let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 3));
@@ -606,7 +615,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::League;
         state.ui.standings.selected_row = 5;
 
@@ -621,7 +630,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::League;
         state.ui.standings.selected_row = 0;
 
@@ -637,7 +646,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::League;
         state.ui.standings.selected_row = 5;
 
@@ -652,7 +661,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::League;
         state.ui.standings.selected_row = 31; // Last team
 
@@ -668,7 +677,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Conference;
         state.ui.standings.selected_column = 1; // Western
         state.ui.standings.selected_row = 10; // Row that exists in Western but maybe not in Eastern
@@ -685,7 +694,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Conference;
         state.ui.standings.selected_column = 0; // Eastern
         state.ui.standings.selected_row = 10;
@@ -702,7 +711,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Division;
         state.ui.standings.selected_column = 0; // Eastern divisions
         state.ui.standings.selected_row = 2;
@@ -718,7 +727,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Conference;
         state.ui.standings.selected_column = 0; // Eastern
         state.ui.standings.selected_row = 5;
@@ -734,7 +743,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Wildcard;
         state.ui.standings.selected_column = 0; // Eastern
         state.ui.standings.selected_row = 5;
@@ -750,7 +759,7 @@ mod tests {
         use crate::tui::testing::create_test_standings;
 
         let mut state = AppState::default();
-        state.data.standings = Some(create_test_standings());
+        state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Division;
         state.ui.standings.selected_column = 1; // Western divisions
         state.ui.standings.selected_row = 20; // High row that might not exist in Eastern

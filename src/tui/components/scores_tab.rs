@@ -4,6 +4,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 use std::collections::HashMap;
+use std::sync::Arc;
 //
 use nhl_api::{DailySchedule, GameDate, GameMatchup};
 //
@@ -22,9 +23,9 @@ use super::{TabbedPanel, TabbedPanelProps, TabItem};
 pub struct ScoresTabProps {
     pub game_date: GameDate,
     pub selected_index: usize,
-    pub schedule: Option<DailySchedule>,
-    pub game_info: HashMap<i64, GameMatchup>,
-    pub period_scores: HashMap<i64, PeriodScores>,
+    pub schedule: Arc<Option<DailySchedule>>,
+    pub game_info: Arc<HashMap<i64, GameMatchup>>,
+    pub period_scores: Arc<HashMap<i64, PeriodScores>>,
     pub box_selection_active: bool,
     pub selected_game_index: Option<usize>,
     pub focused: bool,
@@ -113,9 +114,9 @@ impl ScoresTab {
 //
 /// Game list widget - shows games for selected date as GameBox widgets
 struct GameListWidget {
-    schedule: Option<DailySchedule>,
-    period_scores: HashMap<i64, PeriodScores>,
-    game_info: HashMap<i64, GameMatchup>,
+    schedule: Arc<Option<DailySchedule>>,
+    period_scores: Arc<HashMap<i64, PeriodScores>>,
+    game_info: Arc<HashMap<i64, GameMatchup>>,
     selected_game_index: Option<usize>,
 }
 //
@@ -196,7 +197,7 @@ impl GameListWidget {
 //
 impl RenderableWidget for GameListWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
-        match &self.schedule {
+        match self.schedule.as_ref().as_ref() {
             None => {
                 let widget = Paragraph::new("Loading games...").block(
                     Block::default().borders(Borders::ALL).title("Games"),
@@ -277,9 +278,9 @@ mod tests {
         let props = ScoresTabProps {
             game_date: GameDate::today(),
             selected_index: 2,
-            schedule: None,
-            game_info: HashMap::new(),
-            period_scores: HashMap::new(),
+            schedule: Arc::new(None),
+            game_info: Arc::new(HashMap::new()),
+            period_scores: Arc::new(HashMap::new()),
             box_selection_active: false,
             selected_game_index: None,
             focused: false,

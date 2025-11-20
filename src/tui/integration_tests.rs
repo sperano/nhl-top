@@ -51,8 +51,8 @@ mod tests {
         runtime.dispatch(Action::StandingsLoaded(Ok(standings.clone())));
 
         // State should now have standings
-        assert!(runtime.state().data.standings.is_some());
-        assert_eq!(runtime.state().data.standings.as_ref().unwrap().len(), 0);
+        assert!(runtime.state().data.standings.as_ref().is_some());
+        assert_eq!(runtime.state().data.standings.as_ref().as_ref().unwrap().len(), 0);
     }
 
     #[tokio::test]

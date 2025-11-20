@@ -129,6 +129,7 @@ impl App {
                     .data
                     .standings
                     .as_ref()
+                    .as_ref()
                     .and_then(|standings| {
                         standings
                             .iter()

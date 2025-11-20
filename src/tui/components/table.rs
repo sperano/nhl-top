@@ -78,7 +78,7 @@
 /// let rows: Vec<PlayerRow> = props.player_stats.clone();
 ///
 /// // 4. Create table widget
-/// let table = TableWidget::from_data(columns, rows)
+/// let table = TableWidget::from_data(&columns, rows)
 ///     .with_selection(props.selected_row.unwrap_or(0), props.selected_col.unwrap_or(0))
 ///     .with_focused(props.table_focused)
 ///     .with_header("Player Statistics")
@@ -112,7 +112,7 @@
 ///     }),
 /// ];
 ///
-/// let table = TableWidget::from_data(columns, standings)
+/// let table = TableWidget::from_data(&columns, standings)
 ///     .with_selection(selected_row, selected_col)
 ///     .with_focused(focused)
 ///     .with_header("NHL Standings")
@@ -232,6 +232,9 @@ impl Component for Table {
     }
 }
 
+/// Width of the selector indicator space (e.g., "► " or "  ")
+const SELECTOR_WIDTH: usize = 2;
+
 /// The actual table widget that implements rendering
 ///
 /// This widget is created directly by parent components that want to render a table.
@@ -254,7 +257,7 @@ pub struct TableWidget {
 impl TableWidget {
     /// Create a new table widget from props
     pub fn new<T: Send + Sync>(props: TableProps<T>) -> Self {
-        Self::from_data(props.columns, props.rows)
+        Self::from_data(&props.columns, props.rows)
             .with_selection_opt(props.selected_row, props.selected_col)
             .with_focused(props.focused)
             .with_header_opt(props.header)
@@ -263,7 +266,7 @@ impl TableWidget {
 
     /// Create a table widget with builder pattern
     /// Extracts all cell data upfront from the rows using column definitions
-    pub fn from_data<T: Send + Sync>(columns: Vec<ColumnDef<T>>, rows: Vec<T>) -> Self {
+    pub fn from_data<T: Send + Sync>(columns: &[ColumnDef<T>], rows: Vec<T>) -> Self {
         // Extract cell data upfront
         let cell_data: Vec<Vec<CellValue>> = rows
             .iter()
@@ -355,17 +358,20 @@ impl TableWidget {
     fn get_cell_style(&self, row: usize, col: usize, config: &DisplayConfig) -> Style {
         let is_selected = self.selected_row == Some(row) && self.selected_col == Some(col);
 
-        if is_selected {
-            if self.focused {
-                // Focused selection: use bright selection color
-                Style::default().fg(config.selection_fg)
+        if is_selected && self.focused {
+            // Focused selection: use REVERSED + BOLD modifier
+            if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg2).add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
             } else {
-                // Unfocused selection: use dim color
-                Style::default().fg(config.unfocused_selection_fg())
+                Style::default().add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
             }
         } else {
-            // No selection: default style
-            Style::default()
+            // Unfocused or not selected: use fg2 from theme (or default if no theme)
+            if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg2)
+            } else {
+                Style::default()
+            }
         }
     }
 
@@ -451,27 +457,48 @@ impl RenderableWidget for TableWidget {
         let margin = self.margin as usize;
         let mut y = area.y;
 
-        // Render header if present
+        // Render header if present (margin first, then selector space)
         if let Some(ref header_text) = self.header {
             if y < area.bottom() {
-                let header_line = format!("{}{}", " ".repeat(margin), header_text);
+                let header_line = format!("{}{}{}",
+                    " ".repeat(margin),
+                    " ".repeat(SELECTOR_WIDTH),
+                    header_text
+                );
+
+                // Apply fg1 style from theme (or default if no theme)
+                let header_style = if let Some(theme) = &config.theme {
+                    Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().add_modifier(Modifier::BOLD)
+                };
+
                 buf.set_string(
                     area.x,
                     y,
                     &header_line,
-                    Style::default().add_modifier(Modifier::BOLD),
+                    header_style,
                 );
                 y += 1;
             }
 
-            // Underline
+            // Underline (margin first, then selector space)
             if y < area.bottom() {
                 let underline = format!(
-                    "{}{}",
+                    "{}{}{}",
                     " ".repeat(margin),
+                    " ".repeat(SELECTOR_WIDTH),
                     "═".repeat(header_text.chars().count())
                 );
-                buf.set_string(area.x, y, &underline, Style::default());
+
+                // Apply fg1 style from theme (or default if no theme)
+                let underline_style = if let Some(theme) = &config.theme {
+                    Style::default().fg(theme.fg1)
+                } else {
+                    Style::default()
+                };
+
+                buf.set_string(area.x, y, &underline, underline_style);
                 y += 1;
             }
 
@@ -481,9 +508,17 @@ impl RenderableWidget for TableWidget {
             }
         }
 
-        // Render column headers
+        // Render column headers (margin first, then selector space)
         if y < area.bottom() {
-            let mut x = area.x + margin as u16;
+            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
+
+            // Apply fg1 style from theme (or default if no theme)
+            let col_header_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().add_modifier(Modifier::BOLD)
+            };
+
             for (col_idx, header) in self.column_headers.iter().enumerate() {
                 let width = self.column_widths[col_idx];
                 let formatted = self.format_cell(header, width, Alignment::Left);
@@ -491,22 +526,34 @@ impl RenderableWidget for TableWidget {
                     x,
                     y,
                     &formatted,
-                    Style::default().add_modifier(Modifier::BOLD),
+                    col_header_style,
                 );
                 x += width as u16 + 2; // +2 for spacing between columns
             }
             y += 1;
         }
 
-        // Render separator line under headers
+        // Render separator line under headers (margin first, then selector space)
         if y < area.bottom() {
             // Calculate total table width (all columns + spacing)
             let total_width: usize = self.column_widths.iter().sum::<usize>()
                 + (self.column_widths.len().saturating_sub(1) * 2); // spacing between columns
 
             let separator = config.box_chars.horizontal.repeat(total_width);
-            let separator_line = format!("{}{}", " ".repeat(margin), separator);
-            buf.set_string(area.x, y, &separator_line, Style::default());
+            let separator_line = format!("{}{}{}",
+                " ".repeat(margin),
+                " ".repeat(SELECTOR_WIDTH),
+                separator
+            );
+
+            // Apply fg3 style from theme (or default if no theme)
+            let separator_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg3)
+            } else {
+                Style::default()
+            };
+
+            buf.set_string(area.x, y, &separator_line, separator_style);
             y += 1;
         }
 
@@ -516,7 +563,28 @@ impl RenderableWidget for TableWidget {
                 break;
             }
 
-            let mut x = area.x + margin as u16;
+            // Render selector indicator (margin first, then selector)
+            let is_row_selected = self.selected_row == Some(row_idx) && self.focused;
+            let selector = if is_row_selected {
+                format!("{} ", config.box_chars.selector)
+            } else {
+                " ".repeat(SELECTOR_WIDTH)
+            };
+
+            // Render margin first
+            if margin > 0 {
+                buf.set_string(area.x, y, &" ".repeat(margin), Style::default());
+            }
+
+            // Then render selector with fg2 color from theme
+            let selector_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg2)
+            } else {
+                Style::default()
+            };
+            buf.set_string(area.x + margin as u16, y, &selector, selector_style);
+
+            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
             for (col_idx, cell_value) in row_cells.iter().enumerate() {
                 let width = self.column_widths[col_idx];
                 let align = self.column_aligns[col_idx];
@@ -627,11 +695,11 @@ mod tests {
         let columns: Vec<ColumnDef<TestRow>> = vec![];
         let rows: Vec<TestRow> = vec![];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
         let config = test_config();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, 1, &config);
 
-        // Empty table renders nothing
+        // Empty table renders nothing (no selector space without content)
         assert_buffer(&buf, &[""]);
     }
 
@@ -659,7 +727,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
@@ -667,10 +735,10 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Name        Val",
-                "─────────────────",
-                "Row1           10",
-                "Row2           20",
+                "  Name        Val",
+                "  ─────────────────",
+                "  Row1           10",
+                "  Row2           20",
             ],
         );
     }
@@ -687,7 +755,7 @@ mod tests {
             CellValue::Text(r.name.clone())
         })];
 
-        let widget = TableWidget::from_data(columns, rows).with_header("Test Table");
+        let widget = TableWidget::from_data(&columns, rows).with_header("Test Table");
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
@@ -695,12 +763,12 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Test Table",
-                "══════════",
+                "  Test Table",
+                "  ══════════",
                 "",
-                "Name",
-                "──────────",
-                "Test",
+                "  Name",
+                "  ──────────",
+                "  Test",
             ],
         );
     }
@@ -717,7 +785,7 @@ mod tests {
             CellValue::Text(r.name.clone())
         })];
 
-        let widget = TableWidget::from_data(columns, rows).with_margin(2);
+        let widget = TableWidget::from_data(&columns, rows).with_margin(2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
@@ -725,9 +793,9 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "  Name",
-                "  ──────────",
-                "  Test",
+                "    Name",
+                "    ──────────",
+                "    Test",
             ],
         );
     }
@@ -752,7 +820,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
@@ -760,9 +828,9 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Left        Right       Center",
-                "──────────────────────────────────",
-                "L                    R      C",
+                "  Left        Right       Center",
+                "  ──────────────────────────────────",
+                "  L                    R      C",
             ],
         );
     }
@@ -779,7 +847,7 @@ mod tests {
             CellValue::Text(r.name.clone())
         })];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
@@ -787,9 +855,9 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Name",
-                "──────────",
-                "Very Lo...",
+                "  Name",
+                "  ──────────",
+                "  Very Lo...",
             ],
         );
     }
@@ -799,7 +867,7 @@ mod tests {
         let rows = create_test_rows();
         let columns = create_test_columns();
 
-        let widget = TableWidget::from_data(columns, rows).with_header("Stats");
+        let widget = TableWidget::from_data(&columns, rows).with_header("Stats");
 
         // Height: header(1) + underline(1) + blank(1) + col_header(1) + separator(1) + 3 rows = 8
         assert_eq!(widget.preferred_height(), Some(8));
@@ -827,7 +895,7 @@ mod tests {
             CellValue::Text(r.name.clone())
         })];
 
-        let widget = TableWidget::from_data(columns, rows)
+        let widget = TableWidget::from_data(&columns, rows)
             .with_selection(1, 0) // Select row 1, col 0
             .with_focused(true);
 
@@ -835,15 +903,15 @@ mod tests {
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
 
-        // Row 1 should be highlighted with selection_fg
+        // Row 1 should be highlighted with selection_fg and show selector
         // Note: We can't easily test the color in assert_buffer, but we can verify the text
         assert_buffer(
             &buf,
             &[
-                "Name",
-                "──────────",
-                "Row1",
-                "Row2", // This row should have selection_fg
+                "  Name",
+                "  ──────────",
+                "  Row1",
+                "► Row2", // This row should have selection_fg and selector
             ],
         );
     }
@@ -875,7 +943,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         // From column 0 (Text1), next link is column 1 (Link1)
         assert_eq!(widget.find_next_link_column(0), Some(1));
@@ -912,7 +980,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         // From column 0 (Link1), no previous link
         assert_eq!(widget.find_prev_link_column(0), None);
@@ -944,7 +1012,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
         assert_eq!(widget.find_first_link_column(), Some(1));
     }
 
@@ -962,7 +1030,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
         assert_eq!(widget.find_first_link_column(), None);
     }
 
@@ -982,7 +1050,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         // Get player link cell
         let cell = widget.get_cell_value(0, 0);
@@ -1004,7 +1072,7 @@ mod tests {
         let rows = create_test_rows();
         let columns = create_test_columns();
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         assert_eq!(widget.row_count(), 3);
         assert_eq!(widget.column_count(), 2);
@@ -1032,7 +1100,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows).with_header("Player Stats");
+        let widget = TableWidget::from_data(&columns, rows).with_header("Player Stats");
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         render_framework_widget(&widget, 50, height, &config);
@@ -1052,7 +1120,7 @@ mod tests {
             }
         })];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         // Get the player link cell
         let cell = widget.get_cell_value(0, 0).unwrap();
@@ -1076,7 +1144,7 @@ mod tests {
             }
         })];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         // Get the team link cell
         let cell = widget.get_cell_value(0, 0).unwrap();
@@ -1124,7 +1192,7 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(columns, rows);
+        let widget = TableWidget::from_data(&columns, rows);
 
         // Navigate right from col 0 (Link) should jump to col 3 (Link), skipping cols 1-2 (Text)
         assert_eq!(widget.find_next_link_column(0), Some(3));

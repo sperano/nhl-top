@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
@@ -14,8 +15,7 @@ use super::types::{Panel, SettingsCategory, Tab};
 /// This is the entire application state in one place.
 /// All state changes happen through the reducer.
 /// Components receive slices of this state as props.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AppState {
     /// Navigation state (which tab, panel stack)
     pub navigation: NavigationState,
@@ -61,14 +61,14 @@ pub struct PanelState {
 #[derive(Debug, Clone)]
 #[derive(Default)]
 pub struct DataState {
-    // API data
-    pub standings: Option<Vec<Standing>>,
-    pub schedule: Option<DailySchedule>,
-    pub game_info: HashMap<i64, GameMatchup>,
-    pub period_scores: HashMap<i64, PeriodScores>,
-    pub boxscores: HashMap<i64, Boxscore>,
-    pub team_roster_stats: HashMap<String, ClubStats>,
-    pub player_data: HashMap<i64, PlayerLanding>,
+    // API data - wrapped in Arc to avoid deep clones on every reducer call
+    pub standings: Arc<Option<Vec<Standing>>>,
+    pub schedule: Arc<Option<DailySchedule>>,
+    pub game_info: Arc<HashMap<i64, GameMatchup>>,
+    pub period_scores: Arc<HashMap<i64, PeriodScores>>,
+    pub boxscores: Arc<HashMap<i64, Boxscore>>,
+    pub team_roster_stats: Arc<HashMap<String, ClubStats>>,
+    pub player_data: Arc<HashMap<i64, PlayerLanding>>,
 
     // Loading states
     pub loading: HashSet<LoadingKey>,

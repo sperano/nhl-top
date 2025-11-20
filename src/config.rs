@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use ratatui::style::{Color, Modifier};
 use phf::phf_map;
 
+// TODO: darker_colorX should be renamed dimmer_colorX
+
 /// Factor used to darken theme colors (0.5 = 50% darker)
 const DARKENING_FACTOR: f32 = 0.5;
 

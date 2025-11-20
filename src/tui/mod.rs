@@ -18,7 +18,6 @@ pub mod state;
 pub mod table;
 pub mod types;
 
-#[cfg(test)]
 pub mod testing;
 
 #[cfg(test)]

@@ -1,9 +1,11 @@
+use std::sync::Arc;
 use std::time::SystemTime;
 use tracing::debug;
 
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
 use crate::tui::state::{AppState, LoadingKey};
+use crate::tui::reducers::standings_layout::build_standings_layout;
 
 /// Handle all data loading actions (API responses)
 pub fn reduce_data_loading(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
@@ -37,9 +39,16 @@ fn handle_standings_loaded(
     match result {
         Ok(standings) => {
             debug!("DATA: Loaded {} standings", standings.len());
-            new_state.data.standings = Some(standings);
+            new_state.data.standings = Arc::new(Some(standings.clone()));
             new_state.data.errors.clear();
             new_state.data.loading.remove(&LoadingKey::Standings);
+
+            // Rebuild standings layout cache when data changes
+            new_state.ui.standings.layout = build_standings_layout(
+                &standings,
+                new_state.ui.standings.view,
+                new_state.system.config.display_standings_western_first,
+            );
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
@@ -60,7 +69,7 @@ fn handle_schedule_loaded(
     match result {
         Ok(schedule) => {
             debug!("DATA: Loaded schedule with {} games", schedule.games.len());
-            new_state.data.schedule = Some(schedule);
+            new_state.data.schedule = Arc::new(Some(schedule));
             new_state.data.errors.clear();
             // TODO: Remove Schedule loading key - needs date string
         }
@@ -88,11 +97,11 @@ fn handle_game_details_loaded(
             // Extract period scores from the game matchup
             if let Some(ref summary) = game_matchup.summary {
                 let period_scores = crate::commands::scores_format::extract_period_scores(summary);
-                new_state.data.period_scores.insert(game_id, period_scores);
+                Arc::make_mut(&mut new_state.data.period_scores).insert(game_id, period_scores);
             }
 
             // Store game info
-            new_state.data.game_info.insert(game_id, game_matchup);
+            Arc::make_mut(&mut new_state.data.game_info).insert(game_id, game_matchup);
 
             new_state.data.loading.remove(&LoadingKey::GameDetails(game_id));
         }
@@ -115,7 +124,7 @@ fn handle_boxscore_loaded(
     match result {
         Ok(boxscore) => {
             debug!("DATA: Loaded boxscore for game {}", game_id);
-            new_state.data.boxscores.insert(game_id, boxscore);
+            Arc::make_mut(&mut new_state.data.boxscores).insert(game_id, boxscore);
             new_state.data.loading.remove(&LoadingKey::Boxscore(game_id));
         }
         Err(e) => {
@@ -138,7 +147,7 @@ fn handle_team_roster_loaded(
     match result {
         Ok(roster) => {
             debug!("DATA: Loaded roster for team {}", team_abbrev);
-            new_state.data.team_roster_stats.insert(team_abbrev.clone(), roster);
+            Arc::make_mut(&mut new_state.data.team_roster_stats).insert(team_abbrev.clone(), roster);
             new_state.data.loading.remove(&LoadingKey::TeamRosterStats(team_abbrev));
         }
         Err(e) => {
@@ -161,7 +170,7 @@ fn handle_player_stats_loaded(
     match result {
         Ok(stats) => {
             debug!("DATA: Loaded stats for player {}", player_id);
-            new_state.data.player_data.insert(player_id, stats);
+            Arc::make_mut(&mut new_state.data.player_data).insert(player_id, stats);
             new_state.data.loading.remove(&LoadingKey::PlayerStats(player_id));
         }
         Err(e) => {
@@ -185,9 +194,9 @@ fn handle_set_game_date(state: AppState, date: nhl_api::GameDate) -> (AppState, 
     new_state.ui.scores.game_date = date;
 
     // Clear schedule data when date changes
-    new_state.data.schedule = None;
-    new_state.data.game_info.clear();
-    new_state.data.period_scores.clear();
+    new_state.data.schedule = Arc::new(None);
+    Arc::make_mut(&mut new_state.data.game_info).clear();
+    Arc::make_mut(&mut new_state.data.period_scores).clear();
 
     (new_state, Effect::None)
 }

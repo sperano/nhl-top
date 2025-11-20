@@ -33,7 +33,7 @@ impl DataEffects {
         ];
 
         // Add game detail fetches for started games
-        if let Some(schedule) = &state.data.schedule {
+        if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
             for game in &schedule.games {
                 // Only fetch details for games that have started
                 if game.game_state != nhl_api::GameState::Future

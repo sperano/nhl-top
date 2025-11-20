@@ -166,7 +166,7 @@ impl RenderableWidget for TeamDetailPanelWidget {
             .filter(|&idx| idx >= show_skaters_from && idx < show_skaters_to)
             .map(|idx| idx - show_skaters_from);
 
-        let skaters_table = TableWidget::from_data(skater_columns, windowed_skaters)
+        let skaters_table = TableWidget::from_data(&skater_columns, windowed_skaters)
             .with_selection_opt(skater_selected_row, Some(0))
             .with_focused(true)
             .with_header(format!("SKATERS ({}) - Regular Season", stats.skaters.len()))
@@ -228,7 +228,7 @@ impl RenderableWidget for TeamDetailPanelWidget {
             .filter(|&idx| idx >= show_goalies_from && idx < show_goalies_to)
             .map(|idx| idx - show_goalies_from);
 
-        let goalies_table = TableWidget::from_data(goalie_columns, windowed_goalies)
+        let goalies_table = TableWidget::from_data(&goalie_columns, windowed_goalies)
             .with_selection_opt(goalie_selected_row, Some(0))
             .with_focused(true)
             .with_header(format!("GOALIES ({}) - Regular Season", stats.goalies.len()))

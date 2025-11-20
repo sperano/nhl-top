@@ -53,7 +53,7 @@ pub async fn fetch_standings_cached(client: &Client) -> Result<Vec<Standing>, NH
 #[cached(
     name = "SCHEDULE_CACHE",
     type = "cached::TimedSizedCache<String, DailySchedule>",
-    create = "{ cached::TimedSizedCache::with_size_and_lifespan(7, 60) }",
+    create = "{ cached::TimedSizedCache::with_size_and_lifespan(14, 60) }",
     convert = r#"{ format!("{}", date) }"#,
     result = true
 )]
@@ -64,7 +64,7 @@ pub async fn fetch_schedule_cached(client: &Client, date: GameDate) -> Result<Da
 #[cached(
     name = "GAME_CACHE",
     type = "cached::TimedSizedCache<i64, GameMatchup>",
-    create = "{ cached::TimedSizedCache::with_size_and_lifespan(50, 30) }",
+    create = "{ cached::TimedSizedCache::with_size_and_lifespan(100, 30) }",
     convert = r#"{ game_id }"#,
     result = true
 )]
@@ -75,7 +75,7 @@ pub async fn fetch_game_cached(client: &Client, game_id: i64) -> Result<GameMatc
 #[cached(
     name = "BOXSCORE_CACHE",
     type = "cached::TimedSizedCache<i64, nhl_api::Boxscore>",
-    create = "{ cached::TimedSizedCache::with_size_and_lifespan(20, 1800) }",
+    create = "{ cached::TimedSizedCache::with_size_and_lifespan(40, 1800) }",
     convert = r#"{ game_id }"#,
     result = true
 )]

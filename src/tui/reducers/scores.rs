@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tracing::{debug, trace};
 
 use crate::tui::action::{Action, ScoresAction};
@@ -68,7 +69,7 @@ fn handle_select_game(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
     if let Some(selected_index) = new_state.ui.scores.selected_game_index {
-        if let Some(schedule) = &new_state.data.schedule {
+        if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
             if let Some(game) = schedule.games.get(selected_index) {
                 let game_id = game.id;
 
@@ -107,7 +108,7 @@ fn handle_enter_box_selection(state: AppState) -> (AppState, Effect) {
 
     // Initialize selection to first game if we have games
     if new_state.ui.scores.selected_game_index.is_none() {
-        if let Some(schedule) = &new_state.data.schedule {
+        if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
             if !schedule.games.is_empty() {
                 new_state.ui.scores.selected_game_index = Some(0);
                 trace!("  Initialized game selection to index 0");
@@ -132,7 +133,7 @@ fn handle_move_game_selection_up(state: AppState) -> (AppState, Effect) {
     }
 
     let old_index = new_state.ui.scores.selected_game_index;
-    if let Some(schedule) = &new_state.data.schedule {
+    if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
         if let Some(current_index) = new_state.ui.scores.selected_game_index {
             let num_games = schedule.games.len();
             let boxes_per_row = new_state.ui.scores.boxes_per_row as usize;
@@ -154,7 +155,7 @@ fn handle_move_game_selection_down(state: AppState) -> (AppState, Effect) {
         return (new_state, Effect::None);
     }
 
-    if let Some(schedule) = &new_state.data.schedule {
+    if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
         if let Some(current_index) = new_state.ui.scores.selected_game_index {
             let num_games = schedule.games.len();
             let boxes_per_row = new_state.ui.scores.boxes_per_row as usize;
@@ -193,7 +194,7 @@ fn handle_move_game_selection_right(state: AppState) -> (AppState, Effect) {
         return (new_state, Effect::None);
     }
 
-    if let Some(schedule) = &new_state.data.schedule {
+    if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
         if let Some(current_index) = new_state.ui.scores.selected_game_index {
             let num_games = schedule.games.len();
             let boxes_per_row = new_state.ui.scores.boxes_per_row as usize;
@@ -218,9 +219,9 @@ fn handle_update_boxes_per_row(state: AppState, boxes_per_row: u16) -> (AppState
 
 /// Helper function to clear schedule data when changing dates
 fn clear_schedule_data(state: &mut AppState) {
-    state.data.schedule = None;
-    state.data.game_info.clear();
-    state.data.period_scores.clear();
+    state.data.schedule = Arc::new(None);
+    Arc::make_mut(&mut state.data.game_info).clear();
+    Arc::make_mut(&mut state.data.period_scores).clear();
 }
 
 #[cfg(test)]
@@ -326,7 +327,7 @@ mod tests {
     fn test_select_game_with_no_schedule() {
         let mut state = AppState::default();
         state.ui.scores.selected_game_index = Some(0);
-        state.data.schedule = None;
+        state.data.schedule = Arc::new(None);
 
         let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGame);
 

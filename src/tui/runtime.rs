@@ -99,7 +99,7 @@ impl Runtime {
             if effects.is_empty() {
                 Effect::None
             } else if effects.len() == 1 {
-                effects.pop().unwrap()
+                effects.pop().expect("effects vec should contain exactly 1 element")
             } else {
                 Effect::Batch(effects)
             }
@@ -179,7 +179,7 @@ impl Runtime {
     fn check_for_game_details_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
         // Check if schedule just loaded (went from None to Some)
         if old_state.data.schedule.is_none() && new_state.data.schedule.is_some() {
-            if let Some(schedule) = &new_state.data.schedule {
+            if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
                 let mut effects = Vec::new();
                 for game in &schedule.games {
                     // Only fetch details for games that have started

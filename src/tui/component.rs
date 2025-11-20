@@ -35,6 +35,14 @@ pub trait Component: Send {
     /// Render component given props and state (pure function)
     fn view(&self, props: &Self::Props, state: &Self::State) -> Element;
 
+    /// Should this component re-render? (like React.shouldComponentUpdate)
+    ///
+    /// Override this to implement memoization. Default is to always re-render.
+    /// Return false to skip re-rendering when props haven't meaningfully changed.
+    fn should_update(&self, _old_props: &Self::Props, _new_props: &Self::Props) -> bool {
+        true // Default: always update
+    }
+
     /// Lifecycle: called when props change
     fn did_update(&mut self, _old_props: &Self::Props, _new_props: &Self::Props) -> Effect {
         Effect::None

@@ -103,7 +103,7 @@ impl GoalieStatsTableWidget {
     /// Create a table from game-level goalie stats
     pub fn from_game_stats(data: Vec<GoalieStats>) -> Self {
         let columns = game_goalie_columns();
-        let inner = TableWidget::from_data(columns, data);
+        let inner = TableWidget::from_data(&columns, data);
         Self { inner }
     }
 
@@ -272,12 +272,12 @@ mod tests {
         table.render(area, &mut buf, &config);
 
         assert_buffer(&buf, &[
-            "Test",
-            "════",
+            "  Test",
+            "  ════",
             "",
-            "Player                Dec  SA   Sa...  GA  SV%    TOI    EV...  PP...  SH...",
-            "────────────────────────────────────────────────────────────────────────────",
-            "Carey Price            W    30     28   2  0....  60...     15      5      2",
+            "  Player                Dec  SA   Sa...  GA  SV%    TOI    EV...  PP...  SH...",
+            "  ────────────────────────────────────────────────────────────────────────────",
+            "  Carey Price            W    30     28   2  0....  60...     15      5      2",
             "",
             "",
             "",

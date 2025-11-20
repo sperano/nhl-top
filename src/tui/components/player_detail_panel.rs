@@ -280,7 +280,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             let windowed_seasons: Vec<_> = season_stats[show_from..show_to].to_vec();
 
             // Build table first to find the link column
-            let mut seasons_table = TableWidget::from_data(columns, windowed_seasons);
+            let mut seasons_table = TableWidget::from_data(&columns, windowed_seasons);
 
             // Find the first link column (should be Team column, index 1)
             let link_column = seasons_table.find_first_link_column().unwrap_or(0);

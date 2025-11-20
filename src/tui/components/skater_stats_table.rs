@@ -105,7 +105,7 @@ impl SkaterStatsTableWidget {
     /// Create a table from game-level skater stats
     pub fn from_game_stats(data: Vec<SkaterStats>) -> Self {
         let columns = game_skater_columns();
-        let inner = TableWidget::from_data(columns, data);
+        let inner = TableWidget::from_data(&columns, data);
         Self { inner }
     }
 
@@ -273,12 +273,12 @@ mod tests {
         table.render(area, &mut buf, &config);
 
         assert_buffer(&buf, &[
-            "Test",
-            "════",
+            "  Test",
+            "  ════",
             "",
-            "Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI",
-            "────────────────────────────────────────────────────────────────────────────────",
-            "Auston Matthews        C    2   1    3   +2    8     5    2    4   55.0  18...",
+            "  Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI",
+            "  ──────────────────────────────────────────────────────────────────────────────",
+            "  Auston Matthews        C    2   1    3   +2    8     5    2    4   55.0  18...",
             "",
             "",
             "",
@@ -303,12 +303,12 @@ mod tests {
         table.render(area, &mut buf, &config);
 
         assert_buffer(&buf, &[
-            "Stats",
-            "═════",
+            "  Stats",
+            "  ═════",
             "",
-            "Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI    S...  G...  T...",
-            "────────────────────────────────────────────────────────────────────────────────────────────────",
-            "A. Matthews            C    2   1    3   +2    8     5    2    4   55.0  18...    22     1     3",
+            "  Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI    S...  G...  T...",
+            "  ────────────────────────────────────────────────────────────────────────────────────────────────",
+            "  A. Matthews            C    2   1    3   +2    8     5    2    4   55.0  18...    22     1     3",
             "",
             "",
             "",

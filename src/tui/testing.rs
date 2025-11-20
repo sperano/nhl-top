@@ -22,6 +22,106 @@ use nhl_api::{Client, Standing};
 use std::sync::Arc;
 use ratatui::buffer::Buffer;
 
+/// Creates a test rendering setup with default configuration
+///
+/// # Examples
+///
+/// ```
+/// use nhl::setup_test_render;
+///
+/// let (state, config, area, buf) = setup_test_render!();
+/// // state: AppState::default()
+/// // config: DisplayConfig::default()
+/// // area: Rect { x: 0, y: 0, width: 80, height: 24 }
+/// // buf: Buffer::empty(area)
+/// ```
+///
+/// With custom dimensions:
+///
+/// ```
+/// use nhl::setup_test_render;
+///
+/// let (state, config, area, buf) = setup_test_render!(120, 40);
+/// // area: Rect { x: 0, y: 0, width: 120, height: 40 }
+/// ```
+#[macro_export]
+macro_rules! setup_test_render {
+    () => {{
+        setup_test_render!(80, 24)
+    }};
+    ($width:expr, $height:expr) => {{
+        let state = $crate::tui::state::AppState::default();
+        let config = $crate::config::DisplayConfig::default();
+        let area = ratatui::layout::Rect::new(0, 0, $width, $height);
+        let buf = ratatui::buffer::Buffer::empty(area);
+        (state, config, area, buf)
+    }};
+}
+
+/// Creates a test rendering setup with custom state initialization
+///
+/// # Examples
+///
+/// ```
+/// use nhl::setup_test_render_with;
+///
+/// let (mut state, config, area, buf) = setup_test_render_with!(|state| {
+///     state.navigation.current_tab = Tab::Standings;
+///     state.ui.standings.view = GroupBy::Conference;
+/// });
+/// ```
+#[macro_export]
+macro_rules! setup_test_render_with {
+    ($init:expr) => {{
+        setup_test_render_with!($init, 80, 24)
+    }};
+    ($init:expr, $width:expr, $height:expr) => {{
+        let mut state = $crate::tui::state::AppState::default();
+        $init(&mut state);
+        let config = $crate::config::DisplayConfig::default();
+        let area = ratatui::layout::Rect::new(0, 0, $width, $height);
+        let buf = ratatui::buffer::Buffer::empty(area);
+        (state, config, area, buf)
+    }};
+}
+
+/// Creates a format_stat_row macro for repetitive stat formatting
+///
+/// This macro reduces boilerplate in boxscore stat formatting by providing
+/// a consistent pattern for displaying two-column stats with a visual bar.
+///
+/// # Examples
+///
+/// ```
+/// use nhl::format_stat_row;
+///
+/// let row = format_stat_row!(
+///     "Shots On Goal",
+///     away_stats.shots_on_goal,
+///     home_stats.shots_on_goal,
+///     bar_content,
+///     bar_width
+/// );
+/// ```
+#[macro_export]
+macro_rules! format_stat_row {
+    ($label:expr, $away:expr, $home:expr, $bar:expr, $bar_width:expr) => {{
+        const LABEL_WIDTH: usize = 20;
+        const SCORE_WIDTH: usize = 3;
+
+        format!(
+            "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+            $label,
+            $away,
+            $bar,
+            $home,
+            label_w = LABEL_WIDTH,
+            score_w = SCORE_WIDTH,
+            bar_w = $bar_width
+        )
+    }};
+}
+
 /// Creates an Arc-wrapped NHL API client for testing.
 ///
 /// This helper eliminates the repetitive `Arc::new(Client::new().unwrap())`
@@ -194,6 +294,58 @@ mod tests {
         // Verify we can call methods on the client
         // (Client::new() should create a valid instance)
         assert!(Arc::strong_count(&client) > 0);
+    }
+
+    #[test]
+    fn test_setup_test_render_default() {
+        let (_state, _config, area, buf) = setup_test_render!();
+
+        assert_eq!(area.width, 80);
+        assert_eq!(area.height, 24);
+        assert_eq!(area.x, 0);
+        assert_eq!(area.y, 0);
+
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_setup_test_render_custom_size() {
+        let (_state, _config, area, buf) = setup_test_render!(120, 40);
+
+        assert_eq!(area.width, 120);
+        assert_eq!(area.height, 40);
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_setup_test_render_with() {
+        use crate::tui::types::Tab;
+        use crate::commands::standings::GroupBy;
+        use crate::tui::state::AppState;
+
+        let (state, _config, area, _buf) = setup_test_render_with!(|state: &mut AppState| {
+            state.navigation.current_tab = Tab::Standings;
+            state.ui.standings.view = GroupBy::Conference;
+        });
+
+        assert_eq!(state.navigation.current_tab, Tab::Standings);
+        assert_eq!(state.ui.standings.view, GroupBy::Conference);
+        assert_eq!(area.width, 80);
+        assert_eq!(area.height, 24);
+    }
+
+    #[test]
+    fn test_format_stat_row() {
+        let row = format_stat_row!(
+            "Shots On Goal",
+            35,
+            28,
+            "█████░░░░░",
+            10
+        );
+
+        let expected = "Shots On Goal         35  █████░░░░░  28 \n";
+        assert_eq!(row, expected);
     }
 }
 

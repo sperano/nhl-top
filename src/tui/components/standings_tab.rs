@@ -3,6 +3,7 @@ use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, Paragraph},
 };
+use std::sync::{Arc, LazyLock};
 
 use nhl_api::Standing;
 
@@ -25,7 +26,7 @@ pub struct StandingsTabProps {
     pub browse_mode: bool,
     pub selected_column: usize,
     pub selected_row: usize,
-    pub standings: Option<Vec<Standing>>,
+    pub standings: Arc<Option<Vec<Standing>>>,
     pub panel_stack: Vec<PanelState>,
     pub focused: bool,
     pub config: Config,
@@ -51,33 +52,38 @@ impl Component for StandingsTab {
     }
 }
 
+/// Cached column definitions for standings table
+/// Uses LazyLock to initialize once and reuse across all calls
+static STANDINGS_COLUMNS: LazyLock<Vec<ColumnDef<Standing>>> = LazyLock::new(|| {
+    vec![
+        ColumnDef::new("Team", 26, Alignment::Left, |s: &Standing| {
+            CellValue::TeamLink {
+                display: s.team_common_name.default.clone(),
+                team_abbrev: s.team_abbrev.default.clone(),
+            }
+        }),
+        ColumnDef::new("GP", 4, Alignment::Right, |s: &Standing| {
+            CellValue::Text(s.games_played().to_string())
+        }),
+        ColumnDef::new("W", 4, Alignment::Right, |s: &Standing| {
+            CellValue::Text(s.wins.to_string())
+        }),
+        ColumnDef::new("L", 3, Alignment::Right, |s: &Standing| {
+            CellValue::Text(s.losses.to_string())
+        }),
+        ColumnDef::new("OT", 3, Alignment::Right, |s: &Standing| {
+            CellValue::Text(s.ot_losses.to_string())
+        }),
+        ColumnDef::new("PTS", 5, Alignment::Right, |s: &Standing| {
+            CellValue::Text(s.points.to_string())
+        }),
+    ]
+});
+
 impl StandingsTab {
-    /// Create column definitions for standings table
-    /// Must be created fresh each time (cannot clone due to closures)
-    fn create_standings_columns() -> Vec<ColumnDef<Standing>> {
-        vec![
-            ColumnDef::new("Team", 26, Alignment::Left, |s: &Standing| {
-                CellValue::TeamLink {
-                    display: s.team_common_name.default.clone(),
-                    team_abbrev: s.team_abbrev.default.clone(),
-                }
-            }),
-            ColumnDef::new("GP", 4, Alignment::Right, |s: &Standing| {
-                CellValue::Text(s.games_played().to_string())
-            }),
-            ColumnDef::new("W", 4, Alignment::Right, |s: &Standing| {
-                CellValue::Text(s.wins.to_string())
-            }),
-            ColumnDef::new("L", 3, Alignment::Right, |s: &Standing| {
-                CellValue::Text(s.losses.to_string())
-            }),
-            ColumnDef::new("OT", 3, Alignment::Right, |s: &Standing| {
-                CellValue::Text(s.ot_losses.to_string())
-            }),
-            ColumnDef::new("PTS", 5, Alignment::Right, |s: &Standing| {
-                CellValue::Text(s.points.to_string())
-            }),
-        ]
+    /// Get the cached column definitions for standings table
+    fn standings_columns() -> &'static Vec<ColumnDef<Standing>> {
+        &STANDINGS_COLUMNS
     }
 
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
@@ -144,7 +150,7 @@ impl StandingsTab {
 
     fn render_standings_table(&self, props: &StandingsTabProps, view: &GroupBy) -> Element {
         // If no standings data, show loading message
-        let Some(ref standings) = props.standings else {
+        let Some(standings) = props.standings.as_ref().as_ref() else {
             return Element::Widget(Box::new(LoadingWidget {
                 message: "Loading standings...".to_string(),
             }));
@@ -165,11 +171,11 @@ impl StandingsTab {
     }
 
     fn render_single_column_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
-        // Create table widget with selection and margin
-        let table = TableWidget::from_data(Self::create_standings_columns(), standings.to_vec())
+        // Create table widget with selection and no margin (selector space only)
+        let table = TableWidget::from_data(Self::standings_columns(), standings.to_vec())
             .with_selection(props.selected_row, props.selected_column)
             .with_focused(props.browse_mode)
-            .with_margin(2);
+            .with_margin(0);
 
         Element::Widget(Box::new(table))
     }
@@ -207,24 +213,24 @@ impl StandingsTab {
         }
 
         // Create left conference table (create fresh columns)
-        let left_table = TableWidget::from_data(Self::create_standings_columns(), groups[0].1.clone())
+        let left_table = TableWidget::from_data(Self::standings_columns(), groups[0].1.clone())
             .with_header(&groups[0].0)
             .with_selection(
                 if props.selected_column == 0 { props.selected_row } else { usize::MAX },
                 0
             )
             .with_focused(props.browse_mode && props.selected_column == 0)
-            .with_margin(2);
+            .with_margin(0);
 
         // Create right conference table (create fresh columns again)
-        let right_table = TableWidget::from_data(Self::create_standings_columns(), groups[1].1.clone())
+        let right_table = TableWidget::from_data(Self::standings_columns(), groups[1].1.clone())
             .with_header(&groups[1].0)
             .with_selection(
                 if props.selected_column == 1 { props.selected_row } else { usize::MAX },
                 0
             )
             .with_focused(props.browse_mode && props.selected_column == 1)
-            .with_margin(2);
+            .with_margin(0);
 
         // Return horizontal layout with both tables
         // Split 50/50 between left and right conference
@@ -264,11 +270,11 @@ impl StandingsTab {
                 usize::MAX
             };
 
-            let table = TableWidget::from_data(Self::create_standings_columns(), teams.clone())
+            let table = TableWidget::from_data(Self::standings_columns(), teams.clone())
                 .with_header(div_name)
                 .with_selection(row_in_division, 0)
                 .with_focused(browse_mode && selected_column == column_index)
-                .with_margin(2);
+                .with_margin(0);
 
             elements.push(Element::Widget(Box::new(table)));
             team_offset += teams_count;
@@ -531,11 +537,11 @@ impl StandingsTab {
             usize::MAX
         };
 
-        TableWidget::from_data(Self::create_standings_columns(), teams.to_vec())
+        TableWidget::from_data(Self::standings_columns(), teams.to_vec())
             .with_header(header)
             .with_selection(row_in_table, 0)
             .with_focused(props.browse_mode && props.selected_column == actual_column)
-            .with_margin(2)
+            .with_margin(0)
     }
 
     /// Create vertical layout for wildcard column elements
@@ -660,7 +666,7 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            standings: None,
+            standings: Arc::new(None),
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
@@ -686,7 +692,7 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            standings: Some(standings),
+            standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
@@ -723,7 +729,7 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            standings: Some(standings),
+            standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
@@ -787,7 +793,7 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            standings: Some(standings),
+            standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
@@ -851,7 +857,7 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            standings: Some(standings),
+            standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
@@ -914,7 +920,7 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            standings: Some(standings),
+            standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),

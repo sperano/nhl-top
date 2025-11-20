@@ -4,6 +4,7 @@ use nhl_api::TeamGameStats;
 use anyhow::{Context, Result};
 use crate::formatting::format_header;
 use crate::config::{Config, DisplayConfig};
+use crate::layout_constants::{BOXSCORE_LABEL_WIDTH, BOXSCORE_SCORE_WIDTH};
 
 /// Format skater (forwards/defense) stats table
 fn format_skater_stats(
@@ -98,74 +99,98 @@ pub fn format_game_stats_table(
 
     output.push_str(&format!("\n{}", format_header("Game Stats", true, display)));
 
-    let bar_width = 30;
+    let bar_width = BOXSCORE_STAT_BAR_WIDTH;
 
     // Shots on Goal
-    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Shots On Goal",
         away_stats.shots_on_goal,
         format_stat_bar(away_stats.shots_on_goal, home_stats.shots_on_goal, bar_width),
-        home_stats.shots_on_goal
+        home_stats.shots_on_goal,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Face-off %
     let away_fo_pct = away_stats.faceoff_percentage();
     let home_fo_pct = home_stats.faceoff_percentage();
-    output.push_str(&format!("{:<20} {:>3.1}%  {:^30}  {:<3.1}%\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$.1}%  {:^bar_w$}  {:<score_w$.1}%\n",
         "Face-off %",
         away_fo_pct,
         format!("{}/{}", away_stats.faceoff_wins, away_stats.faceoff_total),
-        home_fo_pct
+        home_fo_pct,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Power Play %
     let away_pp_pct = away_stats.power_play_percentage();
     let home_pp_pct = home_stats.power_play_percentage();
-    output.push_str(&format!("{:<20} {:>3.1}%  {:^30}  {:<3.1}%\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$.1}%  {:^bar_w$}  {:<score_w$.1}%\n",
         "Power Play %",
         away_pp_pct,
         format!("{}/{}", away_stats.power_play_goals, away_stats.power_play_opportunities),
-        home_pp_pct
+        home_pp_pct,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Penalty Minutes
-    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Penalty Minutes",
         away_stats.penalty_minutes,
         format_stat_bar(away_stats.penalty_minutes, home_stats.penalty_minutes, bar_width),
-        home_stats.penalty_minutes
+        home_stats.penalty_minutes,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Hits
-    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Hits",
         away_stats.hits,
         format_stat_bar(away_stats.hits, home_stats.hits, bar_width),
-        home_stats.hits
+        home_stats.hits,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Blocked Shots
-    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Blocked Shots",
         away_stats.blocked_shots,
         format_stat_bar(away_stats.blocked_shots, home_stats.blocked_shots, bar_width),
-        home_stats.blocked_shots
+        home_stats.blocked_shots,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Giveaways
-    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Giveaways",
         away_stats.giveaways,
         format_stat_bar(away_stats.giveaways, home_stats.giveaways, bar_width),
-        home_stats.giveaways
+        home_stats.giveaways,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     // Takeaways
-    output.push_str(&format!("{:<20} {:>3}  {:^30}  {:<3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Takeaways",
         away_stats.takeaways,
         format_stat_bar(away_stats.takeaways, home_stats.takeaways, bar_width),
-        home_stats.takeaways
+        home_stats.takeaways,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH,
+        bar_w = bar_width
     ));
 
     output
@@ -193,27 +218,37 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
     }
 
     // Display score
-    let score_header = format!("{:<20} {:>3}", "Team", "Score");
+    let score_header = format!("{:<label_w$} {:>score_w$}", "Team", "Score",
+        label_w = BOXSCORE_LABEL_WIDTH, score_w = BOXSCORE_SCORE_WIDTH);
     output.push_str(&format!("\n{}", format_header(&score_header, false, display)));
-    output.push_str(&format!("{:<20} {:>3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
         boxscore.away_team.abbrev,
-        boxscore.away_team.score
+        boxscore.away_team.score,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH
     ));
-    output.push_str(&format!("{:<20} {:>3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
         boxscore.home_team.abbrev,
-        boxscore.home_team.score
+        boxscore.home_team.score,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH
     ));
 
     // Display shots on goal
-    let sog_header = format!("{:<20} {:>3}", "Team", "SOG");
+    let sog_header = format!("{:<label_w$} {:>score_w$}", "Team", "SOG",
+        label_w = BOXSCORE_LABEL_WIDTH, score_w = BOXSCORE_SCORE_WIDTH);
     output.push_str(&format!("\n{}", format_header(&sog_header, false, display)));
-    output.push_str(&format!("{:<20} {:>3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
         boxscore.away_team.abbrev,
-        boxscore.away_team.sog
+        boxscore.away_team.sog,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH
     ));
-    output.push_str(&format!("{:<20} {:>3}\n",
+    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
         boxscore.home_team.abbrev,
-        boxscore.home_team.sog
+        boxscore.home_team.sog,
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH
     ));
 
     #[cfg(feature = "game_stats")]

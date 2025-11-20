@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use tracing::debug;
 
 use crate::tui::action::Action;
@@ -482,7 +483,7 @@ mod tests {
             goalies: goalies.clone(),
         };
 
-        state.data.team_roster_stats.insert("EDM".to_string(), roster);
+        Arc::make_mut(&mut state.data.team_roster_stats).insert("EDM".to_string(), roster);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "EDM".to_string(),
@@ -591,7 +592,7 @@ mod tests {
             goalies,
         };
 
-        state.data.team_roster_stats.insert("EDM".to_string(), roster);
+        Arc::make_mut(&mut state.data.team_roster_stats).insert("EDM".to_string(), roster);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "EDM".to_string(),
@@ -699,7 +700,7 @@ mod tests {
             goalies,
         };
 
-        state.data.team_roster_stats.insert("TST".to_string(), roster);
+        Arc::make_mut(&mut state.data.team_roster_stats).insert("TST".to_string(), roster);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "TST".to_string(),
@@ -812,7 +813,7 @@ mod tests {
             goalies: vec![],
         };
 
-        state.data.team_roster_stats.insert("COL".to_string(), roster);
+        Arc::make_mut(&mut state.data.team_roster_stats).insert("COL".to_string(), roster);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "COL".to_string(),
@@ -917,7 +918,7 @@ mod tests {
             goalies: vec![],
         };
 
-        state.data.team_roster_stats.insert("COL".to_string(), roster);
+        Arc::make_mut(&mut state.data.team_roster_stats).insert("COL".to_string(), roster);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "COL".to_string(),
@@ -1024,7 +1025,7 @@ mod tests {
             goalies,
         };
 
-        state.data.team_roster_stats.insert("TST".to_string(), roster);
+        Arc::make_mut(&mut state.data.team_roster_stats).insert("TST".to_string(), roster);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "TST".to_string(),
@@ -1157,7 +1158,7 @@ mod tests {
             vec![],
         );
 
-        state.data.boxscores.insert(TEST_GAME_ID, boxscore);
+        Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::Boxscore { game_id: TEST_GAME_ID },
             scroll_offset: 0,
@@ -1188,7 +1189,7 @@ mod tests {
             vec![create_test_skater(8476887, "Filip Forsberg", "L")],
         );
 
-        state.data.boxscores.insert(TEST_GAME_ID, boxscore);
+        Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::Boxscore { game_id: TEST_GAME_ID },
             scroll_offset: 0,
@@ -1220,7 +1221,7 @@ mod tests {
             vec![],
         );
 
-        state.data.boxscores.insert(TEST_GAME_ID, boxscore);
+        Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::Boxscore { game_id: TEST_GAME_ID },
             scroll_offset: 0,
@@ -1305,7 +1306,7 @@ mod tests {
             last_five_games: None,
         };
 
-        state.data.player_data.insert(TEST_PLAYER_ID, player_data);
+        Arc::make_mut(&mut state.data.player_data).insert(TEST_PLAYER_ID, player_data);
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::PlayerDetail { player_id: TEST_PLAYER_ID },
             scroll_offset: 0,
