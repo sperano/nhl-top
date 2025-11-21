@@ -50,6 +50,9 @@ fn handle_cycle_view_left(state: AppState) -> (AppState, Effect) {
 
     // Rebuild layout cache when view changes
     rebuild_standings_layout_cache(&mut new_state);
+
+    // Reset selection when changing views
+    reset_standings_selection(&mut new_state);
     (new_state, Effect::None)
 }
 
@@ -59,6 +62,9 @@ fn handle_cycle_view_right(state: AppState) -> (AppState, Effect) {
 
     // Rebuild layout cache when view changes
     rebuild_standings_layout_cache(&mut new_state);
+
+    // Reset selection when changing views
+    reset_standings_selection(&mut new_state);
     (new_state, Effect::None)
 }
 
@@ -560,6 +566,42 @@ mod tests {
         assert_eq!(new_state.ui.standings.selected_column, 0);
         assert_eq!(new_state.ui.standings.selected_row, 0);
         assert_eq!(new_state.ui.standings.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_cycle_view_left_resets_selection() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 1;
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 10;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewLeft);
+
+        // Selection should be reset
+        assert_eq!(new_state.ui.standings.selected_column, 0);
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+        assert_eq!(new_state.ui.standings.scroll_offset, 0);
+        // View should change
+        assert_eq!(new_state.ui.standings.view, GroupBy::Wildcard);
+    }
+
+    #[test]
+    fn test_cycle_view_right_resets_selection() {
+        let mut state = AppState::default();
+        state.ui.standings.view = GroupBy::Division;
+        state.ui.standings.selected_column = 1;
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 10;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::CycleViewRight);
+
+        // Selection should be reset
+        assert_eq!(new_state.ui.standings.selected_column, 0);
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+        assert_eq!(new_state.ui.standings.scroll_offset, 0);
+        // View should change
+        assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
     }
 
     // Tests with actual standings data

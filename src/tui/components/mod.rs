@@ -13,6 +13,7 @@ pub mod tabbed_panel;
 pub mod table;
 pub mod skater_stats_table;
 pub mod goalie_stats_table;
+pub mod standings_panels;
 
 pub use app::App;
 pub use status_bar::StatusBar;
@@ -27,3 +28,7 @@ pub use tabbed_panel::{TabbedPanel, TabbedPanelProps, TabItem};
 pub use table::{Table, TableProps, TableWidget};
 pub use skater_stats_table::SkaterStatsTableWidget;
 pub use goalie_stats_table::GoalieStatsTableWidget;
+pub use standings_panels::{
+    ConferenceStandingsPanel, DivisionStandingsPanel, LeagueStandingsPanel,
+    StandingsPanelProps, WildcardStandingsPanel,
+};
