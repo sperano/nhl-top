@@ -194,7 +194,7 @@ pub fn assert_buffer(buf: &Buffer, expected: &[&str]) {
 }
 
 /// Helper to create a test Standing
-fn create_division_team(
+pub fn create_division_team(
     name: &str,
     abbrev: &str,
     division: &str,
@@ -229,6 +229,24 @@ fn create_division_team(
 }
 
 /// Create a full 32-team NHL standings for testing
+/// Create test standings with a specific count (for testing windowing/scrolling)
+pub fn create_test_standings_with_count(count: usize) -> Vec<Standing> {
+    (0..count)
+        .map(|i| {
+            create_division_team(
+                &format!("Team {}", i),
+                &format!("T{}", i),
+                "Division",
+                "Conference",
+                0,  // wins
+                0,  // losses
+                0,  // ot
+                count as i32 - i as i32, // points (descending)
+            )
+        })
+        .collect()
+}
+
 pub fn create_test_standings() -> Vec<Standing> {
     vec![
         // Atlantic (Eastern) - 8 teams

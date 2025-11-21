@@ -182,6 +182,7 @@ impl App {
             browse_mode: state.ui.standings.browse_mode,
             selected_column: state.ui.standings.selected_column,
             selected_row: state.ui.standings.selected_row,
+            scroll_offset: state.ui.standings.scroll_offset,
             standings: state.data.standings.clone(),
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,

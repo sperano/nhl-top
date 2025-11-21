@@ -23,7 +23,7 @@ pub mod testing;
 #[cfg(test)]
 mod integration_tests;
 
-pub use action::{Action, ScoresAction};
+pub use action::{Action, ScoresAction, StandingsAction};
 pub use component::{Component, Effect, Element};
 pub use effects::DataEffects;
 pub use keys::key_to_action;
@@ -141,6 +141,18 @@ pub async fn run(
             if boxes_per_row != current_boxes_per_row {
                 tracing::debug!("DRAW: boxes_per_row changed: {} -> {}", current_boxes_per_row, boxes_per_row);
                 runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(boxes_per_row)));
+            }
+
+            // Update viewport_height for standings scrolling
+            // Subtract chrome: tab bar (2) + subtab bar (2) + status bar (1) + table header/separator (2) + padding (1) + 1
+            const STANDINGS_CHROME_HEIGHT: u16 = 9;
+            let viewport_height = area.height.saturating_sub(STANDINGS_CHROME_HEIGHT) as usize;
+
+            // Dispatch action to update viewport_height if it changed
+            let current_viewport_height = runtime.state().ui.standings.viewport_height;
+            if viewport_height != current_viewport_height {
+                tracing::debug!("DRAW: viewport_height changed: {} -> {}", current_viewport_height, viewport_height);
+                runtime.dispatch(Action::StandingsAction(StandingsAction::UpdateViewportHeight(viewport_height)));
             }
 
             // Build virtual tree from current state

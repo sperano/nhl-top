@@ -87,6 +87,11 @@ pub enum StandingsAction {
     MoveSelectionDown,
     MoveSelectionLeft,
     MoveSelectionRight,
+    PageDown,
+    PageUp,
+    GoToTop,
+    GoToBottom,
+    UpdateViewportHeight(usize), // Update actual visible height from renderer
 }
 
 /// Tab-specific actions for Settings

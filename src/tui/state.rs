@@ -125,6 +125,9 @@ pub struct StandingsUiState {
     pub selected_column: usize,
     pub selected_row: usize,
     pub scroll_offset: usize,
+    /// Actual viewport height (number of teams visible)
+    /// Updated during rendering based on terminal size
+    pub viewport_height: usize,
     /// Cached layout: layout[column][row] = team_abbrev
     /// Rebuilt when standings data changes or view changes
     pub layout: Vec<Vec<String>>,
@@ -138,6 +141,7 @@ impl Default for StandingsUiState {
             selected_column: 0,
             selected_row: 0,
             scroll_offset: 0,
+            viewport_height: 20, // Default fallback, updated during render
             layout: Vec::new(),
         }
     }

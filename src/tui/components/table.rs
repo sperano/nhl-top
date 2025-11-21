@@ -232,7 +232,7 @@ impl Component for Table {
     }
 }
 
-/// Width of the selector indicator space (e.g., "► " or "  ")
+/// Width of the selector indicator space (e.g., "▶ " or "  ")
 const SELECTOR_WIDTH: usize = 2;
 
 /// The actual table widget that implements rendering
@@ -911,7 +911,7 @@ mod tests {
                 "  Name",
                 "  ──────────",
                 "  Row1",
-                "► Row2", // This row should have selection_fg and selector
+                "▶ Row2", // This row should have selection_fg and selector
             ],
         );
     }

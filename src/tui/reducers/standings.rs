@@ -13,6 +13,9 @@ use super::standings_layout::{
     count_teams_in_wildcard_column,
 };
 
+/// Page size for PageUp/PageDown navigation
+const PAGE_SIZE: usize = 10;
+
 /// Sub-reducer for standings tab
 pub fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, Effect) {
     match action {
@@ -29,6 +32,15 @@ pub fn reduce_standings(state: AppState, action: StandingsAction) -> (AppState, 
         StandingsAction::MoveSelectionDown => handle_move_selection_down(state),
         StandingsAction::MoveSelectionLeft => handle_move_selection_left(state),
         StandingsAction::MoveSelectionRight => handle_move_selection_right(state),
+        StandingsAction::PageDown => handle_page_down(state),
+        StandingsAction::PageUp => handle_page_up(state),
+        StandingsAction::GoToTop => handle_go_to_top(state),
+        StandingsAction::GoToBottom => handle_go_to_bottom(state),
+        StandingsAction::UpdateViewportHeight(height) => {
+            let mut new_state = state;
+            new_state.ui.standings.viewport_height = height;
+            (new_state, Effect::None)
+        }
     }
 }
 
@@ -146,8 +158,13 @@ fn handle_move_selection_up(state: AppState) -> (AppState, Effect) {
             if new_state.ui.standings.selected_row == 0 {
                 // At first team - wrap to last team
                 new_state.ui.standings.selected_row = max_row;
+                // Ensure selection stays visible (will auto-scroll to show last team)
+                ensure_selection_visible(&mut new_state);
+                debug!("STANDINGS: Wrapped to bottom");
             } else {
                 new_state.ui.standings.selected_row -= 1;
+                // Ensure selection stays visible
+                ensure_selection_visible(&mut new_state);
             }
         }
     }
@@ -172,8 +189,12 @@ fn handle_move_selection_down(state: AppState) -> (AppState, Effect) {
             if new_state.ui.standings.selected_row >= max_row {
                 // At last team - wrap to first team
                 new_state.ui.standings.selected_row = 0;
+                new_state.ui.standings.scroll_offset = 0;
+                debug!("STANDINGS: Wrapped to top, reset scroll_offset to 0");
             } else {
                 new_state.ui.standings.selected_row += 1;
+                // Ensure selection stays visible
+                ensure_selection_visible(&mut new_state);
             }
         }
     }
@@ -219,7 +240,106 @@ fn handle_move_selection_right(state: AppState) -> (AppState, Effect) {
     (new_state, Effect::None)
 }
 
+fn handle_page_down(state: AppState) -> (AppState, Effect) {
+    let mut new_state = state;
+    let team_count = get_team_count(&new_state);
+
+    if team_count > 0 {
+        let max_row = team_count - 1;
+        let new_row = (new_state.ui.standings.selected_row + PAGE_SIZE).min(max_row);
+        new_state.ui.standings.selected_row = new_row;
+        ensure_selection_visible(&mut new_state);
+        debug!("STANDINGS: PageDown - moved to row {}", new_row);
+    }
+
+    (new_state, Effect::None)
+}
+
+fn handle_page_up(state: AppState) -> (AppState, Effect) {
+    let mut new_state = state;
+    let team_count = get_team_count(&new_state);
+
+    if team_count > 0 {
+        let new_row = new_state.ui.standings.selected_row.saturating_sub(PAGE_SIZE);
+        new_state.ui.standings.selected_row = new_row;
+        ensure_selection_visible(&mut new_state);
+        debug!("STANDINGS: PageUp - moved to row {}", new_row);
+    }
+
+    (new_state, Effect::None)
+}
+
+fn handle_go_to_top(state: AppState) -> (AppState, Effect) {
+    let mut new_state = state;
+    new_state.ui.standings.selected_row = 0;
+    new_state.ui.standings.scroll_offset = 0;
+    debug!("STANDINGS: GoToTop - row 0, scroll 0");
+
+    (new_state, Effect::None)
+}
+
+fn handle_go_to_bottom(state: AppState) -> (AppState, Effect) {
+    let mut new_state = state;
+    let team_count = get_team_count(&new_state);
+
+    if team_count > 0 {
+        let last_row = team_count - 1;
+        new_state.ui.standings.selected_row = last_row;
+        new_state.ui.standings.scroll_offset = 0;
+        debug!("STANDINGS: GoToBottom - row {}, scroll 0", last_row);
+    }
+
+    (new_state, Effect::None)
+}
+
 // Helper functions
+
+/// Ensure the selected team is visible by adjusting scroll_offset
+///
+/// This function implements auto-scroll logic:
+/// - If selection is above the visible window, scroll up
+/// - If selection is below the visible window, scroll down
+/// - Uses actual viewport_height from rendering for pixel-perfect scrolling
+fn ensure_selection_visible(state: &mut AppState) {
+    let selected = state.ui.standings.selected_row;
+    let scroll = state.ui.standings.scroll_offset;
+    let viewport_height = state.ui.standings.viewport_height;
+
+    // If selection is above visible window, scroll up
+    if selected < scroll {
+        state.ui.standings.scroll_offset = selected;
+        debug!(
+            "STANDINGS: Auto-scroll UP to keep row {} visible (scroll_offset: {} -> {})",
+            selected, scroll, state.ui.standings.scroll_offset
+        );
+        return;
+    }
+
+    // If selection is below visible window, scroll down
+    let visible_end = scroll + viewport_height;
+    if selected >= visible_end {
+        let new_scroll = selected.saturating_sub(viewport_height - 1);
+        debug!(
+            "STANDINGS: Auto-scroll DOWN to keep row {} visible (scroll_offset: {} -> {}, viewport_height: {})",
+            selected, scroll, new_scroll, viewport_height
+        );
+        state.ui.standings.scroll_offset = new_scroll;
+    }
+}
+
+/// Helper to get total team count for current view
+fn get_team_count(state: &AppState) -> usize {
+    if let Some(standings) = state.data.standings.as_ref().as_ref() {
+        get_team_count_for_column(
+            standings,
+            state.ui.standings.view,
+            state.ui.standings.selected_column,
+            state.system.config.display_standings_western_first,
+        )
+    } else {
+        0
+    }
+}
 
 /// Rebuild the standings layout cache from current standings data
 fn rebuild_standings_layout_cache(state: &mut AppState) {
@@ -813,5 +933,298 @@ mod tests {
         // Row should be clamped to the max row available in Eastern column
         assert!(new_state.ui.standings.selected_row <= 15); // At most 16 Eastern teams
         assert!(matches!(effect, Effect::None));
+    }
+
+    // Auto-scroll tests
+    #[test]
+    fn test_auto_scroll_down_when_selection_moves_below_visible() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.viewport_height = 20;
+        state.ui.standings.selected_row = 19; // Just at edge of visible (0-19)
+        state.ui.standings.scroll_offset = 0;
+
+        // Move down - should trigger scroll
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 20);
+        assert_eq!(new_state.ui.standings.scroll_offset, 1,
+            "Should scroll down by 1 to keep row 20 visible (20 - 20 + 1 = 1)");
+
+        // Selection should be within visible window
+        let viewport_height = new_state.ui.standings.viewport_height;
+        assert!(new_state.ui.standings.selected_row >= new_state.ui.standings.scroll_offset);
+        assert!(new_state.ui.standings.selected_row < new_state.ui.standings.scroll_offset + viewport_height);
+    }
+
+    #[test]
+    fn test_auto_scroll_down_multiple_times() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.viewport_height = 20;
+        state.ui.standings.selected_row = 0;
+        state.ui.standings.scroll_offset = 0;
+
+        // Move down 25 times
+        for i in 1..=25 {
+            let (new_state, _) = reduce_standings(state.clone(), StandingsAction::MoveSelectionDown);
+            state = new_state;
+
+            assert_eq!(state.ui.standings.selected_row, i);
+            // Scroll should track selection to keep it visible
+            let viewport_height = state.ui.standings.viewport_height;
+            if i >= viewport_height {
+                assert!(state.ui.standings.scroll_offset > 0,
+                    "After moving to row {}, scroll should have started", i);
+            }
+        }
+    }
+
+    #[test]
+    fn test_auto_scroll_up_when_selection_moves_above_visible() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 15;
+        state.ui.standings.scroll_offset = 10;
+
+        // Move up - should scroll up to keep selection visible
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        assert_eq!(new_state.ui.standings.selected_row, 14);
+        assert_eq!(new_state.ui.standings.scroll_offset, 10,
+            "Should not scroll yet - row 14 is still visible (10-29)");
+
+        // Move up more
+        let mut state = new_state;
+        for _ in 0..5 {
+            let (new_state, _) = reduce_standings(state.clone(), StandingsAction::MoveSelectionUp);
+            state = new_state;
+        }
+
+        assert_eq!(state.ui.standings.selected_row, 9);
+        assert_eq!(state.ui.standings.scroll_offset, 9,
+            "Should scroll up to keep row 9 visible");
+    }
+
+    #[test]
+    fn test_wrap_to_top_resets_scroll() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 31;
+        state.ui.standings.scroll_offset = 15;
+
+        // Wrap from bottom to top
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+        assert_eq!(new_state.ui.standings.scroll_offset, 0,
+            "Wrapping to top should reset scroll_offset");
+    }
+
+    #[test]
+    fn test_wrap_to_bottom_resets_scroll() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 0;
+        state.ui.standings.scroll_offset = 0;
+        state.ui.standings.viewport_height = 20;
+
+        // Wrap from top to bottom (32 teams, selected_row = 31)
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
+
+        assert_eq!(new_state.ui.standings.selected_row, 31);
+        // With viewport_height=20, last visible row is scroll_offset + 19
+        // To show row 31, scroll_offset should be 31 - 19 = 12
+        assert_eq!(new_state.ui.standings.scroll_offset, 12,
+            "Wrapping to bottom should auto-scroll to show last team");
+    }
+
+    #[test]
+    fn test_no_scroll_when_selection_already_visible() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 10;
+        state.ui.standings.scroll_offset = 5;
+
+        let initial_scroll = state.ui.standings.scroll_offset;
+
+        // Move down within visible window (5-24)
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 11);
+        assert_eq!(new_state.ui.standings.scroll_offset, initial_scroll,
+            "Scroll should not change when selection moves within visible window");
+    }
+
+    #[test]
+    fn test_no_scroll_with_empty_standings() {
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(vec![]));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 0;
+        state.ui.standings.scroll_offset = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 0);
+        assert_eq!(new_state.ui.standings.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_ensure_selection_visible_scroll_down() {
+        let mut state = AppState::default();
+        state.ui.standings.selected_row = 25;
+        state.ui.standings.scroll_offset = 0;
+
+        ensure_selection_visible(&mut state);
+
+        // Row 25 with scroll 0 means row is at position 25
+        // Visible window is 0-19, so row 25 is outside
+        // New scroll should be: 25 - 20 + 1 = 6
+        assert_eq!(state.ui.standings.scroll_offset, 6);
+    }
+
+    #[test]
+    fn test_ensure_selection_visible_scroll_up() {
+        let mut state = AppState::default();
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 10;
+
+        ensure_selection_visible(&mut state);
+
+        assert_eq!(state.ui.standings.scroll_offset, 5,
+            "Should scroll up to make row 5 visible");
+    }
+
+    #[test]
+    fn test_ensure_selection_visible_no_change() {
+        let mut state = AppState::default();
+        state.ui.standings.selected_row = 10;
+        state.ui.standings.scroll_offset = 5;
+
+        ensure_selection_visible(&mut state);
+
+        assert_eq!(state.ui.standings.scroll_offset, 5,
+            "Should not change scroll when selection is visible");
+    }
+
+    // Page navigation tests
+    #[test]
+    fn test_page_down_moves_selection_by_page_size() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::PageDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 15,
+            "PageDown should move 10 rows (PAGE_SIZE)");
+        // Should trigger auto-scroll since row 15 is outside initial viewport (0-19)
+    }
+
+    #[test]
+    fn test_page_down_at_end_clamps_to_last_team() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 28; // Near end (32 teams total)
+        state.ui.standings.scroll_offset = 10;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::PageDown);
+
+        assert_eq!(new_state.ui.standings.selected_row, 31,
+            "PageDown should clamp to last team (31)");
+    }
+
+    #[test]
+    fn test_page_up_moves_selection_by_page_size() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 20;
+        state.ui.standings.scroll_offset = 10;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::PageUp);
+
+        assert_eq!(new_state.ui.standings.selected_row, 10,
+            "PageUp should move up 10 rows (PAGE_SIZE)");
+    }
+
+    #[test]
+    fn test_page_up_at_top_clamps_to_zero() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 0;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::PageUp);
+
+        assert_eq!(new_state.ui.standings.selected_row, 0,
+            "PageUp should clamp to first team when near top");
+    }
+
+    #[test]
+    fn test_go_to_top_resets_to_first_team() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 25;
+        state.ui.standings.scroll_offset = 15;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::GoToTop);
+
+        assert_eq!(new_state.ui.standings.selected_row, 0,
+            "GoToTop should move to first team");
+        assert_eq!(new_state.ui.standings.scroll_offset, 0,
+            "GoToTop should reset scroll to 0");
+    }
+
+    #[test]
+    fn test_go_to_bottom_moves_to_last_team() {
+        use crate::tui::testing::create_test_standings;
+
+        let mut state = AppState::default();
+        state.data.standings = Arc::new(Some(create_test_standings()));
+        state.ui.standings.view = GroupBy::League;
+        state.ui.standings.selected_row = 5;
+        state.ui.standings.scroll_offset = 2;
+
+        let (new_state, _) = reduce_standings(state, StandingsAction::GoToBottom);
+
+        assert_eq!(new_state.ui.standings.selected_row, 31,
+            "GoToBottom should move to last team (31)");
+        assert_eq!(new_state.ui.standings.scroll_offset, 0,
+            "GoToBottom should reset scroll to 0");
     }
 }

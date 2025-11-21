@@ -270,7 +270,7 @@ mod tests {
         assert_buffer(&buf, &[
             "",
             &format!("    Log Level:  {}", config.log_level),
-            "  ► Log File:   /tmp/test.log█",
+            "  ▶ Log File:   /tmp/test.log█",
         ]);
     }
 
@@ -299,7 +299,7 @@ mod tests {
         assert_buffer(&buf, &[
             "",
             &format!("    Log Level:  {}", config.log_level),
-            &format!("  ► Log File:   {}", config.log_file),
+            &format!("  ▶ Log File:   {}", config.log_file),
         ]);
     }
 
@@ -328,7 +328,7 @@ mod tests {
         assert_buffer(&buf, &[
             "",
             "    Log Level:  info",
-            "  ► Log File:   █",
+            "  ▶ Log File:   █",
         ]);
     }
 

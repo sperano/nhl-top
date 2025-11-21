@@ -144,6 +144,10 @@ fn handle_standings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Acti
             KeyCode::Left => Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft)),
             KeyCode::Right => Some(Action::StandingsAction(StandingsAction::MoveSelectionRight)),
             KeyCode::Enter => Some(Action::StandingsAction(StandingsAction::SelectTeam)),
+            KeyCode::PageDown => Some(Action::StandingsAction(StandingsAction::PageDown)),
+            KeyCode::PageUp => Some(Action::StandingsAction(StandingsAction::PageUp)),
+            KeyCode::Home => Some(Action::StandingsAction(StandingsAction::GoToTop)),
+            KeyCode::End => Some(Action::StandingsAction(StandingsAction::GoToBottom)),
             _ => None,
         }
     } else {
