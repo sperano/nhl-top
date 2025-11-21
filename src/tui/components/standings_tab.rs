@@ -88,60 +88,70 @@ impl StandingsTab {
 
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
     fn render_view_tabs(&self, props: &StandingsTabProps) -> Element {
-        // Determine active tab key
-        let active_key = match props.view {
-            GroupBy::Wildcard => "wildcard",
-            GroupBy::Division => "division",
-            GroupBy::Conference => "conference",
-            GroupBy::League => "league",
-        };
-
-        // Only create content for the active tab to avoid cloning TableWidget
         // All inactive tabs get Element::None to avoid cloning issues
-        let tabs = vec![
+        let tabs = [GroupBy::Wildcard, GroupBy::Division, GroupBy::Conference, GroupBy::League];
+        let tabs = tabs.iter().map(|g|
             TabItem::new(
-                "wildcard",
-                "Wildcard",
-                if active_key == "wildcard" {
-                    self.render_standings_table(props, &GroupBy::Wildcard)
+                g.name(),
+                g.name(),
+                if props.view == *g {
+                    self.render_standings_table(props, g)
                 } else {
                     Element::None
-                },
-            ),
-            TabItem::new(
-                "division",
-                "Division",
-                if active_key == "division" {
-                    self.render_standings_table(props, &GroupBy::Division)
-                } else {
-                    Element::None
-                },
-            ),
-            TabItem::new(
-                "conference",
-                "Conference",
-                if active_key == "conference" {
-                    self.render_standings_table(props, &GroupBy::Conference)
-                } else {
-                    Element::None
-                },
-            ),
-            TabItem::new(
-                "league",
-                "League",
-                if active_key == "league" {
-                    self.render_standings_table(props, &GroupBy::League)
-                } else {
-                    Element::None
-                },
-            ),
-        ];
+                }
+            )
+        ).collect();
 
+        // let tabs = vec![
+        //     TabItem::new(
+        //         GroupBy::Wildcard.name(),
+        //         GroupBy::Wildcard.name(),
+        //         if props.view == GroupBy::Wildcard {
+        //             self.render_standings_table(props, &GroupBy::Wildcard)
+        //         } else {
+        //             Element::None
+        //         },
+        //     ),
+        //     TabItem::new(
+        //         GroupBy::Division.name(),
+        //         GroupBy::Division.name(),
+        //         if props.view == GroupBy::Division {
+        //             self.render_standings_table(props, &GroupBy::Division)
+        //         } else {
+        //             Element::None
+        //         },
+        //     ),
+        //     TabItem::new(
+        //         GroupBy::Conference.name(),
+        //         GroupBy::Conference.name(),
+        //         if props.view == GroupBy::Conference {
+        //             self.render_standings_table(props, &GroupBy::Conference)
+        //         } else {
+        //             Element::None
+        //         },
+        //     ),
+        //     TabItem::new(
+        //         GroupBy::League.name(),
+        //         GroupBy::League.name(),
+        //         if props.view == GroupBy::League {
+        //             self.render_standings_table(props, &GroupBy::League)
+        //         } else {
+        //             Element::None
+        //         },
+        //     ),
+        // ];
+
+        // Determine active tab key
+        // let active_key = match props.view {
+        //     GroupBy::Wildcard => "wildcard",
+        //     GroupBy::Division => "division",
+        //     GroupBy::Conference => "conference",
+        //     GroupBy::League => "league",
+        // };
         TabbedPanel.view(
             &TabbedPanelProps {
-                active_key: active_key.into(),
+                active_key: props.view.name().to_string(),
                 tabs,
-                // Tab bar is only focused when content is focused AND not in browse mode
                 focused: props.focused && !props.browse_mode,
             },
             &(),

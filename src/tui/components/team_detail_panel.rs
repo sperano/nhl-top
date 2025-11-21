@@ -399,7 +399,7 @@ mod tests {
 
         let club_stats = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters,
             goalies,
         };
@@ -440,7 +440,7 @@ mod tests {
 
         let club_stats = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters,
             goalies,
         };

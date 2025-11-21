@@ -6,6 +6,10 @@ pub mod types;
 pub mod tui;
 pub mod team_abbrev;
 pub mod layout_constants;
+pub mod data_provider;
 
-#[cfg(feature = "development")]
+#[cfg(any(test, feature = "development"))]
+pub mod fixtures;
+
+#[cfg(any(test, feature = "development"))]
 pub mod dev;

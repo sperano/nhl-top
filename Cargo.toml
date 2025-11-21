@@ -23,6 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 cached = { version = "0.49", features = ["async"] }
 unicode-width = "0.1"
 phf = { version = "0.13.1", features = ["macros"] }
+async-trait = "0.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

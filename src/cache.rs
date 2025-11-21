@@ -1,7 +1,8 @@
 use cached::proc_macro::cached;
 use nhl_api::{
-    Client, DailySchedule, GameDate, GameMatchup, NHLApiError, Standing,
+    DailySchedule, GameDate, GameMatchup, NHLApiError, Standing,
 };
+use crate::data_provider::NHLDataProvider;
 
 pub use cached::Cached;
 
@@ -46,7 +47,7 @@ pub async fn cache_stats() -> CacheStats {
     convert = r#"{ () }"#,
     result = true
 )]
-pub async fn fetch_standings_cached(client: &Client) -> Result<Vec<Standing>, NHLApiError> {
+pub async fn fetch_standings_cached(client: &dyn NHLDataProvider) -> Result<Vec<Standing>, NHLApiError> {
     client.current_league_standings().await
 }
 
@@ -57,7 +58,7 @@ pub async fn fetch_standings_cached(client: &Client) -> Result<Vec<Standing>, NH
     convert = r#"{ format!("{}", date) }"#,
     result = true
 )]
-pub async fn fetch_schedule_cached(client: &Client, date: GameDate) -> Result<DailySchedule, NHLApiError> {
+pub async fn fetch_schedule_cached(client: &dyn NHLDataProvider, date: GameDate) -> Result<DailySchedule, NHLApiError> {
     client.daily_schedule(Some(date)).await
 }
 
@@ -68,7 +69,7 @@ pub async fn fetch_schedule_cached(client: &Client, date: GameDate) -> Result<Da
     convert = r#"{ game_id }"#,
     result = true
 )]
-pub async fn fetch_game_cached(client: &Client, game_id: i64) -> Result<GameMatchup, NHLApiError> {
+pub async fn fetch_game_cached(client: &dyn NHLDataProvider, game_id: i64) -> Result<GameMatchup, NHLApiError> {
     client.landing(game_id).await
 }
 
@@ -79,7 +80,7 @@ pub async fn fetch_game_cached(client: &Client, game_id: i64) -> Result<GameMatc
     convert = r#"{ game_id }"#,
     result = true
 )]
-pub async fn fetch_boxscore_cached(client: &Client, game_id: i64) -> Result<nhl_api::Boxscore, NHLApiError> {
+pub async fn fetch_boxscore_cached(client: &dyn NHLDataProvider, game_id: i64) -> Result<nhl_api::Boxscore, NHLApiError> {
     client.boxscore(game_id).await
 }
 
@@ -91,11 +92,11 @@ pub async fn fetch_boxscore_cached(client: &Client, game_id: i64) -> Result<nhl_
     result = true
 )]
 pub async fn fetch_club_stats_cached(
-    client: &Client,
+    client: &dyn NHLDataProvider,
     team_abbrev: &str,
     season: i32,
 ) -> Result<nhl_api::ClubStats, NHLApiError> {
-    client.club_stats(team_abbrev, season, 2).await
+    client.club_stats(team_abbrev, season, nhl_api::GameType::RegularSeason).await
 }
 
 #[cached(
@@ -105,21 +106,21 @@ pub async fn fetch_club_stats_cached(
     convert = r#"{ player_id }"#,
     result = true
 )]
-pub async fn fetch_player_landing_cached(client: &Client, player_id: i64) -> Result<nhl_api::PlayerLanding, NHLApiError> {
+pub async fn fetch_player_landing_cached(client: &dyn NHLDataProvider, player_id: i64) -> Result<nhl_api::PlayerLanding, NHLApiError> {
     client.player_landing(player_id).await
 }
 
-pub async fn refresh_standings(client: &Client) -> Result<Vec<Standing>, NHLApiError> {
+pub async fn refresh_standings(client: &dyn NHLDataProvider) -> Result<Vec<Standing>, NHLApiError> {
     STANDINGS_CACHE.lock().await.cache_clear();
     fetch_standings_cached(client).await
 }
 
-pub async fn refresh_game(client: &Client, game_id: i64) -> Result<GameMatchup, NHLApiError> {
+pub async fn refresh_game(client: &dyn NHLDataProvider, game_id: i64) -> Result<GameMatchup, NHLApiError> {
     GAME_CACHE.lock().await.cache_remove(&game_id);
     fetch_game_cached(client, game_id).await
 }
 
-pub async fn refresh_schedule(client: &Client, date: GameDate) -> Result<DailySchedule, NHLApiError> {
+pub async fn refresh_schedule(client: &dyn NHLDataProvider, date: GameDate) -> Result<DailySchedule, NHLApiError> {
     let key = format!("{}", date);
     SCHEDULE_CACHE.lock().await.cache_remove(&key);
     fetch_schedule_cached(client, date).await
@@ -128,6 +129,7 @@ pub async fn refresh_schedule(client: &Client, date: GameDate) -> Result<DailySc
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dev::mock_client::MockClient;
 
     fn is_rate_limit_error(err: &NHLApiError) -> bool {
         matches!(err, NHLApiError::RateLimitExceeded { .. })
@@ -146,10 +148,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_standings_cache_works() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         let stats_before = cache_stats().await;
         assert_eq!(stats_before.standings_entries, 0);
@@ -162,10 +164,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access and may hit rate limits
+    #[ignore] // Shared cache state - run individually
     async fn test_standings_cache_hit() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         let start1 = std::time::Instant::now();
         let standings1 = match fetch_standings_cached(&client).await {
@@ -194,10 +196,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_schedule_cache_size_limit() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         for day in 1..=10 {
             if let Some(date) = chrono::NaiveDate::from_ymd_opt(2024, 11, day) {
@@ -211,10 +213,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_game_cache_different_keys() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         let _ = fetch_game_cached(&client, 2024020001).await;
         let _ = fetch_game_cached(&client, 2024020002).await;
@@ -224,10 +226,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_club_stats_cache_composite_key() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         let _ = fetch_club_stats_cached(&client, "TOR", 20242025).await;
         let _ = fetch_club_stats_cached(&client, "TOR", 20232024).await;
@@ -238,9 +240,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_clear_all_caches() {
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         let _ = fetch_standings_cached(&client).await;
         let _ = fetch_schedule_cached(&client, GameDate::Now).await;
@@ -256,10 +258,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_refresh_standings_clears_cache() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         if fetch_standings_cached(&client).await.is_ok() {
             let stats1 = cache_stats().await;
@@ -273,10 +275,10 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore] // Integration test - requires network access
+    #[ignore] // Shared cache state - run individually
     async fn test_refresh_schedule_removes_specific_entry() {
         clear_all_caches().await;
-        let client = Client::new().expect("Failed to create client");
+        let client = MockClient::new();
 
         let date1 = GameDate::Date(chrono::NaiveDate::from_ymd_opt(2024, 11, 1).unwrap());
         let date2 = GameDate::Date(chrono::NaiveDate::from_ymd_opt(2024, 11, 2).unwrap());

@@ -1,4 +1,5 @@
-use nhl_api::{Client, Standing};
+use nhl_api::Standing;
+use crate::data_provider::NHLDataProvider;
 use std::collections::BTreeMap;
 use crate::commands::parse_game_date;
 use crate::formatting::format_header;
@@ -386,7 +387,7 @@ pub fn format_standings_by_group(standings: &[Standing], by: GroupBy, western_fi
     }
 }
 
-pub async fn run(client: &Client, season: Option<i64>, date: Option<String>, by: GroupBy, config: &Config) -> Result<()> {
+pub async fn run(client: &dyn NHLDataProvider, season: Option<i64>, date: Option<String>, by: GroupBy, config: &Config) -> Result<()> {
     let standings = if date.is_some() {
         // Parse date string and get standings for that date
         let game_date = parse_game_date(date)?;

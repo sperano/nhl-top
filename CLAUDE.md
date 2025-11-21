@@ -31,7 +31,38 @@ cargo run -- --debug standings
 
 # Run performance test example
 cargo run --example test_parallel
+
+# Development mode with mock data (requires development feature)
+cargo build --features development
+cargo run --features development -- --mock           # TUI with mock data
+cargo run --features development -- --mock standings # Mock standings
+cargo run --features development -- --mock schedule  # Mock schedule
+cargo run --features development -- --mock scores    # Mock scores
 ```
+
+## Development Features
+
+The project includes a "development" feature flag that enables mock mode for development and testing. This is useful for:
+
+- **Screenshots**: Taking consistent screenshots with deterministic data
+- **Debugging**: Testing the application without network calls
+- **Development**: Working on UI features without API rate limits
+- **Testing**: Running integration tests with predictable data
+
+### Mock Mode
+
+When the development feature is enabled and the `--mock` flag is provided:
+
+1. **Data Provider Abstraction**: Uses `NHLDataProvider` trait to abstract over real and mock clients
+2. **Mock Client**: `MockClient` returns fixture data from `src/fixtures.rs`
+3. **Fixture Data**: Realistic NHL data including all 32 teams, various game states (live, final, future)
+4. **Consistent Data**: Always returns the same data for screenshots and testing
+
+### Modules Added for Development
+
+- **`src/data_provider.rs`**: Trait abstracting NHL data operations
+- **`src/dev/mock_client.rs`**: Mock implementation of the data provider
+- **`src/fixtures.rs`**: Fixture data generators for testing and development
 
 ## Architecture
 

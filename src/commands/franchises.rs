@@ -1,7 +1,7 @@
 use anyhow::Result;
-use nhl_api::Client;
+use crate::data_provider::NHLDataProvider;
 
-pub async fn run(client: &Client) -> Result<()> {
+pub async fn run(client: &dyn NHLDataProvider) -> Result<()> {
     let franchises = client.franchises().await?;
 
     println!("\nNHL Franchises");

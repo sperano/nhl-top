@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use tracing::debug;
 
 use crate::tui::action::Action;
@@ -257,7 +256,7 @@ fn handle_player_season_selection(
         if let Some(seasons) = &player.season_totals {
             // Filter to NHL regular season only and sort by season descending (latest first)
             let mut nhl_seasons: Vec<_> = seasons.iter()
-                .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
+                .filter(|s| s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL")
                 .collect();
             nhl_seasons.sort_by_season_desc();
 
@@ -314,6 +313,7 @@ fn panel_select_item(state: AppState) -> (AppState, Effect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn test_push_panel() {
@@ -478,7 +478,7 @@ mod tests {
 
         let roster = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters: skaters.clone(),
             goalies: goalies.clone(),
         };
@@ -587,7 +587,7 @@ mod tests {
 
         let roster = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters,
             goalies,
         };
@@ -695,7 +695,7 @@ mod tests {
 
         let roster = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters,
             goalies,
         };
@@ -808,7 +808,7 @@ mod tests {
 
         let roster = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters,
             goalies: vec![],
         };
@@ -913,7 +913,7 @@ mod tests {
 
         let roster = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters,
             goalies: vec![],
         };
@@ -1020,7 +1020,7 @@ mod tests {
 
         let roster = ClubStats {
             season: "20242025".to_string(),
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             skaters: vec![],
             goalies,
         };
@@ -1080,7 +1080,7 @@ mod tests {
         nhl_api::Boxscore {
             id: game_id,
             season: 20242025,
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             limited_scoring: false,
             game_date: "2024-11-16".to_string(),
             venue: nhl_api::LocalizedString { default: "Test Arena".to_string() },
@@ -1275,7 +1275,7 @@ mod tests {
             season_totals: Some(vec![
                 SeasonTotal {
                     season: 20232024,
-                    game_type_id: 2,
+                    game_type: nhl_api::GameType::RegularSeason,
                     league_abbrev: "NHL".to_string(),
                     team_name: LocalizedString { default: "Boston Bruins".to_string() },
                     team_common_name: Some(LocalizedString { default: "Bruins".to_string() }),
@@ -1289,7 +1289,7 @@ mod tests {
                 },
                 SeasonTotal {
                     season: 20222023,
-                    game_type_id: 2,
+                    game_type: nhl_api::GameType::RegularSeason,
                     league_abbrev: "NHL".to_string(),
                     team_name: LocalizedString { default: "Toronto Maple Leafs".to_string() },
                     team_common_name: Some(LocalizedString { default: "Maple Leafs".to_string() }),

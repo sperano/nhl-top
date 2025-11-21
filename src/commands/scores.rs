@@ -1,4 +1,5 @@
-use nhl_api::{Client, Boxscore, GameClock};
+use nhl_api::{Boxscore, GameClock};
+use crate::data_provider::NHLDataProvider;
 use crate::commands::parse_game_date;
 use anyhow::{Context, Result};
 
@@ -21,7 +22,7 @@ const TRAILING_PADDING: &str = "                                    ";
 /// Width of header separator line
 const HEADER_SEPARATOR_WIDTH: usize = 90;
 
-pub async fn run(client: &Client, date: Option<String>) -> Result<()> {
+pub async fn run(client: &dyn NHLDataProvider, date: Option<String>) -> Result<()> {
     let game_date = parse_game_date(date)?;
 
     let schedule = client.daily_schedule(Some(game_date)).await

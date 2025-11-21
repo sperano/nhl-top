@@ -46,7 +46,7 @@ use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
-use nhl_api::Client;
+use crate::data_provider::NHLDataProvider;
 use crate::config::Config;
 use crate::layout_constants::GAME_BOX_WITH_MARGIN;
 
@@ -60,9 +60,38 @@ fn is_quit_action(action: &Action) -> bool {
     matches!(action, Action::Quit)
 }
 
+/// Find the next available screenshot counter by scanning existing files
+#[cfg(feature = "development")]
+fn get_next_screenshot_counter() -> u32 {
+    use std::fs;
+
+    let mut max_counter = 0;
+
+    if let Ok(entries) = fs::read_dir(".") {
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                // Match pattern: nhl-screenshot-NNN.txt where NNN is 3 digits
+                if filename.starts_with("nhl-screenshot-") && filename.ends_with(".txt") {
+                    // Extract the part between "nhl-screenshot-" and ".txt"
+                    if let Some(middle) = filename.strip_prefix("nhl-screenshot-").and_then(|s| s.strip_suffix(".txt")) {
+                        // Only accept if it's exactly 3 digits
+                        if middle.len() == 3 && middle.chars().all(|c| c.is_ascii_digit()) {
+                            if let Ok(counter) = middle.parse::<u32>() {
+                                max_counter = max_counter.max(counter);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    max_counter + 1
+}
+
 /// Main entry point for TUI mode
 pub async fn run(
-    client: Arc<Client>,
+    client: Arc<dyn NHLDataProvider>,
     config: Config,
 ) -> Result<(), io::Error> {
     // Setup terminal
@@ -132,13 +161,21 @@ pub async fn run(
         #[cfg(feature = "development")]
         if let Some(buffer) = screenshot_buffer {
             screenshot_requested = false;
-            let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-            let filename = format!("nhl-screenshot-{}.txt", timestamp);
+            let counter = get_next_screenshot_counter();
+            let filename = format!("nhl-screenshot-{:03}.txt", counter);
             let area = ratatui::layout::Rect::new(0, 0, buffer.area().width, buffer.area().height);
             if let Err(e) = crate::dev::screenshot::save_buffer_screenshot(&buffer, area, &filename) {
                 tracing::error!("Failed to save screenshot: {}", e);
+                runtime.dispatch(Action::SetStatusMessage {
+                    message: format!("Failed to save screenshot: {}", e),
+                    is_error: true,
+                });
             } else {
                 tracing::info!("Screenshot saved to {}", filename);
+                runtime.dispatch(Action::SetStatusMessage {
+                    message: format!("Screenshot saved: {}", filename),
+                    is_error: false,
+                });
             }
         }
 
@@ -257,5 +294,69 @@ mod tests {
         assert!(!is_quit_action(&Action::PopPanel));
         assert!(!is_quit_action(&Action::SelectPlayer(123456)));
         assert!(!is_quit_action(&Action::SelectTeam("BOS".to_string())));
+    }
+
+    #[test]
+    #[cfg(feature = "development")]
+    #[ignore = "changes working directory - run with --test-threads=1"]
+    fn test_get_next_screenshot_counter_with_existing_files() {
+        use std::fs;
+        use std::env;
+
+        // Create a temporary directory for testing
+        let temp_dir = env::temp_dir().join(format!("nhl_screenshot_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir); // Remove if exists from previous run
+        fs::create_dir(&temp_dir).unwrap();
+        let original_dir = env::current_dir().unwrap();
+
+        // Change to temp directory
+        env::set_current_dir(&temp_dir).unwrap();
+
+        // Test with no existing files
+        assert_eq!(get_next_screenshot_counter(), 1);
+
+        // Create test files
+        fs::write("nhl-screenshot-001.txt", "test").unwrap();
+        fs::write("nhl-screenshot-005.txt", "test").unwrap();
+        fs::write("nhl-screenshot-010.txt", "test").unwrap();
+
+        // Should return 11 (max + 1)
+        assert_eq!(get_next_screenshot_counter(), 11);
+
+        // Restore original directory before cleanup
+        env::set_current_dir(&original_dir).unwrap();
+
+        // Clean up temp directory
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    #[cfg(feature = "development")]
+    #[ignore = "changes working directory - run with --test-threads=1"]
+    fn test_get_next_screenshot_counter_ignores_old_format() {
+        use std::fs;
+        use std::env;
+
+        // Create a temporary directory for testing
+        let temp_dir = env::temp_dir().join(format!("nhl_screenshot_test_2_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&temp_dir); // Remove if exists from previous run
+        fs::create_dir(&temp_dir).unwrap();
+        let original_dir = env::current_dir().unwrap();
+
+        // Change to temp directory
+        env::set_current_dir(&temp_dir).unwrap();
+
+        // Create a counter-based file and an old timestamp-based file
+        fs::write("nhl-screenshot-002.txt", "test").unwrap();
+        fs::write("nhl-screenshot-20251120-135010.txt", "test").unwrap();
+
+        // Should return 3, ignoring the timestamp-based file
+        assert_eq!(get_next_screenshot_counter(), 3);
+
+        // Restore original directory before cleanup
+        env::set_current_dir(&original_dir).unwrap();
+
+        // Clean up temp directory
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

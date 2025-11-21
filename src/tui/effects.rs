@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
-use nhl_api::{Client, GameDate};
+use nhl_api::GameDate;
 
 use crate::cache;
+use crate::data_provider::NHLDataProvider;
 use super::action::Action;
 use super::component::Effect;
 use super::state::{AppState};
 
 /// Regular season game type identifier
-const REGULAR_SEASON: i32 = 2;
+const REGULAR_SEASON: nhl_api::GameType = nhl_api::GameType::RegularSeason;
 
 /// Effect handler for data fetching operations
 ///
@@ -16,12 +17,12 @@ const REGULAR_SEASON: i32 = 2;
 /// Each method returns an Effect that will dispatch the appropriate
 /// *Loaded action when complete.
 pub struct DataEffects {
-    client: Arc<Client>,
+    client: Arc<dyn NHLDataProvider>,
 }
 
 impl DataEffects {
-    /// Create a new DataEffects handler with an NHL API client
-    pub fn new(client: Arc<Client>) -> Self {
+    /// Create a new DataEffects handler with an NHL data provider
+    pub fn new(client: Arc<dyn NHLDataProvider>) -> Self {
         Self { client }
     }
 
@@ -51,7 +52,7 @@ impl DataEffects {
     pub fn fetch_standings(&self) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = cache::fetch_standings_cached(&client).await;
+            let result = cache::fetch_standings_cached(client.as_ref()).await;
             Action::StandingsLoaded(result.map_err(|e| e.to_string()))
         }))
     }
@@ -60,7 +61,7 @@ impl DataEffects {
     pub fn fetch_schedule(&self, date: GameDate) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = cache::fetch_schedule_cached(&client, date).await;
+            let result = cache::fetch_schedule_cached(client.as_ref(), date).await;
             Action::ScheduleLoaded(result.map_err(|e| e.to_string()))
         }))
     }
@@ -69,7 +70,7 @@ impl DataEffects {
     pub fn fetch_game_details(&self, game_id: i64) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = cache::fetch_game_cached(&client, game_id).await;
+            let result = cache::fetch_game_cached(client.as_ref(), game_id).await;
             Action::GameDetailsLoaded(game_id, result.map_err(|e| e.to_string()))
         }))
     }
@@ -96,7 +97,7 @@ impl DataEffects {
                     match current_season {
                         Some(season_info) => {
                             // Fetch stats for the current season (with caching)
-                            cache::fetch_club_stats_cached(&client, &abbrev, season_info.season).await
+                            cache::fetch_club_stats_cached(client.as_ref(), &abbrev, season_info.season).await
                         }
                         None => {
                             Err(nhl_api::NHLApiError::ApiError {
@@ -117,7 +118,7 @@ impl DataEffects {
     pub fn fetch_player_stats(&self, player_id: i64) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = cache::fetch_player_landing_cached(&client, player_id).await;
+            let result = cache::fetch_player_landing_cached(client.as_ref(), player_id).await;
             Action::PlayerStatsLoaded(player_id, result.map_err(|e| e.to_string()))
         }))
     }
@@ -126,7 +127,7 @@ impl DataEffects {
     pub fn fetch_boxscore(&self, game_id: i64) -> Effect {
         let client = self.client.clone();
         Effect::Async(Box::pin(async move {
-            let result = cache::fetch_boxscore_cached(&client, game_id).await;
+            let result = cache::fetch_boxscore_cached(client.as_ref(), game_id).await;
             Action::BoxscoreLoaded(game_id, result.map_err(|e| e.to_string()))
         }))
     }

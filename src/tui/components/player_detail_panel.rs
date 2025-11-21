@@ -165,12 +165,12 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             y += 2;
         }
 
-        // Get regular season stats only (game_type_id == 2)
+        // Get regular season stats only
         let mut season_stats: Vec<SeasonTotal> = player.season_totals
             .as_ref()
             .map(|seasons| {
                 seasons.iter()
-                    .filter(|s| s.game_type_id == 2 && s.league_abbrev == "NHL")
+                    .filter(|s| s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL")
                     .cloned()
                     .collect()
             })
@@ -357,7 +357,7 @@ mod tests {
             season_totals: Some(vec![
                 SeasonTotal {
                     season: 20232024,
-                    game_type_id: 2,
+                    game_type: nhl_api::GameType::RegularSeason,
                     league_abbrev: "NHL".to_string(),
                     team_name: LocalizedString {
                         default: "Toronto Maple Leafs".to_string(),
@@ -375,7 +375,7 @@ mod tests {
                 },
                 SeasonTotal {
                     season: 20222023,
-                    game_type_id: 2,
+                    game_type: nhl_api::GameType::RegularSeason,
                     league_abbrev: "NHL".to_string(),
                     team_name: LocalizedString {
                         default: "Toronto Maple Leafs".to_string(),

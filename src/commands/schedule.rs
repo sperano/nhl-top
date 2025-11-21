@@ -1,4 +1,5 @@
-use nhl_api::{Client, DailySchedule};
+use nhl_api::DailySchedule;
+use crate::data_provider::NHLDataProvider;
 use crate::commands::parse_game_date;
 use crate::layout_constants::{SCHEDULE_BOX_CONTENT_WIDTH, SCHEDULE_BOX_TOTAL_WIDTH};
 use anyhow::{Context, Result};
@@ -49,7 +50,7 @@ pub fn format_schedule(schedule: &DailySchedule) -> String {
     output
 }
 
-pub async fn run(client: &Client, date: Option<String>) -> Result<()> {
+pub async fn run(client: &dyn NHLDataProvider, date: Option<String>) -> Result<()> {
     let game_date = parse_game_date(date)?;
     let schedule = client.daily_schedule(Some(game_date)).await
         .context("Failed to fetch schedule")?;
@@ -83,7 +84,7 @@ mod tests {
     ) -> ScheduleGame {
         ScheduleGame {
             id: 2024020001,
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             game_date: Some("2024-11-03".to_string()),
             start_time_utc: start_time_utc.to_string(),
             game_state,

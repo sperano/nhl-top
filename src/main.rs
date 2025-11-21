@@ -1,6 +1,10 @@
 use nhl::tui;
 use nhl::commands;
 use nhl::config;
+use nhl::data_provider::NHLDataProvider;
+
+#[cfg(feature = "development")]
+use nhl::dev::mock_client::MockClient;
 
 use nhl_api::Client;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -26,6 +30,11 @@ struct Cli {
     /// Log file path (default: /dev/null for no logging)
     #[arg(short = 'F', long, global = true, default_value = DEFAULT_LOG_FILE)]
     log_file: String,
+
+    /// Use mock data instead of real API calls (development feature only)
+    #[cfg(feature = "development")]
+    #[arg(long, global = true)]
+    mock: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -94,9 +103,15 @@ enum Commands {
     Config,
 }
 
-fn create_client() -> Client {
+fn create_client(#[allow(unused_variables)] mock_mode: bool) -> Arc<dyn NHLDataProvider> {
+    #[cfg(feature = "development")]
+    if mock_mode {
+        tracing::info!("Using mock client for development");
+        return Arc::new(MockClient::new());
+    }
+
     match Client::new() {
-        Ok(client) => client,
+        Ok(client) => Arc::new(client),
         Err(e) => {
             let error_msg = format!("Failed to create NHL API client: {}", e);
             tracing::error!("{}", error_msg);
@@ -185,14 +200,14 @@ fn resolve_log_config<'a>(cli: &'a Cli, config: &'a config::Config) -> (&'a str,
 }
 
 /// Run TUI mode
-async fn run_tui_mode(config: config::Config) -> Result<(), std::io::Error> {
+async fn run_tui_mode(config: config::Config, mock_mode: bool) -> Result<(), std::io::Error> {
     tracing::info!("Running in experimental React-like mode");
-    let client = Arc::new(create_client());
+    let client = create_client(mock_mode);
     tui::run(client, config).await
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler
-async fn execute_command(client: &Client, command: Commands, config: &config::Config) -> anyhow::Result<()> {
+async fn execute_command(client: &dyn NHLDataProvider, command: Commands, config: &config::Config) -> anyhow::Result<()> {
     match command {
         Commands::Config => unreachable!("Config command should be handled before execute_command"),
         Commands::Standings { season, date, by } => {
@@ -225,9 +240,15 @@ async fn main() {
         init_logging(log_level, log_file);
     }
 
+    // Extract mock flag (only available in development feature)
+    #[cfg(feature = "development")]
+    let mock_mode = cli.mock;
+    #[cfg(not(feature = "development"))]
+    let mock_mode = false;
+
     // If no subcommand, run TUI
     if cli.command.is_none() {
-        if let Err(e) = run_tui_mode(config).await {
+        if let Err(e) = run_tui_mode(config, mock_mode).await {
             eprintln!("Error running TUI: {}", e);
             std::process::exit(1);
         }
@@ -243,8 +264,8 @@ async fn main() {
     }
 
     // Create client and execute command
-    let client = create_client();
-    if let Err(e) = execute_command(&client, command, &config).await {
+    let client = create_client(mock_mode);
+    if let Err(e) = execute_command(&*client, command, &config).await {
         eprintln!("Error: {:#}", e);
         tracing::error!("Command failed: {:#}", e);
         std::process::exit(1);

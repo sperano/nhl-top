@@ -209,7 +209,7 @@ mod tests {
     fn create_minimal_season(season: i32) -> SeasonTotal {
         SeasonTotal {
             season,
-            game_type_id: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             league_abbrev: "NHL".to_string(),
             team_name: LocalizedString { default: "Test Team".to_string() },
             team_common_name: None,

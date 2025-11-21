@@ -723,7 +723,7 @@ mod tests {
         let boxscore = Boxscore {
             id: 2024020001,
             season: 20242025,
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             limited_scoring: false,
             game_date: "2024-10-04".to_string(),
             venue: LocalizedString {
@@ -847,7 +847,7 @@ mod tests {
         Boxscore {
             id: 2024020001,
             season: 20242025,
-            game_type: 2,
+            game_type: nhl_api::GameType::RegularSeason,
             limited_scoring: false,
             game_date: "2024-10-04".to_string(),
             venue: LocalizedString {

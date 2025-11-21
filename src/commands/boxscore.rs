@@ -1,4 +1,5 @@
-use nhl_api::{Client, GameId, Boxscore};
+use nhl_api::Boxscore;
+use crate::data_provider::NHLDataProvider;
 #[cfg(feature = "game_stats")]
 use nhl_api::TeamGameStats;
 use anyhow::{Context, Result};
@@ -271,8 +272,7 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
     output
 }
 
-pub async fn run(client: &Client, game_id: i64, config: &Config) -> Result<()> {
-    let game_id = GameId::new(game_id);
+pub async fn run(client: &dyn NHLDataProvider, game_id: i64, config: &Config) -> Result<()> {
     let boxscore = client.boxscore(game_id).await
         .context("Failed to fetch boxscore")?;
     print!("{}", format_boxscore(&boxscore, &config.display));
