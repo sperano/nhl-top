@@ -1,5 +1,7 @@
 /// Helper methods and extension traits for common TUI operations
 use nhl_api::{ClubGoalieStats, ClubSkaterStats, SeasonTotal, Standing};
+#[cfg(test)]
+use nhl_api::Position;
 
 /// Extension trait for sorting standings by points (descending)
 pub trait StandingsSorting {
@@ -165,7 +167,7 @@ mod tests {
             headshot: String::new(),
             first_name: LocalizedString { default: "Test".to_string() },
             last_name: LocalizedString { default: "Player".to_string() },
-            position_code: "C".to_string(),
+            position: Position::Center,
             games_played: 10,
             plus_minus: 0,
             penalty_minutes: 0,

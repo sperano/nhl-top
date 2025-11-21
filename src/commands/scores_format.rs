@@ -1,4 +1,4 @@
-use nhl_api::GameSummary;
+use nhl_api::{GameSummary, PeriodType};
 use crate::formatting::BoxChars;
 use crate::layout_constants::{SCORE_BOX_WIDTH, PERIOD_COL_WIDTH, TEAM_ABBREV_COL_WIDTH};
 
@@ -50,9 +50,9 @@ impl PeriodScores {
 }
 
 /// Format period text (e.g., "1st Period", "Overtime", "Shootout")
-pub fn format_period_text(period_type: &str, period_number: i32) -> String {
+pub fn format_period_text(period_type: PeriodType, period_number: i32) -> String {
     match period_type {
-        "REG" => {
+        PeriodType::Regulation => {
             let ordinal = match period_number {
                 1 => "1st",
                 2 => "2nd",
@@ -61,9 +61,8 @@ pub fn format_period_text(period_type: &str, period_number: i32) -> String {
             };
             format!("{} Period", ordinal)
         },
-        "OT" => "Overtime".to_string(),
-        "SO" => "Shootout".to_string(),
-        _ => format!("Period {}", period_number),
+        PeriodType::Overtime => "Overtime".to_string(),
+        PeriodType::Shootout => "Shootout".to_string(),
     }
 }
 
@@ -341,14 +340,14 @@ pub fn extract_period_scores(summary: &GameSummary) -> PeriodScores {
         let period_num = period.period_descriptor.number as usize;
 
         // Determine if this is OT or SO
-        if period.period_descriptor.period_type == "OT" {
+        if period.period_descriptor.period_type == PeriodType::Overtime {
             has_ot = true;
             // Ensure we have enough slots (up to OVERTIME_INDEX + 1)
             if away_periods.len() < OVERTIME_INDEX + 1 {
                 away_periods.push(0);
                 home_periods.push(0);
             }
-        } else if period.period_descriptor.period_type == "SO" {
+        } else if period.period_descriptor.period_type == PeriodType::Shootout {
             has_so = true;
             // Ensure we have enough slots (up to SHOOTOUT_INDEX + 1)
             while away_periods.len() < SHOOTOUT_INDEX + 1 {
@@ -367,14 +366,10 @@ pub fn extract_period_scores(summary: &GameSummary) -> PeriodScores {
             let home_goals_in_period = period_home_score - prev_home_score;
 
             // Store in the appropriate slot
-            let idx = if period.period_descriptor.period_type == "REG" {
-                (period_num - 1).min(PERIOD_3_INDEX) // P1=0, P2=1, P3=2
-            } else if period.period_descriptor.period_type == "OT" {
-                OVERTIME_INDEX // OT slot
-            } else if period.period_descriptor.period_type == "SO" {
-                SHOOTOUT_INDEX // SO slot
-            } else {
-                continue;
+            let idx = match period.period_descriptor.period_type {
+                PeriodType::Regulation => (period_num - 1).min(PERIOD_3_INDEX), // P1=0, P2=1, P3=2
+                PeriodType::Overtime => OVERTIME_INDEX,
+                PeriodType::Shootout => SHOOTOUT_INDEX,
             };
 
             if idx < away_periods.len() {
@@ -575,24 +570,19 @@ mod tests {
 
     #[test]
     fn test_format_period_text_regular() {
-        assert_eq!(format_period_text("REG", 1), "1st Period");
-        assert_eq!(format_period_text("REG", 2), "2nd Period");
-        assert_eq!(format_period_text("REG", 3), "3rd Period");
-        assert_eq!(format_period_text("REG", 4), "4th Period");
+        assert_eq!(format_period_text(PeriodType::Regulation, 1), "1st Period");
+        assert_eq!(format_period_text(PeriodType::Regulation, 2), "2nd Period");
+        assert_eq!(format_period_text(PeriodType::Regulation, 3), "3rd Period");
+        assert_eq!(format_period_text(PeriodType::Regulation, 4), "4th Period");
     }
 
     #[test]
     fn test_format_period_text_overtime() {
-        assert_eq!(format_period_text("OT", 4), "Overtime");
+        assert_eq!(format_period_text(PeriodType::Overtime, 4), "Overtime");
     }
 
     #[test]
     fn test_format_period_text_shootout() {
-        assert_eq!(format_period_text("SO", 5), "Shootout");
-    }
-
-    #[test]
-    fn test_format_period_text_unknown() {
-        assert_eq!(format_period_text("UNKNOWN", 1), "Period 1");
+        assert_eq!(format_period_text(PeriodType::Shootout, 5), "Shootout");
     }
 }

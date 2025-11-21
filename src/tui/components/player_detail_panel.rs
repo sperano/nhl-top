@@ -5,7 +5,7 @@ use ratatui::{
     style::{Style, Modifier},
 };
 
-use nhl_api::{PlayerLanding, SeasonTotal};
+use nhl_api::{PlayerLanding, Position, SeasonTotal};
 
 use crate::config::DisplayConfig;
 use crate::tui::helpers::SeasonSorting;
@@ -101,7 +101,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             sweater,
             player.position,
             player.shoots_catches,
-            if player.position == "G" { "Catches" } else { "Shoots" }
+            if player.position == Position::Goalie { "Catches" } else { "Shoots" }
         );
         buf.set_string(x, y, &details1, Style::default());
         y += 1;
@@ -139,7 +139,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             buf.set_string(x, y, career_header, Style::default().add_modifier(Modifier::BOLD));
             y += 1;
 
-            let career_stats = if player.position == "G" {
+            let career_stats = if player.position == Position::Goalie {
                 format!(
                     "GP: {} | W: {} | L: {} | OTL: {} | GAA: {:.2} | SV%: {:.3} | SO: {}",
                     career.regular_season.games_played.unwrap_or(0),
@@ -183,7 +183,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
 
         if !season_stats.is_empty() {
             // Create season-by-season table
-            let is_goalie = player.position == "G";
+            let is_goalie = player.position == Position::Goalie;
 
             let columns = if is_goalie {
                 vec![
@@ -320,10 +320,10 @@ impl RenderableWidget for PlayerDetailPanelWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nhl_api::{LocalizedString, SeasonTotal};
+    use nhl_api::{Handedness, LocalizedString, SeasonTotal};
     use ratatui::{buffer::Buffer, layout::Rect};
 
-    fn create_test_player(player_id: i64, position: &str) -> PlayerLanding {
+    fn create_test_player(player_id: i64, position: Position) -> PlayerLanding {
         PlayerLanding {
             player_id,
             is_active: true,
@@ -336,7 +336,7 @@ mod tests {
                 default: "Player".to_string(),
             },
             sweater_number: Some(34),
-            position: position.to_string(),
+            position,
             headshot: String::new(),
             hero_image: None,
             height_in_inches: 73,
@@ -349,7 +349,7 @@ mod tests {
                 default: "ON".to_string(),
             }),
             birth_country: Some("CAN".to_string()),
-            shoots_catches: "L".to_string(),
+            shoots_catches: Handedness::Left,
             draft_details: None,
             player_slug: None,
             featured_stats: None,
@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_player_panel_renders_with_data() {
-        let player = create_test_player(8479318, "C");
+        let player = create_test_player(8479318, Position::Center);
 
         let widget = PlayerDetailPanelWidget {
             player_id: 8479318,
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_player_panel_with_limited_height() {
-        let player = create_test_player(8479318, "C");
+        let player = create_test_player(8479318, Position::Center);
 
         let widget = PlayerDetailPanelWidget {
             player_id: 8479318,

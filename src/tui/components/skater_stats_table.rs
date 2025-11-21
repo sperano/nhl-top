@@ -48,7 +48,7 @@ fn game_skater_columns() -> Vec<ColumnDef<SkaterStats>> {
             }
         }),
         ColumnDef::new("Pos", 3, Alignment::Center, |s: &SkaterStats| {
-            CellValue::Text(s.position.clone())
+            CellValue::Text(s.position.to_string())
         }),
         ColumnDef::new("G", 2, Alignment::Right, |s: &SkaterStats| {
             CellValue::Text(s.goals.to_string())
@@ -178,18 +178,18 @@ impl RenderableWidget for SkaterStatsTableWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nhl_api::LocalizedString;
+    use nhl_api::{LocalizedString, Position};
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
 
-    fn create_test_skater(id: i64, name: &str, pos: &str, g: i32, a: i32) -> SkaterStats {
+    fn create_test_skater(id: i64, name: &str, pos: Position, g: i32, a: i32) -> SkaterStats {
         SkaterStats {
             player_id: id,
             sweater_number: 34,
             name: LocalizedString {
                 default: name.to_string(),
             },
-            position: pos.to_string(),
+            position: pos,
             goals: g,
             assists: a,
             points: g + a,
@@ -210,8 +210,8 @@ mod tests {
     #[test]
     fn test_game_stats_table_renders() {
         let skaters = vec![
-            create_test_skater(8479318, "Auston Matthews", "C", 2, 1),
-            create_test_skater(8478402, "Connor McDavid", "C", 1, 3),
+            create_test_skater(8479318, "Auston Matthews", Position::Center, 2, 1),
+            create_test_skater(8478402, "Connor McDavid", Position::Center, 1, 3),
         ];
 
         let table = SkaterStatsTableWidget::from_game_stats(skaters)
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_player_link_column_is_first() {
-        let skaters = vec![create_test_skater(8479318, "Auston Matthews", "C", 2, 1)];
+        let skaters = vec![create_test_skater(8479318, "Auston Matthews", Position::Center, 2, 1)];
 
         let table = SkaterStatsTableWidget::from_game_stats(skaters);
 
@@ -259,7 +259,7 @@ mod tests {
         use crate::tui::testing::assert_buffer;
 
         let skaters = vec![
-            create_test_skater(8479318, "Auston Matthews", "C", 2, 1),
+            create_test_skater(8479318, "Auston Matthews", Position::Center, 2, 1),
         ];
 
         let table = SkaterStatsTableWidget::from_game_stats(skaters)
@@ -290,7 +290,7 @@ mod tests {
     fn test_table_shows_all_stat_columns() {
         use crate::tui::testing::assert_buffer;
 
-        let skater = create_test_skater(8479318, "A. Matthews", "C", 2, 1);
+        let skater = create_test_skater(8479318, "A. Matthews", Position::Center, 2, 1);
 
         let table = SkaterStatsTableWidget::from_game_stats(vec![skater])
             .with_header("Stats")

@@ -130,7 +130,7 @@ impl RenderableWidget for TeamDetailPanelWidget {
                 }
             }),
             ColumnDef::new("Pos", 3, Alignment::Left, |s: &nhl_api::ClubSkaterStats| {
-                CellValue::Text(s.position_code.clone())
+                CellValue::Text(s.position.to_string())
             }),
             ColumnDef::new("GP", 4, Alignment::Right, |s: &nhl_api::ClubSkaterStats| {
                 CellValue::Text(s.games_played.to_string())
@@ -267,14 +267,14 @@ impl RenderableWidget for TeamDetailPanelWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nhl_api::{ClubGoalieStats, ClubSkaterStats, LocalizedString};
+    use nhl_api::{ClubGoalieStats, ClubSkaterStats, LocalizedString, Position};
     use ratatui::{buffer::Buffer, layout::Rect};
 
     fn create_test_skater(
         player_id: i64,
         first_name: &str,
         last_name: &str,
-        position: &str,
+        position: Position,
         gp: i32,
         goals: i32,
         assists: i32,
@@ -289,7 +289,7 @@ mod tests {
             last_name: LocalizedString {
                 default: last_name.to_string(),
             },
-            position_code: position.to_string(),
+            position,
             games_played: gp,
             goals,
             assists,
@@ -384,7 +384,7 @@ mod tests {
                 i,
                 "Test",
                 &format!("Player{}", i),
-                "C",
+                Position::Center,
                 20,
                 10,
                 15,
@@ -435,7 +435,7 @@ mod tests {
     /// exactly y = height, which would cause an index out of bounds.
     #[test]
     fn test_rendering_at_exact_boundary_height() {
-        let skaters = vec![create_test_skater(1, "John", "Doe", "C", 20, 10, 15, 25)];
+        let skaters = vec![create_test_skater(1, "John", "Doe", Position::Center, 20, 10, 15, 25)];
         let goalies = vec![create_test_goalie(2, "Jane", "Smith", 15, 8)];
 
         let club_stats = ClubStats {

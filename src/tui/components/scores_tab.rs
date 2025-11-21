@@ -130,7 +130,7 @@ impl GameListWidget {
             // Get period text and time from game_info
             if let Some(info) = self.game_info.get(&game.id) {
                 let period_text = format_period_text(
-                    &info.period_descriptor.period_type,
+                    info.period_descriptor.period_type,
                     info.period_descriptor.number
                 );
                 let (time_remaining, in_intermission) = if let Some(clock) = &info.clock {

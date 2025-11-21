@@ -131,7 +131,7 @@ impl BoxscorePanelWidget {
             boxscore.game_date, boxscore.venue.default
         );
 
-        let period_text = format_period_text(&boxscore.period_descriptor.number, &boxscore.period_descriptor.period_type);
+        let period_text = format_period_text(&boxscore.period_descriptor.number, boxscore.period_descriptor.period_type);
         let status_period = format!(
             "Status: {} | Period: {}",
             format_game_state(&boxscore.game_state),
@@ -607,12 +607,11 @@ fn format_game_state(state: &nhl_api::GameState) -> &str {
     }
 }
 
-fn format_period_text(number: &i32, period_type: &str) -> String {
+fn format_period_text(number: &i32, period_type: nhl_api::PeriodType) -> String {
     match period_type {
-        "REG" => format!("{}", number),
-        "OT" => "OT".to_string(),
-        "SO" => "SO".to_string(),
-        _ => format!("{}", number),
+        nhl_api::PeriodType::Regulation => format!("{}", number),
+        nhl_api::PeriodType::Overtime => "OT".to_string(),
+        nhl_api::PeriodType::Shootout => "SO".to_string(),
     }
 }
 
@@ -622,6 +621,7 @@ mod tests {
     use nhl_api::{
         Boxscore, BoxscoreTeam, PlayerByGameStats, TeamPlayerStats,
         SkaterStats, GoalieStats, GameClock, GameState, LocalizedString, PeriodDescriptor,
+        Position, PeriodType,
     };
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
@@ -631,7 +631,7 @@ mod tests {
     fn create_test_skater(
         name: &str,
         sweater_number: i32,
-        position: &str,
+        position: Position,
     ) -> SkaterStats {
         SkaterStats {
             player_id: 0,
@@ -639,7 +639,7 @@ mod tests {
                 default: name.to_string(),
             },
             sweater_number,
-            position: position.to_string(),
+            position,
             goals: 0,
             assists: 0,
             points: 0,
@@ -668,7 +668,7 @@ mod tests {
                 default: name.to_string(),
             },
             sweater_number,
-            position: "G".to_string(),
+            position: Position::Goalie,
             even_strength_shots_against: "0".to_string(),
             power_play_shots_against: "0".to_string(),
             shorthanded_shots_against: "0".to_string(),
@@ -698,10 +698,10 @@ mod tests {
     fn test_constraint_alignment_with_different_player_counts() {
         // Create NSH with 11 forwards, 7 defense, 2 goalies
         let nsh_forwards = (1..=11)
-            .map(|i| create_test_skater(&format!("NSH F{}", i), i, "L"))
+            .map(|i| create_test_skater(&format!("NSH F{}", i), i, Position::LeftWing))
             .collect();
         let nsh_defense = (12..=18)
-            .map(|i| create_test_skater(&format!("NSH D{}", i - 11), i, "D"))
+            .map(|i| create_test_skater(&format!("NSH D{}", i - 11), i, Position::Defense))
             .collect();
         let nsh_goalies = vec![
             create_test_goalie("NSH G1", 30),
@@ -710,10 +710,10 @@ mod tests {
 
         // Create PIT with 12 forwards, 6 defense, 2 goalies (different forward count!)
         let pit_forwards = (1..=12)
-            .map(|i| create_test_skater(&format!("PIT F{}", i), i, "L"))
+            .map(|i| create_test_skater(&format!("PIT F{}", i), i, Position::LeftWing))
             .collect();
         let pit_defense = (13..=18)
-            .map(|i| create_test_skater(&format!("PIT D{}", i - 12), i, "D"))
+            .map(|i| create_test_skater(&format!("PIT D{}", i - 12), i, Position::Defense))
             .collect();
         let pit_goalies = vec![
             create_test_goalie("PIT G1", 30),
@@ -740,7 +740,7 @@ mod tests {
             game_schedule_state: "OK".to_string(),
             period_descriptor: PeriodDescriptor {
                 number: 2,
-                period_type: "REG".to_string(),
+                period_type: PeriodType::Regulation,
                 max_regulation_periods: 3,
             },
             special_event: None,
@@ -864,7 +864,7 @@ mod tests {
             game_schedule_state: "OK".to_string(),
             period_descriptor: PeriodDescriptor {
                 number: 2,
-                period_type: "REG".to_string(),
+                period_type: PeriodType::Regulation,
                 max_regulation_periods: 3,
             },
             special_event: None,

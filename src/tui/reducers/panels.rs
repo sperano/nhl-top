@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn test_panel_select_item_skater() {
         // Regression test: Ensure selecting a skater from team detail pushes PlayerDetail panel
-        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString};
+        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -410,7 +410,7 @@ mod tests {
                 first_name: LocalizedString { default: "Connor".to_string() },
                 last_name: LocalizedString { default: "McDavid".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 15,
                 assists: 25,
@@ -432,7 +432,7 @@ mod tests {
                 first_name: LocalizedString { default: "Leon".to_string() },
                 last_name: LocalizedString { default: "Draisaitl".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 12,
                 assists: 20,
@@ -509,7 +509,7 @@ mod tests {
     fn test_panel_select_item_goalie() {
         // Regression test: Ensure selecting a goalie from team detail pushes PlayerDetail panel
         // Bug: Previously only skaters were handled, selecting a goalie did nothing
-        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString};
+        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -519,7 +519,7 @@ mod tests {
                 first_name: LocalizedString { default: "Connor".to_string() },
                 last_name: LocalizedString { default: "McDavid".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 15,
                 assists: 25,
@@ -617,7 +617,7 @@ mod tests {
     #[test]
     fn test_panel_select_item_second_goalie() {
         // Test selecting the second goalie in the list
-        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString};
+        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -627,7 +627,7 @@ mod tests {
                 first_name: LocalizedString { default: "Player".to_string() },
                 last_name: LocalizedString { default: "One".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 15,
                 assists: 25,
@@ -730,7 +730,7 @@ mod tests {
         // This test creates a roster where sorted order != data order
         // Then verifies that selecting visual position 0 gets the highest-points player,
         // not the first player in the data array
-        use nhl_api::{ClubStats, ClubSkaterStats, LocalizedString};
+        use nhl_api::{ClubStats, ClubSkaterStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -743,7 +743,7 @@ mod tests {
                 first_name: LocalizedString { default: "Brent".to_string() },
                 last_name: LocalizedString { default: "Burns".to_string() },
                 headshot: String::new(),
-                position_code: "D".to_string(),
+                position: Position::Defense,
                 games_played: 20,
                 goals: 3,
                 assists: 7,
@@ -765,7 +765,7 @@ mod tests {
                 first_name: LocalizedString { default: "Brock".to_string() },
                 last_name: LocalizedString { default: "Nelson".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 2,
                 assists: 3,
@@ -787,7 +787,7 @@ mod tests {
                 first_name: LocalizedString { default: "Martin".to_string() },
                 last_name: LocalizedString { default: "Necas".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 15,
                 assists: 25,
@@ -838,7 +838,7 @@ mod tests {
     #[test]
     fn test_panel_select_item_sorted_second_position() {
         // Test selecting second visual position in sorted roster
-        use nhl_api::{ClubStats, ClubSkaterStats, LocalizedString};
+        use nhl_api::{ClubStats, ClubSkaterStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -848,7 +848,7 @@ mod tests {
                 first_name: LocalizedString { default: "Brent".to_string() },
                 last_name: LocalizedString { default: "Burns".to_string() },
                 headshot: String::new(),
-                position_code: "D".to_string(),
+                position: Position::Defense,
                 games_played: 20,
                 goals: 3,
                 assists: 7,
@@ -870,7 +870,7 @@ mod tests {
                 first_name: LocalizedString { default: "Brock".to_string() },
                 last_name: LocalizedString { default: "Nelson".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 2,
                 assists: 3,
@@ -892,7 +892,7 @@ mod tests {
                 first_name: LocalizedString { default: "Martin".to_string() },
                 last_name: LocalizedString { default: "Necas".to_string() },
                 headshot: String::new(),
-                position_code: "C".to_string(),
+                position: Position::Center,
                 games_played: 20,
                 goals: 15,
                 assists: 25,
@@ -1047,12 +1047,12 @@ mod tests {
     }
 
     /// Helper to create a test SkaterStats
-    fn create_test_skater(player_id: i64, name: &str, position: &str) -> nhl_api::SkaterStats {
+    fn create_test_skater(player_id: i64, name: &str, position: nhl_api::Position) -> nhl_api::SkaterStats {
         nhl_api::SkaterStats {
             player_id,
             name: nhl_api::LocalizedString { default: name.to_string() },
             sweater_number: 87,
-            position: position.to_string(),
+            position,
             goals: 1,
             assists: 2,
             points: 3,
@@ -1093,7 +1093,7 @@ mod tests {
             game_schedule_state: "OK".to_string(),
             period_descriptor: nhl_api::PeriodDescriptor {
                 number: 3,
-                period_type: "REG".to_string(),
+                period_type: nhl_api::PeriodType::Regulation,
                 max_regulation_periods: 3,
             },
             special_event: None,
@@ -1154,7 +1154,7 @@ mod tests {
 
         let boxscore = create_test_boxscore(
             TEST_GAME_ID,
-            vec![create_test_skater(8478483, "Sidney Crosby", "C")],
+            vec![create_test_skater(8478483, "Sidney Crosby", nhl_api::Position::Center)],
             vec![],
         );
 
@@ -1185,8 +1185,8 @@ mod tests {
 
         let boxscore = create_test_boxscore(
             TEST_GAME_ID,
-            vec![create_test_skater(8478483, "Away Forward", "C")],
-            vec![create_test_skater(8476887, "Filip Forsberg", "L")],
+            vec![create_test_skater(8478483, "Away Forward", nhl_api::Position::Center)],
+            vec![create_test_skater(8476887, "Filip Forsberg", nhl_api::Position::LeftWing)],
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
@@ -1216,8 +1216,8 @@ mod tests {
 
         let boxscore = create_test_boxscore_with_positions(
             TEST_GAME_ID,
-            vec![create_test_skater(100, "Forward One", "C")],
-            vec![create_test_skater(200, "Defense One", "D")],
+            vec![create_test_skater(100, "Forward One", nhl_api::Position::Center)],
+            vec![create_test_skater(200, "Defense One", nhl_api::Position::Defense)],
             vec![],
         );
 
@@ -1258,7 +1258,7 @@ mod tests {
             first_name: LocalizedString { default: "Test".to_string() },
             last_name: LocalizedString { default: "Player".to_string() },
             sweater_number: Some(34),
-            position: "C".to_string(),
+            position: nhl_api::Position::Center,
             headshot: String::new(),
             hero_image: None,
             height_in_inches: 72,
@@ -1267,7 +1267,7 @@ mod tests {
             birth_city: Some(LocalizedString { default: "Test City".to_string() }),
             birth_state_province: None,
             birth_country: Some("USA".to_string()),
-            shoots_catches: "L".to_string(),
+            shoots_catches: nhl_api::Handedness::Left,
             draft_details: None,
             player_slug: None,
             featured_stats: None,
