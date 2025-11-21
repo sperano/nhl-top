@@ -21,11 +21,8 @@ pub use game_box::{GameBox, GameState};
 pub mod settings_list;
 pub use settings_list::SettingsListWidget;
 
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-};
 use crate::config::DisplayConfig;
+use ratatui::{buffer::Buffer, layout::Rect};
 
 /// Core trait for renderable widgets
 ///

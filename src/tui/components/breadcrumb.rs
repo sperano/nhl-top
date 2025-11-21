@@ -10,12 +10,7 @@ use ratatui::{
 };
 
 use crate::config::DisplayConfig;
-use crate::tui::{
-    component::RenderableWidget,
-    state::PanelState,
-    Panel,
-    Tab,
-};
+use crate::tui::{component::RenderableWidget, state::PanelState, Panel, Tab};
 
 /// Breadcrumb widget that renders a navigation path
 #[derive(Clone)]
@@ -135,7 +130,9 @@ mod tests {
     #[test]
     fn test_breadcrumb_with_boxscore() {
         let panel_stack = vec![PanelState {
-            panel: Panel::Boxscore { game_id: 2024020001 },
+            panel: Panel::Boxscore {
+                game_id: 2024020001,
+            },
             scroll_offset: 0,
             selected_index: None,
         }];
@@ -153,7 +150,9 @@ mod tests {
     fn test_breadcrumb_with_nested_panels() {
         let panel_stack = vec![
             PanelState {
-                panel: Panel::Boxscore { game_id: 2024020001 },
+                panel: Panel::Boxscore {
+                    game_id: 2024020001,
+                },
                 scroll_offset: 0,
                 selected_index: None,
             },
@@ -170,7 +169,10 @@ mod tests {
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Scores > Boxscore: Game 2024020001 > Player: 8471675"]);
+        assert_buffer(
+            &buf,
+            &["Scores > Boxscore: Game 2024020001 > Player: 8471675"],
+        );
     }
 
     #[test]

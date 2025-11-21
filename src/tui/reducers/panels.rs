@@ -1,10 +1,10 @@
 use tracing::debug;
 
 use crate::tui::action::Action;
-use crate::tui::types::Panel;
 use crate::tui::component::Effect;
+use crate::tui::helpers::{ClubGoalieStatsSorting, ClubSkaterStatsSorting, SeasonSorting};
 use crate::tui::state::{AppState, LoadingKey, PanelState};
-use crate::tui::helpers::{ClubSkaterStatsSorting, ClubGoalieStatsSorting, SeasonSorting};
+use crate::tui::types::Panel;
 
 /// Handle all panel management actions
 pub fn reduce_panels(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
@@ -39,13 +39,22 @@ fn pop_panel(state: AppState) -> (AppState, Effect) {
         // Clear the loading state for the panel being popped
         match &panel_state.panel {
             Panel::Boxscore { game_id } => {
-                new_state.data.loading.remove(&LoadingKey::Boxscore(*game_id));
+                new_state
+                    .data
+                    .loading
+                    .remove(&LoadingKey::Boxscore(*game_id));
             }
             Panel::TeamDetail { abbrev } => {
-                new_state.data.loading.remove(&LoadingKey::TeamRosterStats(abbrev.clone()));
+                new_state
+                    .data
+                    .loading
+                    .remove(&LoadingKey::TeamRosterStats(abbrev.clone()));
             }
             Panel::PlayerDetail { player_id } => {
-                new_state.data.loading.remove(&LoadingKey::PlayerStats(*player_id));
+                new_state
+                    .data
+                    .loading
+                    .remove(&LoadingKey::PlayerStats(*player_id));
             }
         }
 
@@ -69,7 +78,10 @@ fn scroll_panel_up(state: AppState, amount: usize) -> (AppState, Effect) {
     // Scroll the current panel if one exists
     if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
         panel.scroll_offset = panel.scroll_offset.saturating_sub(amount);
-        debug!("PANEL: Scrolled up by {}, new offset: {}", amount, panel.scroll_offset);
+        debug!(
+            "PANEL: Scrolled up by {}, new offset: {}",
+            amount, panel.scroll_offset
+        );
     }
 
     (new_state, Effect::None)
@@ -81,7 +93,10 @@ fn scroll_panel_down(state: AppState, amount: usize) -> (AppState, Effect) {
     // Scroll the current panel if one exists
     if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
         panel.scroll_offset = panel.scroll_offset.saturating_add(amount);
-        debug!("PANEL: Scrolled down by {}, new offset: {}", amount, panel.scroll_offset);
+        debug!(
+            "PANEL: Scrolled down by {}, new offset: {}",
+            amount, panel.scroll_offset
+        );
     }
 
     (new_state, Effect::None)
@@ -94,7 +109,10 @@ fn panel_select_next(state: AppState) -> (AppState, Effect) {
     if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
         if let Some(idx) = panel.selected_index {
             panel.selected_index = Some(idx.saturating_add(1));
-            debug!("PANEL: Selected next item, index: {:?}", panel.selected_index);
+            debug!(
+                "PANEL: Selected next item, index: {:?}",
+                panel.selected_index
+            );
         } else {
             panel.selected_index = Some(0);
         }
@@ -110,7 +128,10 @@ fn panel_select_previous(state: AppState) -> (AppState, Effect) {
     if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
         if let Some(idx) = panel.selected_index {
             panel.selected_index = Some(idx.saturating_sub(1));
-            debug!("PANEL: Selected previous item, index: {:?}", panel.selected_index);
+            debug!(
+                "PANEL: Selected previous item, index: {:?}",
+                panel.selected_index
+            );
         }
     }
 
@@ -255,15 +276,20 @@ fn handle_player_season_selection(
     if let Some(player) = state.data.player_data.get(&player_id) {
         if let Some(seasons) = &player.season_totals {
             // Filter to NHL regular season only and sort by season descending (latest first)
-            let mut nhl_seasons: Vec<_> = seasons.iter()
-                .filter(|s| s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL")
+            let mut nhl_seasons: Vec<_> = seasons
+                .iter()
+                .filter(|s| {
+                    s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL"
+                })
                 .collect();
             nhl_seasons.sort_by_season_desc();
 
             if let Some(season) = nhl_seasons.get(selected_index) {
                 // Extract team abbreviation from common name
                 if let Some(ref common_name) = season.team_common_name {
-                    if let Some(abbrev) = crate::team_abbrev::common_name_to_abbrev(&common_name.default) {
+                    if let Some(abbrev) =
+                        crate::team_abbrev::common_name_to_abbrev(&common_name.default)
+                    {
                         debug!(
                             "PANEL: Selected season {} (index {}) from player {}, navigating to team {}",
                             season.season, selected_index, player_id, abbrev
@@ -290,16 +316,22 @@ fn handle_player_season_selection(
 
 fn panel_select_item(state: AppState) -> (AppState, Effect) {
     // Get information about the current panel
-    let panel_info = state.navigation.panel_stack.last().map(|p| {
-        (p.panel.clone(), p.selected_index)
-    });
+    let panel_info = state
+        .navigation
+        .panel_stack
+        .last()
+        .map(|p| (p.panel.clone(), p.selected_index));
 
     if let Some((panel, Some(idx))) = panel_info {
         // Delegate to panel-specific handlers
         let result = match panel {
-            Panel::TeamDetail { ref abbrev } => handle_team_roster_selection(state.clone(), abbrev, idx),
+            Panel::TeamDetail { ref abbrev } => {
+                handle_team_roster_selection(state.clone(), abbrev, idx)
+            }
             Panel::Boxscore { game_id } => handle_boxscore_selection(state.clone(), game_id, idx),
-            Panel::PlayerDetail { player_id } => handle_player_season_selection(state.clone(), player_id, idx),
+            Panel::PlayerDetail { player_id } => {
+                handle_player_season_selection(state.clone(), player_id, idx)
+            }
         };
 
         if let Some((new_state, effect)) = result {
@@ -345,7 +377,10 @@ mod tests {
         let (new_state, _) = pop_panel(state);
 
         assert!(new_state.navigation.panel_stack.is_empty());
-        assert!(!new_state.data.loading.contains(&LoadingKey::Boxscore(game_id)));
+        assert!(!new_state
+            .data
+            .loading
+            .contains(&LoadingKey::Boxscore(game_id)));
     }
 
     #[test]
@@ -399,7 +434,7 @@ mod tests {
     #[test]
     fn test_panel_select_item_skater() {
         // Regression test: Ensure selecting a skater from team detail pushes PlayerDetail panel
-        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString, Position};
+        use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -407,8 +442,12 @@ mod tests {
         let skaters = vec![
             ClubSkaterStats {
                 player_id: 8478402,
-                first_name: LocalizedString { default: "Connor".to_string() },
-                last_name: LocalizedString { default: "McDavid".to_string() },
+                first_name: LocalizedString {
+                    default: "Connor".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "McDavid".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Center,
                 games_played: 20,
@@ -429,8 +468,12 @@ mod tests {
             },
             ClubSkaterStats {
                 player_id: 8477934,
-                first_name: LocalizedString { default: "Leon".to_string() },
-                last_name: LocalizedString { default: "Draisaitl".to_string() },
+                first_name: LocalizedString {
+                    default: "Leon".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Draisaitl".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Center,
                 games_played: 20,
@@ -451,30 +494,32 @@ mod tests {
             },
         ];
 
-        let goalies = vec![
-            ClubGoalieStats {
-                player_id: 8471469,
-                first_name: LocalizedString { default: "Stuart".to_string() },
-                last_name: LocalizedString { default: "Skinner".to_string() },
-                headshot: String::new(),
-                games_played: 15,
-                games_started: 15,
-                wins: 10,
-                losses: 3,
-                overtime_losses: 2,
-                goals_against_average: 2.45,
-                save_percentage: 0.915,
-                shots_against: 450,
-                saves: 412,
-                goals_against: 38,
-                shutouts: 2,
-                goals: 0,
-                assists: 0,
-                points: 0,
-                penalty_minutes: 0,
-                time_on_ice: 900,
+        let goalies = vec![ClubGoalieStats {
+            player_id: 8471469,
+            first_name: LocalizedString {
+                default: "Stuart".to_string(),
             },
-        ];
+            last_name: LocalizedString {
+                default: "Skinner".to_string(),
+            },
+            headshot: String::new(),
+            games_played: 15,
+            games_started: 15,
+            wins: 10,
+            losses: 3,
+            overtime_losses: 2,
+            goals_against_average: 2.45,
+            save_percentage: 0.915,
+            shots_against: 450,
+            saves: 412,
+            goals_against: 38,
+            shutouts: 2,
+            goals: 0,
+            assists: 0,
+            points: 0,
+            penalty_minutes: 0,
+            time_on_ice: 900,
+        }];
 
         let roster = ClubStats {
             season: "20242025".to_string(),
@@ -509,40 +554,46 @@ mod tests {
     fn test_panel_select_item_goalie() {
         // Regression test: Ensure selecting a goalie from team detail pushes PlayerDetail panel
         // Bug: Previously only skaters were handled, selecting a goalie did nothing
-        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString, Position};
+        use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
-        let skaters = vec![
-            ClubSkaterStats {
-                player_id: 8478402,
-                first_name: LocalizedString { default: "Connor".to_string() },
-                last_name: LocalizedString { default: "McDavid".to_string() },
-                headshot: String::new(),
-                position: Position::Center,
-                games_played: 20,
-                goals: 15,
-                assists: 25,
-                points: 40,
-                plus_minus: 10,
-                penalty_minutes: 10,
-                power_play_goals: 5,
-                shorthanded_goals: 0,
-                game_winning_goals: 3,
-                overtime_goals: 1,
-                shots: 80,
-                shooting_pctg: 0.1875,
-                avg_time_on_ice_per_game: 22.5,
-                avg_shifts_per_game: 25.0,
-                faceoff_win_pctg: 0.55,
+        let skaters = vec![ClubSkaterStats {
+            player_id: 8478402,
+            first_name: LocalizedString {
+                default: "Connor".to_string(),
             },
-        ];
+            last_name: LocalizedString {
+                default: "McDavid".to_string(),
+            },
+            headshot: String::new(),
+            position: Position::Center,
+            games_played: 20,
+            goals: 15,
+            assists: 25,
+            points: 40,
+            plus_minus: 10,
+            penalty_minutes: 10,
+            power_play_goals: 5,
+            shorthanded_goals: 0,
+            game_winning_goals: 3,
+            overtime_goals: 1,
+            shots: 80,
+            shooting_pctg: 0.1875,
+            avg_time_on_ice_per_game: 22.5,
+            avg_shifts_per_game: 25.0,
+            faceoff_win_pctg: 0.55,
+        }];
 
         let goalies = vec![
             ClubGoalieStats {
                 player_id: 8471469,
-                first_name: LocalizedString { default: "Stuart".to_string() },
-                last_name: LocalizedString { default: "Skinner".to_string() },
+                first_name: LocalizedString {
+                    default: "Stuart".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Skinner".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 15,
                 games_started: 15,
@@ -563,8 +614,12 @@ mod tests {
             },
             ClubGoalieStats {
                 player_id: 8476999,
-                first_name: LocalizedString { default: "Calvin".to_string() },
-                last_name: LocalizedString { default: "Pickard".to_string() },
+                first_name: LocalizedString {
+                    default: "Calvin".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Pickard".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 5,
                 games_started: 5,
@@ -617,40 +672,46 @@ mod tests {
     #[test]
     fn test_panel_select_item_second_goalie() {
         // Test selecting the second goalie in the list
-        use nhl_api::{ClubStats, ClubSkaterStats, ClubGoalieStats, LocalizedString, Position};
+        use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
-        let skaters = vec![
-            ClubSkaterStats {
-                player_id: 8478402,
-                first_name: LocalizedString { default: "Player".to_string() },
-                last_name: LocalizedString { default: "One".to_string() },
-                headshot: String::new(),
-                position: Position::Center,
-                games_played: 20,
-                goals: 15,
-                assists: 25,
-                points: 40,
-                plus_minus: 10,
-                penalty_minutes: 10,
-                power_play_goals: 5,
-                shorthanded_goals: 0,
-                game_winning_goals: 3,
-                overtime_goals: 1,
-                shots: 80,
-                shooting_pctg: 0.1875,
-                avg_time_on_ice_per_game: 22.5,
-                avg_shifts_per_game: 25.0,
-                faceoff_win_pctg: 0.55,
+        let skaters = vec![ClubSkaterStats {
+            player_id: 8478402,
+            first_name: LocalizedString {
+                default: "Player".to_string(),
             },
-        ];
+            last_name: LocalizedString {
+                default: "One".to_string(),
+            },
+            headshot: String::new(),
+            position: Position::Center,
+            games_played: 20,
+            goals: 15,
+            assists: 25,
+            points: 40,
+            plus_minus: 10,
+            penalty_minutes: 10,
+            power_play_goals: 5,
+            shorthanded_goals: 0,
+            game_winning_goals: 3,
+            overtime_goals: 1,
+            shots: 80,
+            shooting_pctg: 0.1875,
+            avg_time_on_ice_per_game: 22.5,
+            avg_shifts_per_game: 25.0,
+            faceoff_win_pctg: 0.55,
+        }];
 
         let goalies = vec![
             ClubGoalieStats {
                 player_id: 8471469,
-                first_name: LocalizedString { default: "Goalie".to_string() },
-                last_name: LocalizedString { default: "One".to_string() },
+                first_name: LocalizedString {
+                    default: "Goalie".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "One".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 15,
                 games_started: 15,
@@ -671,8 +732,12 @@ mod tests {
             },
             ClubGoalieStats {
                 player_id: 8476999,
-                first_name: LocalizedString { default: "Goalie".to_string() },
-                last_name: LocalizedString { default: "Two".to_string() },
+                first_name: LocalizedString {
+                    default: "Goalie".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Two".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 5,
                 games_started: 5,
@@ -730,7 +795,7 @@ mod tests {
         // This test creates a roster where sorted order != data order
         // Then verifies that selecting visual position 0 gets the highest-points player,
         // not the first player in the data array
-        use nhl_api::{ClubStats, ClubSkaterStats, LocalizedString, Position};
+        use nhl_api::{ClubSkaterStats, ClubStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
@@ -740,8 +805,12 @@ mod tests {
         let skaters = vec![
             ClubSkaterStats {
                 player_id: 8470613, // Brent Burns
-                first_name: LocalizedString { default: "Brent".to_string() },
-                last_name: LocalizedString { default: "Burns".to_string() },
+                first_name: LocalizedString {
+                    default: "Brent".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Burns".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Defense,
                 games_played: 20,
@@ -762,8 +831,12 @@ mod tests {
             },
             ClubSkaterStats {
                 player_id: 8475754, // Brock Nelson
-                first_name: LocalizedString { default: "Brock".to_string() },
-                last_name: LocalizedString { default: "Nelson".to_string() },
+                first_name: LocalizedString {
+                    default: "Brock".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Nelson".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Center,
                 games_played: 20,
@@ -784,8 +857,12 @@ mod tests {
             },
             ClubSkaterStats {
                 player_id: 8480039, // Martin Necas
-                first_name: LocalizedString { default: "Martin".to_string() },
-                last_name: LocalizedString { default: "Necas".to_string() },
+                first_name: LocalizedString {
+                    default: "Martin".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Necas".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Center,
                 games_played: 20,
@@ -838,15 +915,19 @@ mod tests {
     #[test]
     fn test_panel_select_item_sorted_second_position() {
         // Test selecting second visual position in sorted roster
-        use nhl_api::{ClubStats, ClubSkaterStats, LocalizedString, Position};
+        use nhl_api::{ClubSkaterStats, ClubStats, LocalizedString, Position};
 
         let mut state = AppState::default();
 
         let skaters = vec![
             ClubSkaterStats {
                 player_id: 8470613,
-                first_name: LocalizedString { default: "Brent".to_string() },
-                last_name: LocalizedString { default: "Burns".to_string() },
+                first_name: LocalizedString {
+                    default: "Brent".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Burns".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Defense,
                 games_played: 20,
@@ -867,8 +948,12 @@ mod tests {
             },
             ClubSkaterStats {
                 player_id: 8475754,
-                first_name: LocalizedString { default: "Brock".to_string() },
-                last_name: LocalizedString { default: "Nelson".to_string() },
+                first_name: LocalizedString {
+                    default: "Brock".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Nelson".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Center,
                 games_played: 20,
@@ -889,8 +974,12 @@ mod tests {
             },
             ClubSkaterStats {
                 player_id: 8480039,
-                first_name: LocalizedString { default: "Martin".to_string() },
-                last_name: LocalizedString { default: "Necas".to_string() },
+                first_name: LocalizedString {
+                    default: "Martin".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "Necas".to_string(),
+                },
                 headshot: String::new(),
                 position: Position::Center,
                 games_played: 20,
@@ -933,7 +1022,10 @@ mod tests {
         assert_eq!(new_state.navigation.panel_stack.len(), 2);
         match &new_state.navigation.panel_stack[1].panel {
             Panel::PlayerDetail { player_id } => {
-                assert_eq!(*player_id, 8470613, "Should select Brent Burns (10 pts, second in sorted list)");
+                assert_eq!(
+                    *player_id, 8470613,
+                    "Should select Brent Burns (10 pts, second in sorted list)"
+                );
             }
             _ => panic!("Expected PlayerDetail panel"),
         }
@@ -942,7 +1034,7 @@ mod tests {
     #[test]
     fn test_panel_select_item_goalies_sorted_by_games_played() {
         // Regression test: Goalies should be sorted by games_played, not data order
-        use nhl_api::{ClubStats, ClubGoalieStats, LocalizedString};
+        use nhl_api::{ClubGoalieStats, ClubStats, LocalizedString};
 
         let mut state = AppState::default();
 
@@ -952,8 +1044,12 @@ mod tests {
         let goalies = vec![
             ClubGoalieStats {
                 player_id: 1001,
-                first_name: LocalizedString { default: "Goalie".to_string() },
-                last_name: LocalizedString { default: "A".to_string() },
+                first_name: LocalizedString {
+                    default: "Goalie".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "A".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 5, // Lowest GP
                 games_started: 5,
@@ -974,8 +1070,12 @@ mod tests {
             },
             ClubGoalieStats {
                 player_id: 1002,
-                first_name: LocalizedString { default: "Goalie".to_string() },
-                last_name: LocalizedString { default: "B".to_string() },
+                first_name: LocalizedString {
+                    default: "Goalie".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "B".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 15, // Highest GP - should be first!
                 games_started: 15,
@@ -996,8 +1096,12 @@ mod tests {
             },
             ClubGoalieStats {
                 player_id: 1003,
-                first_name: LocalizedString { default: "Goalie".to_string() },
-                last_name: LocalizedString { default: "C".to_string() },
+                first_name: LocalizedString {
+                    default: "Goalie".to_string(),
+                },
+                last_name: LocalizedString {
+                    default: "C".to_string(),
+                },
                 headshot: String::new(),
                 games_played: 10, // Middle GP
                 games_started: 10,
@@ -1040,17 +1144,26 @@ mod tests {
         assert_eq!(new_state.navigation.panel_stack.len(), 2);
         match &new_state.navigation.panel_stack[1].panel {
             Panel::PlayerDetail { player_id } => {
-                assert_eq!(*player_id, 1002, "Should select Goalie B (15 GP), not Goalie A (5 GP)");
+                assert_eq!(
+                    *player_id, 1002,
+                    "Should select Goalie B (15 GP), not Goalie A (5 GP)"
+                );
             }
             _ => panic!("Expected PlayerDetail panel"),
         }
     }
 
     /// Helper to create a test SkaterStats
-    fn create_test_skater(player_id: i64, name: &str, position: nhl_api::Position) -> nhl_api::SkaterStats {
+    fn create_test_skater(
+        player_id: i64,
+        name: &str,
+        position: nhl_api::Position,
+    ) -> nhl_api::SkaterStats {
         nhl_api::SkaterStats {
             player_id,
-            name: nhl_api::LocalizedString { default: name.to_string() },
+            name: nhl_api::LocalizedString {
+                default: name.to_string(),
+            },
             sweater_number: 87,
             position,
             goals: 1,
@@ -1083,8 +1196,12 @@ mod tests {
             game_type: nhl_api::GameType::RegularSeason,
             limited_scoring: false,
             game_date: "2024-11-16".to_string(),
-            venue: nhl_api::LocalizedString { default: "Test Arena".to_string() },
-            venue_location: nhl_api::LocalizedString { default: "Test City".to_string() },
+            venue: nhl_api::LocalizedString {
+                default: "Test Arena".to_string(),
+            },
+            venue_location: nhl_api::LocalizedString {
+                default: "Test City".to_string(),
+            },
             start_time_utc: "2024-11-16T23:00:00Z".to_string(),
             eastern_utc_offset: "-05:00".to_string(),
             venue_utc_offset: "-05:00".to_string(),
@@ -1099,25 +1216,37 @@ mod tests {
             special_event: None,
             away_team: nhl_api::BoxscoreTeam {
                 id: 1,
-                common_name: nhl_api::LocalizedString { default: "Penguins".to_string() },
+                common_name: nhl_api::LocalizedString {
+                    default: "Penguins".to_string(),
+                },
                 abbrev: "PIT".to_string(),
                 score: 3,
                 sog: 30,
                 logo: String::new(),
                 dark_logo: String::new(),
-                place_name: nhl_api::LocalizedString { default: "Pittsburgh".to_string() },
-                place_name_with_preposition: nhl_api::LocalizedString { default: "Pittsburgh".to_string() },
+                place_name: nhl_api::LocalizedString {
+                    default: "Pittsburgh".to_string(),
+                },
+                place_name_with_preposition: nhl_api::LocalizedString {
+                    default: "Pittsburgh".to_string(),
+                },
             },
             home_team: nhl_api::BoxscoreTeam {
                 id: 18,
-                common_name: nhl_api::LocalizedString { default: "Predators".to_string() },
+                common_name: nhl_api::LocalizedString {
+                    default: "Predators".to_string(),
+                },
                 abbrev: "NSH".to_string(),
                 score: 2,
                 sog: 25,
                 logo: String::new(),
                 dark_logo: String::new(),
-                place_name: nhl_api::LocalizedString { default: "Nashville".to_string() },
-                place_name_with_preposition: nhl_api::LocalizedString { default: "Nashville".to_string() },
+                place_name: nhl_api::LocalizedString {
+                    default: "Nashville".to_string(),
+                },
+                place_name_with_preposition: nhl_api::LocalizedString {
+                    default: "Nashville".to_string(),
+                },
             },
             clock: nhl_api::GameClock {
                 time_remaining: "00:00".to_string(),
@@ -1141,7 +1270,11 @@ mod tests {
     }
 
     /// Helper to create a minimal test Boxscore (simple version)
-    fn create_test_boxscore(game_id: i64, away_forwards: Vec<nhl_api::SkaterStats>, home_forwards: Vec<nhl_api::SkaterStats>) -> nhl_api::Boxscore {
+    fn create_test_boxscore(
+        game_id: i64,
+        away_forwards: Vec<nhl_api::SkaterStats>,
+        home_forwards: Vec<nhl_api::SkaterStats>,
+    ) -> nhl_api::Boxscore {
         create_test_boxscore_with_positions(game_id, away_forwards, vec![], home_forwards)
     }
 
@@ -1154,13 +1287,19 @@ mod tests {
 
         let boxscore = create_test_boxscore(
             TEST_GAME_ID,
-            vec![create_test_skater(8478483, "Sidney Crosby", nhl_api::Position::Center)],
+            vec![create_test_skater(
+                8478483,
+                "Sidney Crosby",
+                nhl_api::Position::Center,
+            )],
             vec![],
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
         state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore { game_id: TEST_GAME_ID },
+            panel: Panel::Boxscore {
+                game_id: TEST_GAME_ID,
+            },
             scroll_offset: 0,
             selected_index: Some(0), // Select first away forward
         });
@@ -1185,13 +1324,23 @@ mod tests {
 
         let boxscore = create_test_boxscore(
             TEST_GAME_ID,
-            vec![create_test_skater(8478483, "Away Forward", nhl_api::Position::Center)],
-            vec![create_test_skater(8476887, "Filip Forsberg", nhl_api::Position::LeftWing)],
+            vec![create_test_skater(
+                8478483,
+                "Away Forward",
+                nhl_api::Position::Center,
+            )],
+            vec![create_test_skater(
+                8476887,
+                "Filip Forsberg",
+                nhl_api::Position::LeftWing,
+            )],
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
         state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore { game_id: TEST_GAME_ID },
+            panel: Panel::Boxscore {
+                game_id: TEST_GAME_ID,
+            },
             scroll_offset: 0,
             selected_index: Some(1), // Index 1 = first home forward (after 1 away forward)
         });
@@ -1202,7 +1351,10 @@ mod tests {
         assert_eq!(new_state.navigation.panel_stack.len(), 2);
         match &new_state.navigation.panel_stack[1].panel {
             Panel::PlayerDetail { player_id } => {
-                assert_eq!(*player_id, 8476887, "Should select Forsberg (first home forward)");
+                assert_eq!(
+                    *player_id, 8476887,
+                    "Should select Forsberg (first home forward)"
+                );
             }
             _ => panic!("Expected PlayerDetail panel"),
         }
@@ -1216,14 +1368,24 @@ mod tests {
 
         let boxscore = create_test_boxscore_with_positions(
             TEST_GAME_ID,
-            vec![create_test_skater(100, "Forward One", nhl_api::Position::Center)],
-            vec![create_test_skater(200, "Defense One", nhl_api::Position::Defense)],
+            vec![create_test_skater(
+                100,
+                "Forward One",
+                nhl_api::Position::Center,
+            )],
+            vec![create_test_skater(
+                200,
+                "Defense One",
+                nhl_api::Position::Defense,
+            )],
             vec![],
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
         state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore { game_id: TEST_GAME_ID },
+            panel: Panel::Boxscore {
+                game_id: TEST_GAME_ID,
+            },
             scroll_offset: 0,
             selected_index: Some(1), // Index 1 = first away defenseman (after 1 forward)
         });
@@ -1244,7 +1406,7 @@ mod tests {
     fn test_panel_select_item_player_detail_season() {
         // Regression test: Selecting a season from PlayerDetail should navigate to TeamDetail
         // Bug: PlayerDetail selection was removed during reducer refactoring
-        use nhl_api::{PlayerLanding, SeasonTotal, LocalizedString};
+        use nhl_api::{LocalizedString, PlayerLanding, SeasonTotal};
 
         let mut state = AppState::default();
         const TEST_PLAYER_ID: i64 = 8481056;
@@ -1255,8 +1417,12 @@ mod tests {
             is_active: true,
             current_team_id: Some(6),
             current_team_abbrev: Some("BOS".to_string()),
-            first_name: LocalizedString { default: "Test".to_string() },
-            last_name: LocalizedString { default: "Player".to_string() },
+            first_name: LocalizedString {
+                default: "Test".to_string(),
+            },
+            last_name: LocalizedString {
+                default: "Player".to_string(),
+            },
             sweater_number: Some(34),
             position: nhl_api::Position::Center,
             headshot: String::new(),
@@ -1264,7 +1430,9 @@ mod tests {
             height_in_inches: 72,
             weight_in_pounds: 200,
             birth_date: "1990-01-01".to_string(),
-            birth_city: Some(LocalizedString { default: "Test City".to_string() }),
+            birth_city: Some(LocalizedString {
+                default: "Test City".to_string(),
+            }),
             birth_state_province: None,
             birth_country: Some("USA".to_string()),
             shoots_catches: nhl_api::Handedness::Left,
@@ -1277,8 +1445,12 @@ mod tests {
                     season: 20232024,
                     game_type: nhl_api::GameType::RegularSeason,
                     league_abbrev: "NHL".to_string(),
-                    team_name: LocalizedString { default: "Boston Bruins".to_string() },
-                    team_common_name: Some(LocalizedString { default: "Bruins".to_string() }),
+                    team_name: LocalizedString {
+                        default: "Boston Bruins".to_string(),
+                    },
+                    team_common_name: Some(LocalizedString {
+                        default: "Bruins".to_string(),
+                    }),
                     sequence: Some(1),
                     games_played: 82,
                     goals: Some(30),
@@ -1291,8 +1463,12 @@ mod tests {
                     season: 20222023,
                     game_type: nhl_api::GameType::RegularSeason,
                     league_abbrev: "NHL".to_string(),
-                    team_name: LocalizedString { default: "Toronto Maple Leafs".to_string() },
-                    team_common_name: Some(LocalizedString { default: "Maple Leafs".to_string() }),
+                    team_name: LocalizedString {
+                        default: "Toronto Maple Leafs".to_string(),
+                    },
+                    team_common_name: Some(LocalizedString {
+                        default: "Maple Leafs".to_string(),
+                    }),
                     sequence: Some(1),
                     games_played: 75,
                     goals: Some(25),
@@ -1308,7 +1484,9 @@ mod tests {
 
         Arc::make_mut(&mut state.data.player_data).insert(TEST_PLAYER_ID, player_data);
         state.navigation.panel_stack.push(PanelState {
-            panel: Panel::PlayerDetail { player_id: TEST_PLAYER_ID },
+            panel: Panel::PlayerDetail {
+                player_id: TEST_PLAYER_ID,
+            },
             scroll_offset: 0,
             selected_index: Some(0), // Select first season (2023-2024, Bruins)
         });

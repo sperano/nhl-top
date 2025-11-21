@@ -1,6 +1,6 @@
-use nhl_api::{GameSummary, PeriodType};
 use crate::formatting::BoxChars;
-use crate::layout_constants::{SCORE_BOX_WIDTH, PERIOD_COL_WIDTH, TEAM_ABBREV_COL_WIDTH};
+use crate::layout_constants::{PERIOD_COL_WIDTH, SCORE_BOX_WIDTH, TEAM_ABBREV_COL_WIDTH};
+use nhl_api::{GameSummary, PeriodType};
 
 // Score Table Constants
 /// Number of base columns in score table (empty, 1, 2, 3, T)
@@ -60,7 +60,7 @@ pub fn format_period_text(period_type: PeriodType, period_number: i32) -> String
                 n => return format!("{}th Period", n),
             };
             format!("{} Period", ordinal)
-        },
+        }
         PeriodType::Overtime => "Overtime".to_string(),
         PeriodType::Shootout => "Shootout".to_string(),
     }
@@ -88,13 +88,14 @@ pub fn build_score_table(
     let max_width = SCORE_BOX_WIDTH as usize; // Width with all 5 periods
 
     // Helper to check if a period should show score or dash
-    let should_show_period = |period: i32| -> bool {
-        current_period_num.is_none_or(|current| period <= current)
-    };
+    let should_show_period =
+        |period: i32| -> bool { current_period_num.is_none_or(|current| period <= current) };
 
     // Build table components
     output.push_str(&build_top_border(total_cols, max_width, box_chars));
-    output.push_str(&build_header_row(has_ot, has_so, total_cols, max_width, box_chars));
+    output.push_str(&build_header_row(
+        has_ot, has_so, total_cols, max_width, box_chars,
+    ));
     output.push_str(&build_middle_border(total_cols, max_width, box_chars));
     output.push_str(&build_team_row(
         away_team,
@@ -188,7 +189,13 @@ fn build_bottom_border(total_cols: usize, max_width: usize, box_chars: &BoxChars
 }
 
 /// Build header row showing period numbers (1, 2, 3, OT, SO, T)
-fn build_header_row(has_ot: bool, has_so: bool, total_cols: usize, max_width: usize, box_chars: &BoxChars) -> String {
+fn build_header_row(
+    has_ot: bool,
+    has_so: bool,
+    total_cols: usize,
+    max_width: usize,
+    box_chars: &BoxChars,
+) -> String {
     let mut row = String::new();
     row.push_str(&box_chars.vertical);
     row.push_str(&format!("{:^5}", ""));
@@ -233,7 +240,10 @@ fn render_team_periods(
     if let Some(periods) = periods {
         // Period 1
         let p1_value = if should_show_period(1) {
-            periods.get(PERIOD_1_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            periods
+                .get(PERIOD_1_INDEX)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "-".to_string())
         } else {
             "-".to_string()
         };
@@ -242,7 +252,10 @@ fn render_team_periods(
 
         // Period 2
         let p2_value = if should_show_period(2) {
-            periods.get(PERIOD_2_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            periods
+                .get(PERIOD_2_INDEX)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "-".to_string())
         } else {
             "-".to_string()
         };
@@ -251,7 +264,10 @@ fn render_team_periods(
 
         // Period 3
         let p3_value = if should_show_period(3) {
-            periods.get(PERIOD_3_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+            periods
+                .get(PERIOD_3_INDEX)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "-".to_string())
         } else {
             "-".to_string()
         };
@@ -260,7 +276,10 @@ fn render_team_periods(
         if has_ot {
             output.push_str(&box_chars.vertical);
             let ot_value = if should_show_period(OVERTIME_PERIOD_NUM) {
-                periods.get(OVERTIME_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+                periods
+                    .get(OVERTIME_INDEX)
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "-".to_string())
             } else {
                 "-".to_string()
             };
@@ -270,7 +289,10 @@ fn render_team_periods(
         if has_so {
             output.push_str(&box_chars.vertical);
             let so_value = if should_show_period(SHOOTOUT_PERIOD_NUM) {
-                periods.get(SHOOTOUT_INDEX).map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())
+                periods
+                    .get(SHOOTOUT_INDEX)
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "-".to_string())
             } else {
                 "-".to_string()
             };
@@ -285,12 +307,14 @@ fn render_team_periods(
 
         if has_ot {
             output.push_str(&box_chars.vertical);
-            output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // OT
+            output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH));
+            // OT
         }
 
         if has_so {
             output.push_str(&box_chars.vertical);
-            output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH)); // SO
+            output.push_str(&format!("{:^width$}", "-", width = PERIOD_COL_WIDTH));
+            // SO
         }
     }
 }
@@ -312,10 +336,22 @@ fn build_team_row(
     row.push_str(&format!("{:^5}", team_abbrev));
     row.push_str(&box_chars.vertical);
 
-    render_team_periods(&mut row, team_periods, has_ot, has_so, should_show_period, box_chars);
+    render_team_periods(
+        &mut row,
+        team_periods,
+        has_ot,
+        has_so,
+        should_show_period,
+        box_chars,
+    );
 
     row.push_str(&box_chars.vertical);
-    row.push_str(&format!("{:^4}", team_score.map(|s| s.to_string()).unwrap_or_else(|| "-".to_string())));
+    row.push_str(&format!(
+        "{:^4}",
+        team_score
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "-".to_string())
+    ));
     row.push_str(&box_chars.vertical);
 
     let padding = calculate_padding(total_cols, max_width);
@@ -469,16 +505,7 @@ mod tests {
     fn test_build_score_table_no_scores() {
         let box_chars = BoxChars::unicode();
         let table = build_score_table(
-            "TOR",
-            "MTL",
-            None,
-            None,
-            false,
-            false,
-            None,
-            None,
-            None,
-            &box_chars,
+            "TOR", "MTL", None, None, false, false, None, None, None, &box_chars,
         );
 
         // Should contain team names

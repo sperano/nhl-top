@@ -1,15 +1,10 @@
+use super::RenderableWidget;
+use crate::config::DisplayConfig;
+use crate::formatting::BoxChars;
 /// Testing utilities for widget rendering
 ///
 /// This module provides helper functions for testing widgets in isolation.
-
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Color,
-};
-use crate::config::DisplayConfig;
-use crate::formatting::BoxChars;
-use super::RenderableWidget;
+use ratatui::{buffer::Buffer, layout::Rect, style::Color};
 
 /// Create a test DisplayConfig with unicode box characters
 ///
@@ -52,11 +47,7 @@ pub fn test_config_ascii() -> DisplayConfig {
 /// let buf = render_widget(&widget, 40, 10);
 /// assert_eq!(get_cell(&buf, 0, 0).symbol(), "H");
 /// ```
-pub fn render_widget(
-    widget: &impl RenderableWidget,
-    width: u16,
-    height: u16,
-) -> Buffer {
+pub fn render_widget(widget: &impl RenderableWidget, width: u16, height: u16) -> Buffer {
     let mut buf = Buffer::empty(Rect::new(0, 0, width, height));
     let config = test_config();
     widget.render(buf.area, &mut buf, &config);
@@ -141,4 +132,3 @@ pub fn buffer_lines(buf: &Buffer) -> Vec<String> {
 
     lines
 }
-

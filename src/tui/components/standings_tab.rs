@@ -8,16 +8,16 @@ use std::sync::{Arc, LazyLock};
 use nhl_api::Standing;
 
 use crate::commands::standings::GroupBy;
-use crate::tui::helpers::StandingsSorting;
-use crate::config::DisplayConfig;
 use crate::config::Config;
+use crate::config::DisplayConfig;
+use crate::tui::helpers::StandingsSorting;
 use crate::tui::{
     component::{horizontal, vertical, Component, Constraint, Element, RenderableWidget},
     state::PanelState,
     Alignment, CellValue, ColumnDef,
 };
 
-use super::{TabbedPanel, TabbedPanelProps, TabItem, TableWidget};
+use super::{TabItem, TabbedPanel, TabbedPanelProps, TableWidget};
 
 /// Props for StandingsTab component
 #[derive(Clone)]
@@ -44,7 +44,10 @@ impl Component for StandingsTab {
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
         // If in panel view, render the panel instead
         if !props.panel_stack.is_empty() {
-            tracing::debug!("RENDER: Panel stack has {} items, rendering panel", props.panel_stack.len());
+            tracing::debug!(
+                "RENDER: Panel stack has {} items, rendering panel",
+                props.panel_stack.len()
+            );
             return self.render_panel(props);
         }
 
@@ -90,18 +93,26 @@ impl StandingsTab {
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
     fn render_view_tabs(&self, props: &StandingsTabProps) -> Element {
         // All inactive tabs get Element::None to avoid cloning issues
-        let tabs = [GroupBy::Wildcard, GroupBy::Division, GroupBy::Conference, GroupBy::League];
-        let tabs = tabs.iter().map(|g|
-            TabItem::new(
-                g.name(),
-                g.name(),
-                if props.view == *g {
-                    self.render_standings_table(props, g)
-                } else {
-                    Element::None
-                }
-            )
-        ).collect();
+        let tabs = [
+            GroupBy::Wildcard,
+            GroupBy::Division,
+            GroupBy::Conference,
+            GroupBy::League,
+        ];
+        let tabs = tabs
+            .iter()
+            .map(|g| {
+                TabItem::new(
+                    g.name(),
+                    g.name(),
+                    if props.view == *g {
+                        self.render_standings_table(props, g)
+                    } else {
+                        Element::None
+                    },
+                )
+            })
+            .collect();
 
         // let tabs = vec![
         //     TabItem::new(
@@ -181,7 +192,11 @@ impl StandingsTab {
         }
     }
 
-    fn render_single_column_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
+    fn render_single_column_view(
+        &self,
+        props: &StandingsTabProps,
+        standings: &[Standing],
+    ) -> Element {
         // Use windowed table widget with scrolling support
         Element::Widget(Box::new(WindowedStandingsTable::new(
             standings.to_vec(),
@@ -198,7 +213,8 @@ impl StandingsTab {
         // Group standings by conference
         let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
         for standing in standings {
-            let conference = standing.conference_name
+            let conference = standing
+                .conference_name
                 .clone()
                 .unwrap_or_else(|| "Unknown".to_string());
             grouped
@@ -228,8 +244,12 @@ impl StandingsTab {
         let left_table = TableWidget::from_data(Self::standings_columns(), groups[0].1.clone())
             .with_header(&groups[0].0)
             .with_selection(
-                if props.selected_column == 0 { props.selected_row } else { usize::MAX },
-                0
+                if props.selected_column == 0 {
+                    props.selected_row
+                } else {
+                    usize::MAX
+                },
+                0,
             )
             .with_focused(props.browse_mode && props.selected_column == 0)
             .with_margin(0);
@@ -238,8 +258,12 @@ impl StandingsTab {
         let right_table = TableWidget::from_data(Self::standings_columns(), groups[1].1.clone())
             .with_header(&groups[1].0)
             .with_selection(
-                if props.selected_column == 1 { props.selected_row } else { usize::MAX },
-                0
+                if props.selected_column == 1 {
+                    props.selected_row
+                } else {
+                    usize::MAX
+                },
+                0,
             )
             .with_focused(props.browse_mode && props.selected_column == 1)
             .with_margin(0);
@@ -274,7 +298,8 @@ impl StandingsTab {
             // We need to check if selected_row falls within this division's range
             let row_in_division = if selected_column == column_index
                 && selected_row >= team_offset
-                && selected_row < team_offset + teams_count {
+                && selected_row < team_offset + teams_count
+            {
                 // Selection is in this division
                 selected_row - team_offset
             } else {
@@ -362,28 +387,58 @@ impl StandingsTab {
 
         let left_column = if left_elements.len() == 3 {
             vertical(
-                [Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)],
+                [
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                ],
                 left_elements,
             )
         } else if left_elements.len() == 2 {
             // No spacer (shouldn't happen with 2 divisions, but handle gracefully)
-            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)], left_elements)
+            vertical(
+                [
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                ],
+                left_elements,
+            )
         } else {
             // Fallback for unexpected number of divisions
-            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT)], left_elements)
+            vertical(
+                [Constraint::Length(
+                    DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT,
+                )],
+                left_elements,
+            )
         };
 
         let right_column = if right_elements.len() == 3 {
             vertical(
-                [Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)],
+                [
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                ],
                 right_elements,
             )
         } else if right_elements.len() == 2 {
             // No spacer
-            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT), Constraint::Length(DIVISION_TABLE_HEIGHT)], right_elements)
+            vertical(
+                [
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                    Constraint::Length(DIVISION_TABLE_HEIGHT),
+                ],
+                right_elements,
+            )
         } else {
             // Fallback for unexpected number of divisions
-            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT)], right_elements)
+            vertical(
+                [Constraint::Length(
+                    DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT,
+                )],
+                right_elements,
+            )
         };
 
         // Return horizontal layout with both columns
@@ -428,12 +483,7 @@ impl StandingsTab {
 
         // Build Western Conference column (Central top 3 + Pacific top 3 + wildcards)
         let western_elements = self.build_wildcard_conference_column(
-            "Central",
-            &central,
-            "Pacific",
-            &pacific,
-            props,
-            1, // Column 1 (right)
+            "Central", &central, "Pacific", &pacific, props, 1, // Column 1 (right)
         );
 
         // Determine column order based on western_first config
@@ -508,10 +558,7 @@ impl StandingsTab {
         let div1_remaining: Vec<_> = div1_teams.iter().skip(3).cloned().collect();
         let div2_remaining: Vec<_> = div2_teams.iter().skip(3).cloned().collect();
 
-        let mut wildcard_teams: Vec<_> = div1_remaining
-            .into_iter()
-            .chain(div2_remaining)
-            .collect();
+        let mut wildcard_teams: Vec<_> = div1_remaining.into_iter().chain(div2_remaining).collect();
         wildcard_teams.sort_by_points_desc();
 
         if !wildcard_teams.is_empty() {
@@ -543,7 +590,8 @@ impl StandingsTab {
         // Calculate selection for this table
         let row_in_table = if props.selected_column == actual_column
             && props.selected_row >= team_offset
-            && props.selected_row < team_offset + teams_count {
+            && props.selected_row < team_offset + teams_count
+        {
             props.selected_row - team_offset
         } else {
             usize::MAX
@@ -566,12 +614,63 @@ impl StandingsTab {
         match elements.len() {
             0 => Element::None,
             1 => vertical([Constraint::Min(0)], elements),
-            2 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT)], elements),
-            3 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT)], elements),
-            4 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT)], elements),
-            5 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1)], elements),
-            6 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1), Constraint::Length(SPACER_HEIGHT)], elements),
-            7 => vertical([Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1), Constraint::Length(SPACER_HEIGHT), Constraint::Min(1)], elements),
+            2 => vertical(
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                ],
+                elements,
+            ),
+            3 => vertical(
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(TABLE_HEIGHT),
+                ],
+                elements,
+            ),
+            4 => vertical(
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                ],
+                elements,
+            ),
+            5 => vertical(
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Min(1),
+                ],
+                elements,
+            ),
+            6 => vertical(
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Min(1),
+                    Constraint::Length(SPACER_HEIGHT),
+                ],
+                elements,
+            ),
+            7 => vertical(
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Min(1),
+                    Constraint::Length(SPACER_HEIGHT),
+                    Constraint::Min(1),
+                ],
+                elements,
+            ),
             _ => {
                 // Fallback for more elements
                 vertical([Constraint::Min(0)], elements)
@@ -600,7 +699,9 @@ impl StandingsTab {
             "No panel".to_string()
         };
 
-        Element::Widget(Box::new(PanelWidget { message: panel_info }))
+        Element::Widget(Box::new(PanelWidget {
+            message: panel_info,
+        }))
     }
 }
 
@@ -702,8 +803,8 @@ struct LoadingWidget {
 
 impl RenderableWidget for LoadingWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
-        let widget = Paragraph::new(self.message.as_str())
-            .block(Block::default().borders(Borders::NONE));
+        let widget =
+            Paragraph::new(self.message.as_str()).block(Block::default().borders(Borders::NONE));
         ratatui::widgets::Widget::render(widget, area, buf);
     }
 
@@ -744,7 +845,9 @@ impl RenderableWidget for SpacerWidget {
     }
 
     fn clone_box(&self) -> Box<dyn RenderableWidget> {
-        Box::new(SpacerWidget { height: self.height })
+        Box::new(SpacerWidget {
+            height: self.height,
+        })
     }
 
     fn preferred_height(&self) -> Option<u16> {
@@ -756,8 +859,8 @@ impl RenderableWidget for SpacerWidget {
 mod tests {
     use super::*;
     use crate::tui::renderer::Renderer;
-    use ratatui::{buffer::Buffer, layout::Rect};
     use crate::tui::testing::{assert_buffer, create_test_standings};
+    use ratatui::{buffer::Buffer, layout::Rect};
     const RENDER_WIDTH: u16 = 120;
     const RENDER_HEIGHT: u16 = 40;
 
@@ -817,7 +920,12 @@ mod tests {
     // === Rendering Tests ===
 
     /// Helper to render element to buffer
-    fn render_element_to_buffer(element: &Element, width: u16, height: u16, config: &DisplayConfig) -> Buffer {
+    fn render_element_to_buffer(
+        element: &Element,
+        width: u16,
+        height: u16,
+        config: &DisplayConfig,
+    ) -> Buffer {
         let mut buf = Buffer::empty(Rect::new(0, 0, width, height));
         let mut renderer = Renderer::new();
         renderer.render(element.clone(), buf.area, &mut buf, config);
@@ -1090,10 +1198,9 @@ mod tests {
 
         let standings = create_test_standings_with_count(32);
         let widget = WindowedStandingsTable::new(
-            standings,
-            15,  // selected_row (absolute)
-            0,   // selected_column
-            10,  // scroll_offset (start at team 10)
+            standings, 15,   // selected_row (absolute)
+            0,    // selected_column
+            10,   // scroll_offset (start at team 10)
             true, // focused
         );
 
@@ -1118,14 +1225,20 @@ mod tests {
 
         // Check that we see the correct teams (Team 10, Team 11, etc.)
         // First data row should be Team 10 (not Team 0)
-        assert!(lines[2].contains("Team 10"), "First visible team should be Team 10");
+        assert!(
+            lines[2].contains("Team 10"),
+            "First visible team should be Team 10"
+        );
 
         // Row with selector should be Team 15 (at visual row 7 = 2 header lines + 5 teams)
-        let selector_line = lines.iter()
+        let selector_line = lines
+            .iter()
             .position(|line| line.contains("▶"))
             .expect("Should find selector");
-        assert!(lines[selector_line].contains("Team 15"),
-            "Selector should be on Team 15");
+        assert!(
+            lines[selector_line].contains("Team 15"),
+            "Selector should be on Team 15"
+        );
     }
 
     #[test]
@@ -1134,10 +1247,9 @@ mod tests {
 
         let standings = create_test_standings_with_count(32);
         let widget = WindowedStandingsTable::new(
-            standings,
-            0,   // selected_row
-            0,   // selected_column
-            0,   // scroll_offset (no scrolling)
+            standings, 0, // selected_row
+            0, // selected_column
+            0, // scroll_offset (no scrolling)
             true,
         );
 
@@ -1158,7 +1270,10 @@ mod tests {
             .collect();
 
         // First team should be Team 0
-        assert!(lines[2].contains("Team 0"), "First visible team should be Team 0");
+        assert!(
+            lines[2].contains("Team 0"),
+            "First visible team should be Team 0"
+        );
 
         // Selector should be on first data row
         assert!(lines[2].contains("▶"), "Selector should be on first team");
@@ -1170,10 +1285,9 @@ mod tests {
 
         let standings = create_test_standings_with_count(32);
         let widget = WindowedStandingsTable::new(
-            standings,
-            31,  // selected_row (last team)
-            0,   // selected_column
-            25,  // scroll_offset (near end)
+            standings, 31, // selected_row (last team)
+            0,  // selected_column
+            25, // scroll_offset (near end)
             true,
         );
 
@@ -1194,18 +1308,26 @@ mod tests {
             .collect();
 
         // Should show teams 25-31 (last 7 teams)
-        assert!(lines[2].contains("Team 25"), "First visible should be Team 25");
+        assert!(
+            lines[2].contains("Team 25"),
+            "First visible should be Team 25"
+        );
 
         // Last team should be visible
-        assert!(lines.iter().any(|line| line.contains("Team 31")),
-            "Team 31 should be visible");
+        assert!(
+            lines.iter().any(|line| line.contains("Team 31")),
+            "Team 31 should be visible"
+        );
 
         // Selector should be on Team 31
-        let selector_line = lines.iter()
+        let selector_line = lines
+            .iter()
             .position(|line| line.contains("▶"))
             .expect("Should find selector");
-        assert!(lines[selector_line].contains("Team 31"),
-            "Selector should be on Team 31");
+        assert!(
+            lines[selector_line].contains("Team 31"),
+            "Selector should be on Team 31"
+        );
     }
 
     #[test]
@@ -1214,10 +1336,9 @@ mod tests {
 
         let standings = create_test_standings_with_count(32);
         let widget = WindowedStandingsTable::new(
-            standings,
-            5,   // selected_row (outside window)
-            0,   // selected_column
-            10,  // scroll_offset (window is 10-29)
+            standings, 5,  // selected_row (outside window)
+            0,  // selected_column
+            10, // scroll_offset (window is 10-29)
             true,
         );
 
@@ -1238,8 +1359,10 @@ mod tests {
             .collect();
 
         // Should NOT have selector (selection is outside visible window)
-        assert!(!lines.iter().any(|line| line.contains("▶")),
-            "Should not show selector when selection is outside window");
+        assert!(
+            !lines.iter().any(|line| line.contains("▶")),
+            "Should not show selector when selection is outside window"
+        );
     }
 
     #[test]
@@ -1256,10 +1379,9 @@ mod tests {
         ];
 
         let widget = WindowedStandingsTable::new(
-            standings,
-            1,   // selected_row
-            0,   // selected_column
-            0,   // scroll_offset
+            standings, 1, // selected_row
+            0, // selected_column
+            0, // scroll_offset
             true,
         );
 
@@ -1269,16 +1391,19 @@ mod tests {
 
         widget.render(area, &mut buf, &config);
 
-        assert_buffer(&buf, &[
-            "  Team                        GP    W     L    OT ",
-            "  ────────────────────────────────────────────────",
-            "  Team 0                       0    0     0    0  ",
-            "▶ Team 1                       0    0     0    0  ",
-            "  Team 2                       0    0     0    0  ",
-            "  Team 3                       0    0     0    0  ",
-            "  Team 4                       0    0     0    0  ",
-            "                                                  ",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "  Team                        GP    W     L    OT ",
+                "  ────────────────────────────────────────────────",
+                "  Team 0                       0    0     0    0  ",
+                "▶ Team 1                       0    0     0    0  ",
+                "  Team 2                       0    0     0    0  ",
+                "  Team 3                       0    0     0    0  ",
+                "  Team 4                       0    0     0    0  ",
+                "                                                  ",
+            ],
+        );
     }
 
     #[test]
@@ -1300,10 +1425,9 @@ mod tests {
         ];
 
         let widget = WindowedStandingsTable::new(
-            standings,
-            7,   // selected_row (absolute)
-            0,   // selected_column
-            5,   // scroll_offset (skip first 5 teams)
+            standings, 7, // selected_row (absolute)
+            0, // selected_column
+            5, // scroll_offset (skip first 5 teams)
             true,
         );
 
@@ -1313,15 +1437,18 @@ mod tests {
 
         widget.render(area, &mut buf, &config);
 
-        assert_buffer(&buf, &[
-            "  Team                        GP    W     L    OT ",
-            "  ────────────────────────────────────────────────",
-            "  Team 5                       0    0     0    0  ",
-            "  Team 6                       0    0     0    0  ",
-            "▶ Team 7                       0    0     0    0  ",
-            "  Team 8                       0    0     0    0  ",
-            "                                                  ",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "  Team                        GP    W     L    OT ",
+                "  ────────────────────────────────────────────────",
+                "  Team 5                       0    0     0    0  ",
+                "  Team 6                       0    0     0    0  ",
+                "▶ Team 7                       0    0     0    0  ",
+                "  Team 8                       0    0     0    0  ",
+                "                                                  ",
+            ],
+        );
     }
 
     #[test]
@@ -1329,13 +1456,7 @@ mod tests {
         use crate::tui::testing::RENDER_WIDTH;
 
         let standings: Vec<Standing> = vec![];
-        let widget = WindowedStandingsTable::new(
-            standings,
-            0,
-            0,
-            0,
-            true,
-        );
+        let widget = WindowedStandingsTable::new(standings, 0, 0, 0, true);
 
         let area = Rect::new(0, 0, RENDER_WIDTH, 10);
         let mut buf = Buffer::empty(area);
@@ -1355,8 +1476,10 @@ mod tests {
             })
             .collect();
 
-        assert!(lines.iter().all(|line| line.is_empty()),
-            "Empty standings should render empty buffer");
+        assert!(
+            lines.iter().all(|line| line.is_empty()),
+            "Empty standings should render empty buffer"
+        );
     }
 
     #[test]
@@ -1393,10 +1516,7 @@ mod tests {
         ];
 
         let widget = WindowedStandingsTable::new(
-            standings,
-            0,
-            0,
-            3,  // scroll_offset
+            standings, 0, 0, 3, // scroll_offset
             false,
         );
 
@@ -1416,10 +1536,7 @@ mod tests {
         ];
 
         let widget = WindowedStandingsTable::new(
-            standings,
-            0,
-            0,
-            1,  // scroll_offset
+            standings, 0, 0, 1, // scroll_offset
             false,
         );
 
@@ -1438,11 +1555,10 @@ mod tests {
             &name.replace("Team ", "T"),
             "Division",
             "Conference",
-            0,  // wins
-            0,  // losses
-            0,  // ot
+            0, // wins
+            0, // losses
+            0, // ot
             points,
         )
     }
-
 }

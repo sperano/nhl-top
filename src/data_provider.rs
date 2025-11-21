@@ -1,9 +1,8 @@
 /// Trait for providing NHL data, abstracting over real API clients and mock implementations
 use async_trait::async_trait;
 use nhl_api::{
-    NHLApiError, GameDate, GameType,
-    Boxscore, ClubStats, DailySchedule, Franchise, GameMatchup, PlayerLanding, Standing,
-    SeasonGameTypes,
+    Boxscore, ClubStats, DailySchedule, Franchise, GameDate, GameMatchup, GameType, NHLApiError,
+    PlayerLanding, SeasonGameTypes, Standing,
 };
 
 /// Trait for NHL data providers, implemented by both real Client and MockClient
@@ -30,7 +29,8 @@ pub trait NHLDataProvider: Send + Sync {
     ) -> Result<ClubStats, NHLApiError>;
 
     /// Get available seasons for a team
-    async fn club_stats_season(&self, team_abbr: &str) -> Result<Vec<SeasonGameTypes>, NHLApiError>;
+    async fn club_stats_season(&self, team_abbr: &str)
+        -> Result<Vec<SeasonGameTypes>, NHLApiError>;
 
     /// Get player landing data
     async fn player_landing(&self, player_id: i64) -> Result<PlayerLanding, NHLApiError>;
@@ -39,10 +39,16 @@ pub trait NHLDataProvider: Send + Sync {
     async fn franchises(&self) -> Result<Vec<Franchise>, NHLApiError>;
 
     /// Get league standings for a specific season
-    async fn league_standings_for_season(&self, season_id: i64) -> Result<Vec<Standing>, NHLApiError>;
+    async fn league_standings_for_season(
+        &self,
+        season_id: i64,
+    ) -> Result<Vec<Standing>, NHLApiError>;
 
     /// Get league standings for a specific date
-    async fn league_standings_for_date(&self, date: &GameDate) -> Result<Vec<Standing>, NHLApiError>;
+    async fn league_standings_for_date(
+        &self,
+        date: &GameDate,
+    ) -> Result<Vec<Standing>, NHLApiError>;
 }
 
 /// Implement the trait for the real nhl_api::Client
@@ -73,7 +79,10 @@ impl NHLDataProvider for nhl_api::Client {
         self.club_stats(team_abbrev, season, game_type).await
     }
 
-    async fn club_stats_season(&self, team_abbr: &str) -> Result<Vec<SeasonGameTypes>, NHLApiError> {
+    async fn club_stats_season(
+        &self,
+        team_abbr: &str,
+    ) -> Result<Vec<SeasonGameTypes>, NHLApiError> {
         self.club_stats_season(team_abbr).await
     }
 
@@ -85,11 +94,17 @@ impl NHLDataProvider for nhl_api::Client {
         self.franchises().await
     }
 
-    async fn league_standings_for_season(&self, season_id: i64) -> Result<Vec<Standing>, NHLApiError> {
+    async fn league_standings_for_season(
+        &self,
+        season_id: i64,
+    ) -> Result<Vec<Standing>, NHLApiError> {
         self.league_standings_for_season(season_id).await
     }
 
-    async fn league_standings_for_date(&self, date: &GameDate) -> Result<Vec<Standing>, NHLApiError> {
+    async fn league_standings_for_date(
+        &self,
+        date: &GameDate,
+    ) -> Result<Vec<Standing>, NHLApiError> {
         self.league_standings_for_date(date).await
     }
 }

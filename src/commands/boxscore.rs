@@ -1,11 +1,11 @@
-use nhl_api::Boxscore;
+use crate::config::{Config, DisplayConfig};
 use crate::data_provider::NHLDataProvider;
+use crate::formatting::format_header;
+use crate::layout_constants::{BOXSCORE_LABEL_WIDTH, BOXSCORE_SCORE_WIDTH};
+use anyhow::{Context, Result};
+use nhl_api::Boxscore;
 #[cfg(feature = "game_stats")]
 use nhl_api::TeamGameStats;
-use anyhow::{Context, Result};
-use crate::formatting::format_header;
-use crate::config::{Config, DisplayConfig};
-use crate::layout_constants::{BOXSCORE_LABEL_WIDTH, BOXSCORE_SCORE_WIDTH};
 
 /// Format skater (forwards/defense) stats table
 fn format_skater_stats(
@@ -17,11 +17,13 @@ fn format_skater_stats(
 ) {
     let header = format!("{} - {}", team_abbrev, position_name);
     output.push_str(&format!("\n{}", format_header(&header, false, display)));
-    output.push_str(&format!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}\n",
+    output.push_str(&format!(
+        "{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}\n",
         "#", "Name", "Pos", "G", "A", "P", "+/-", "TOI"
     ));
     for player in players {
-        output.push_str(&format!("{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}\n",
+        output.push_str(&format!(
+            "{:<3} {:<20} {:<4} {:>3} {:>3} {:>3} {:>4} {:>6}\n",
             player.sweater_number,
             player.name.default,
             player.position,
@@ -43,14 +45,17 @@ fn format_goalie_stats(
 ) {
     let header = format!("{} - Goalies", team_abbrev);
     output.push_str(&format!("\n{}", format_header(&header, false, display)));
-    output.push_str(&format!("{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}\n",
+    output.push_str(&format!(
+        "{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}\n",
         "#", "Name", "SA", "Saves", "GA", "SV%"
     ));
     for goalie in goalies {
-        let sv_pct = goalie.save_pctg
+        let sv_pct = goalie
+            .save_pctg
             .map(|p| format!("{:.3}", p))
             .unwrap_or_else(|| "-".to_string());
-        output.push_str(&format!("{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}\n",
+        output.push_str(&format!(
+            "{:<3} {:<20} {:>4} {:>6} {:>6} {:>6}\n",
             goalie.sweater_number,
             goalie.name.default,
             goalie.shots_against,
@@ -103,10 +108,15 @@ pub fn format_game_stats_table(
     let bar_width = BOXSCORE_STAT_BAR_WIDTH;
 
     // Shots on Goal
-    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Shots On Goal",
         away_stats.shots_on_goal,
-        format_stat_bar(away_stats.shots_on_goal, home_stats.shots_on_goal, bar_width),
+        format_stat_bar(
+            away_stats.shots_on_goal,
+            home_stats.shots_on_goal,
+            bar_width
+        ),
         home_stats.shots_on_goal,
         label_w = BOXSCORE_LABEL_WIDTH,
         score_w = BOXSCORE_SCORE_WIDTH,
@@ -116,7 +126,8 @@ pub fn format_game_stats_table(
     // Face-off %
     let away_fo_pct = away_stats.faceoff_percentage();
     let home_fo_pct = home_stats.faceoff_percentage();
-    output.push_str(&format!("{:<label_w$} {:>score_w$.1}%  {:^bar_w$}  {:<score_w$.1}%\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$.1}%  {:^bar_w$}  {:<score_w$.1}%\n",
         "Face-off %",
         away_fo_pct,
         format!("{}/{}", away_stats.faceoff_wins, away_stats.faceoff_total),
@@ -129,10 +140,14 @@ pub fn format_game_stats_table(
     // Power Play %
     let away_pp_pct = away_stats.power_play_percentage();
     let home_pp_pct = home_stats.power_play_percentage();
-    output.push_str(&format!("{:<label_w$} {:>score_w$.1}%  {:^bar_w$}  {:<score_w$.1}%\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$.1}%  {:^bar_w$}  {:<score_w$.1}%\n",
         "Power Play %",
         away_pp_pct,
-        format!("{}/{}", away_stats.power_play_goals, away_stats.power_play_opportunities),
+        format!(
+            "{}/{}",
+            away_stats.power_play_goals, away_stats.power_play_opportunities
+        ),
         home_pp_pct,
         label_w = BOXSCORE_LABEL_WIDTH,
         score_w = BOXSCORE_SCORE_WIDTH,
@@ -140,10 +155,15 @@ pub fn format_game_stats_table(
     ));
 
     // Penalty Minutes
-    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Penalty Minutes",
         away_stats.penalty_minutes,
-        format_stat_bar(away_stats.penalty_minutes, home_stats.penalty_minutes, bar_width),
+        format_stat_bar(
+            away_stats.penalty_minutes,
+            home_stats.penalty_minutes,
+            bar_width
+        ),
         home_stats.penalty_minutes,
         label_w = BOXSCORE_LABEL_WIDTH,
         score_w = BOXSCORE_SCORE_WIDTH,
@@ -151,7 +171,8 @@ pub fn format_game_stats_table(
     ));
 
     // Hits
-    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Hits",
         away_stats.hits,
         format_stat_bar(away_stats.hits, home_stats.hits, bar_width),
@@ -162,10 +183,15 @@ pub fn format_game_stats_table(
     ));
 
     // Blocked Shots
-    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Blocked Shots",
         away_stats.blocked_shots,
-        format_stat_bar(away_stats.blocked_shots, home_stats.blocked_shots, bar_width),
+        format_stat_bar(
+            away_stats.blocked_shots,
+            home_stats.blocked_shots,
+            bar_width
+        ),
         home_stats.blocked_shots,
         label_w = BOXSCORE_LABEL_WIDTH,
         score_w = BOXSCORE_SCORE_WIDTH,
@@ -173,7 +199,8 @@ pub fn format_game_stats_table(
     ));
 
     // Giveaways
-    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Giveaways",
         away_stats.giveaways,
         format_stat_bar(away_stats.giveaways, home_stats.giveaways, bar_width),
@@ -184,7 +211,8 @@ pub fn format_game_stats_table(
     ));
 
     // Takeaways
-    output.push_str(&format!("{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}  {:^bar_w$}  {:<score_w$}\n",
         "Takeaways",
         away_stats.takeaways,
         format_stat_bar(away_stats.takeaways, home_stats.takeaways, bar_width),
@@ -201,34 +229,44 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
     let mut output = String::new();
 
     // Display game header
-    let header = format!("{} @ {}",
-        boxscore.away_team.common_name.default,
-        boxscore.home_team.common_name.default
+    let header = format!(
+        "{} @ {}",
+        boxscore.away_team.common_name.default, boxscore.home_team.common_name.default
     );
     output.push_str(&format!("\n{}", format_header(&header, true, display)));
-    output.push_str(&format!("Date: {} | Venue: {}\n",
-        boxscore.game_date,
-        boxscore.venue.default
+    output.push_str(&format!(
+        "Date: {} | Venue: {}\n",
+        boxscore.game_date, boxscore.venue.default
     ));
-    output.push_str(&format!("Status: {} | Period: {}\n",
-        boxscore.game_state,
-        boxscore.period_descriptor.number
+    output.push_str(&format!(
+        "Status: {} | Period: {}\n",
+        boxscore.game_state, boxscore.period_descriptor.number
     ));
     if boxscore.clock.running || !boxscore.clock.in_intermission {
         output.push_str(&format!("Time: {}\n", boxscore.clock.time_remaining));
     }
 
     // Display score
-    let score_header = format!("{:<label_w$} {:>score_w$}", "Team", "Score",
-        label_w = BOXSCORE_LABEL_WIDTH, score_w = BOXSCORE_SCORE_WIDTH);
-    output.push_str(&format!("\n{}", format_header(&score_header, false, display)));
-    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
+    let score_header = format!(
+        "{:<label_w$} {:>score_w$}",
+        "Team",
+        "Score",
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH
+    );
+    output.push_str(&format!(
+        "\n{}",
+        format_header(&score_header, false, display)
+    ));
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}\n",
         boxscore.away_team.abbrev,
         boxscore.away_team.score,
         label_w = BOXSCORE_LABEL_WIDTH,
         score_w = BOXSCORE_SCORE_WIDTH
     ));
-    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}\n",
         boxscore.home_team.abbrev,
         boxscore.home_team.score,
         label_w = BOXSCORE_LABEL_WIDTH,
@@ -236,16 +274,23 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
     ));
 
     // Display shots on goal
-    let sog_header = format!("{:<label_w$} {:>score_w$}", "Team", "SOG",
-        label_w = BOXSCORE_LABEL_WIDTH, score_w = BOXSCORE_SCORE_WIDTH);
+    let sog_header = format!(
+        "{:<label_w$} {:>score_w$}",
+        "Team",
+        "SOG",
+        label_w = BOXSCORE_LABEL_WIDTH,
+        score_w = BOXSCORE_SCORE_WIDTH
+    );
     output.push_str(&format!("\n{}", format_header(&sog_header, false, display)));
-    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}\n",
         boxscore.away_team.abbrev,
         boxscore.away_team.sog,
         label_w = BOXSCORE_LABEL_WIDTH,
         score_w = BOXSCORE_SCORE_WIDTH
     ));
-    output.push_str(&format!("{:<label_w$} {:>score_w$}\n",
+    output.push_str(&format!(
+        "{:<label_w$} {:>score_w$}\n",
         boxscore.home_team.abbrev,
         boxscore.home_team.sog,
         label_w = BOXSCORE_LABEL_WIDTH,
@@ -254,8 +299,10 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
 
     #[cfg(feature = "game_stats")]
     {
-        let away_team_stats = TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.away_team);
-        let home_team_stats = TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.home_team);
+        let away_team_stats =
+            TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.away_team);
+        let home_team_stats =
+            TeamGameStats::from_team_player_stats(&boxscore.player_by_game_stats.home_team);
         output.push_str(&format_game_stats_table(
             &boxscore.away_team.abbrev,
             &boxscore.home_team.abbrev,
@@ -266,14 +313,26 @@ pub fn format_boxscore(boxscore: &Boxscore, display: &DisplayConfig) -> String {
     }
 
     // Display player stats using extracted helper functions
-    format_team_stats(&mut output, &boxscore.away_team.abbrev, &boxscore.player_by_game_stats.away_team, display);
-    format_team_stats(&mut output, &boxscore.home_team.abbrev, &boxscore.player_by_game_stats.home_team, display);
+    format_team_stats(
+        &mut output,
+        &boxscore.away_team.abbrev,
+        &boxscore.player_by_game_stats.away_team,
+        display,
+    );
+    format_team_stats(
+        &mut output,
+        &boxscore.home_team.abbrev,
+        &boxscore.player_by_game_stats.home_team,
+        display,
+    );
 
     output
 }
 
 pub async fn run(client: &dyn NHLDataProvider, game_id: i64, config: &Config) -> Result<()> {
-    let boxscore = client.boxscore(game_id).await
+    let boxscore = client
+        .boxscore(game_id)
+        .await
         .context("Failed to fetch boxscore")?;
     print!("{}", format_boxscore(&boxscore, &config.display));
 

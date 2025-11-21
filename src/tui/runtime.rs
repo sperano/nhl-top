@@ -90,16 +90,28 @@ impl Runtime {
 
             // Combine effects if needed
             let mut effects = Vec::new();
-            if !matches!(reducer_effect, Effect::None) { effects.push(reducer_effect); }
-            if !matches!(boxscore_effect, Effect::None) { effects.push(boxscore_effect); }
-            if !matches!(team_detail_effect, Effect::None) { effects.push(team_detail_effect); }
-            if !matches!(player_detail_effect, Effect::None) { effects.push(player_detail_effect); }
-            if !matches!(game_details_effect, Effect::None) { effects.push(game_details_effect); }
+            if !matches!(reducer_effect, Effect::None) {
+                effects.push(reducer_effect);
+            }
+            if !matches!(boxscore_effect, Effect::None) {
+                effects.push(boxscore_effect);
+            }
+            if !matches!(team_detail_effect, Effect::None) {
+                effects.push(team_detail_effect);
+            }
+            if !matches!(player_detail_effect, Effect::None) {
+                effects.push(player_detail_effect);
+            }
+            if !matches!(game_details_effect, Effect::None) {
+                effects.push(game_details_effect);
+            }
 
             if effects.is_empty() {
                 Effect::None
             } else if effects.len() == 1 {
-                effects.pop().expect("effects vec should contain exactly 1 element")
+                effects
+                    .pop()
+                    .expect("effects vec should contain exactly 1 element")
             } else {
                 Effect::Batch(effects)
             }
@@ -120,12 +132,18 @@ impl Runtime {
                 if let super::types::Panel::Boxscore { game_id } = panel_state.panel {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.boxscores.contains_key(&game_id)
-                        && !new_state.data.loading.contains(&super::state::LoadingKey::Boxscore(game_id))
+                        && !new_state
+                            .data
+                            .loading
+                            .contains(&super::state::LoadingKey::Boxscore(game_id))
                     {
                         debug!("EFFECT: Triggering boxscore fetch for game_id={}", game_id);
                         return self.data_effects.fetch_boxscore(game_id);
                     } else {
-                        trace!("EFFECT: Boxscore already loaded/loading for game_id={}", game_id);
+                        trace!(
+                            "EFFECT: Boxscore already loaded/loading for game_id={}",
+                            game_id
+                        );
                     }
                 }
             }
@@ -141,12 +159,21 @@ impl Runtime {
                 if let super::types::Panel::TeamDetail { abbrev } = &panel_state.panel {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.team_roster_stats.contains_key(abbrev)
-                        && !new_state.data.loading.contains(&super::state::LoadingKey::TeamRosterStats(abbrev.clone()))
+                        && !new_state
+                            .data
+                            .loading
+                            .contains(&super::state::LoadingKey::TeamRosterStats(abbrev.clone()))
                     {
-                        debug!("EFFECT: Triggering team roster stats fetch for team={}", abbrev);
+                        debug!(
+                            "EFFECT: Triggering team roster stats fetch for team={}",
+                            abbrev
+                        );
                         return self.data_effects.fetch_team_roster_stats(abbrev.clone());
                     } else {
-                        trace!("EFFECT: Team roster stats already loaded/loading for team={}", abbrev);
+                        trace!(
+                            "EFFECT: Team roster stats already loaded/loading for team={}",
+                            abbrev
+                        );
                     }
                 }
             }
@@ -162,12 +189,21 @@ impl Runtime {
                 if let super::types::Panel::PlayerDetail { player_id } = panel_state.panel {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.player_data.contains_key(&player_id)
-                        && !new_state.data.loading.contains(&super::state::LoadingKey::PlayerStats(player_id))
+                        && !new_state
+                            .data
+                            .loading
+                            .contains(&super::state::LoadingKey::PlayerStats(player_id))
                     {
-                        debug!("EFFECT: Triggering player stats fetch for player_id={}", player_id);
+                        debug!(
+                            "EFFECT: Triggering player stats fetch for player_id={}",
+                            player_id
+                        );
                         return self.data_effects.fetch_player_stats(player_id);
                     } else {
-                        trace!("EFFECT: Player stats already loaded/loading for player_id={}", player_id);
+                        trace!(
+                            "EFFECT: Player stats already loaded/loading for player_id={}",
+                            player_id
+                        );
                     }
                 }
             }
@@ -186,7 +222,10 @@ impl Runtime {
                     if game.game_state != nhl_api::GameState::Future
                         && game.game_state != nhl_api::GameState::PreGame
                     {
-                        debug!("EFFECT: Triggering game details fetch for game_id={}", game.id);
+                        debug!(
+                            "EFFECT: Triggering game details fetch for game_id={}",
+                            game.id
+                        );
                         effects.push(self.data_effects.fetch_game_details(game.id));
                     }
                 }
@@ -216,8 +255,8 @@ impl Runtime {
     /// It builds the component tree by calling the root App component's view() method
     /// with the current state as props.
     pub fn build(&self) -> Element {
-        use crate::tui::components::App;
         use crate::tui::component::Component;
+        use crate::tui::components::App;
 
         let app = App;
         app.view(&self.state, &())
@@ -296,9 +335,9 @@ impl Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::types::Tab;
-    use crate::tui::testing::create_client;
     use crate::tui::keys::key_to_action;
+    use crate::tui::testing::create_client;
+    use crate::tui::types::Tab;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn create_test_data_effects() -> Arc<DataEffects> {
@@ -428,7 +467,11 @@ mod tests {
 
         // Should have received at least StandingsLoaded and ScheduleLoaded actions
         // Note: actual count depends on network and what data is returned
-        assert!(total_count >= 1, "Expected at least 1 action from data refresh after {} seconds", start.elapsed().as_secs_f32());
+        assert!(
+            total_count >= 1,
+            "Expected at least 1 action from data refresh after {} seconds",
+            start.elapsed().as_secs_f32()
+        );
     }
 
     #[tokio::test]
@@ -506,26 +549,44 @@ mod tests {
 
         // Start on Scores, go right to Standings
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Standings);
+        assert_eq!(
+            runtime.state().navigation.current_tab,
+            crate::tui::Tab::Standings
+        );
 
         // Go right to Stats
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Stats);
+        assert_eq!(
+            runtime.state().navigation.current_tab,
+            crate::tui::Tab::Stats
+        );
 
         // Go right to Players
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Players);
+        assert_eq!(
+            runtime.state().navigation.current_tab,
+            crate::tui::Tab::Players
+        );
 
         // Go right to Settings
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Settings);
+        assert_eq!(
+            runtime.state().navigation.current_tab,
+            crate::tui::Tab::Settings
+        );
 
         // Go right to Browser
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Browser);
+        assert_eq!(
+            runtime.state().navigation.current_tab,
+            crate::tui::Tab::Browser
+        );
 
         // Go right to wrap around to Scores
         runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(runtime.state().navigation.current_tab, crate::tui::Tab::Scores);
+        assert_eq!(
+            runtime.state().navigation.current_tab,
+            crate::tui::Tab::Scores
+        );
     }
 }

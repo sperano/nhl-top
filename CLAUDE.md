@@ -75,90 +75,208 @@ The application operates in two distinct modes:
 
 The mode is determined in `src/main.rs` by checking if `cli.command.is_none()`.
 
+### React-like Unidirectional Data Flow
+
+The TUI uses a React/Redux-inspired architecture with unidirectional data flow:
+
+```
+┌─────────────┐     ┌──────────┐     ┌─────────────┐
+│  Key Event  │────>│  Action  │────>│   Reducer   │
+└─────────────┘     └──────────┘     └─────────────┘
+                                            │
+                                            v
+┌─────────────┐     ┌──────────┐     ┌─────────────┐
+│   Render    │<────│  Element │<────│    State    │
+└─────────────┘     │   Tree   │     │  (AppState) │
+                    └──────────┘     └─────────────┘
+                          ^
+                          │
+                    ┌─────────────┐
+                    │  Component  │
+                    │   .view()   │
+                    └─────────────┘
+```
+
 ### Module Structure
 
 #### Core Modules
-- **`src/main.rs`**: Entry point with CLI parsing, SharedData struct, and background data fetching loop
-- **`src/commands/`**: Each subcommand (standings, boxscore, schedule, scores) as separate modules
-- **`src/tui/`**: TUI implementation split into submodules (tabs, widgets, events, mod)
+- **`src/main.rs`**: Entry point with CLI parsing
+- **`src/commands/`**: Each subcommand (standings, boxscore, schedule, scores, franchises) as separate modules
+- **`src/tui/`**: TUI implementation with React-like framework
 - **`src/config.rs`**: Configuration management using XDG base directories
+- **`src/cache.rs`**: API response caching
 
-#### TUI Submodules (Modular Tab-Based Architecture)
+#### TUI Module Structure
 
-The TUI is organized into a modular tab-based architecture where each tab is self-contained:
+```
+src/tui/
+├── mod.rs              # Main entry point, TUI run loop
+├── component.rs        # Core Component trait, Element types, RenderableWidget
+├── action.rs           # Action enum (Redux-like actions)
+├── state.rs            # AppState - single source of truth
+├── reducer.rs          # Main reducer + settings reducer
+├── reducers/           # Sub-reducers (modular)
+│   ├── mod.rs
+│   ├── navigation.rs   # Tab navigation actions
+│   ├── panels.rs       # Panel stack management
+│   ├── data_loading.rs # Data loaded actions
+│   ├── scores.rs       # Scores tab actions
+│   ├── standings.rs    # Standings tab actions
+│   └── standings_layout.rs  # Standings layout calculations
+├── runtime.rs          # Runtime - manages component lifecycle
+├── renderer.rs         # Renders Element tree to ratatui Buffer
+├── effects.rs          # DataEffects - async data fetching
+├── keys.rs             # Keyboard event to Action mapping
+├── navigation.rs       # Panel stack utilities (breadcrumbs)
+├── types.rs            # Tab, Panel, SettingsCategory enums
+├── helpers.rs          # UI helper functions
+├── settings_helpers.rs # Settings-specific helpers
+├── table.rs            # Generic table types (CellValue, ColumnDef)
+├── testing.rs          # Test utilities and fixtures
+├── integration_tests.rs # Integration tests (cfg(test))
+├── components/         # React-like Components
+│   ├── mod.rs
+│   ├── app.rs          # Root App component
+│   ├── tabbed_panel.rs # TabbedPanel (tabs + content)
+│   ├── scores_tab.rs   # Scores tab component
+│   ├── standings_tab.rs # Standings tab component
+│   ├── settings_tab.rs # Settings tab component
+│   ├── boxscore_panel.rs # Boxscore drill-down panel
+│   ├── team_detail_panel.rs # Team detail drill-down panel
+│   ├── player_detail_panel.rs # Player detail drill-down panel
+│   ├── standings_panels.rs # Division/Conference/League/Wildcard panels
+│   ├── status_bar.rs   # Status bar component
+│   ├── breadcrumb.rs   # Breadcrumb navigation widget
+│   ├── table.rs        # Generic Table component
+│   ├── skater_stats_table.rs # Skater stats table
+│   └── goalie_stats_table.rs # Goalie stats table
+└── widgets/            # Low-level renderable widgets
+    ├── mod.rs          # RenderableWidget trait
+    ├── game_box.rs     # GameBox widget (score display)
+    ├── score_table.rs  # ScoreTable widget
+    ├── settings_list.rs # SettingsListWidget
+    ├── list_modal.rs   # ListModalWidget (for selections)
+    └── testing.rs      # Widget test utilities
+```
 
-**Common modules:**
-- **`tui/common/tab_bar.rs`**: Renders main navigation tabs with box-drawing characters
-- **`tui/common/status_bar.rs`**: Renders status bar with refresh time or error messages
-- **`tui/common/mod.rs`**: Common module exports
+### AppState Architecture
 
-**Tab modules** (each follows state/view/handler pattern):
-- **`tui/scores/`**: Scores tab with date navigation
-  - `state.rs`: `State { selected_index, subtab_focused }`
-  - `view.rs`: `render_subtabs()` (3-date sliding window), `render_content()` (game scores)
-  - `handler.rs`: `handle_key()` for left/right date navigation
-  - `mod.rs`: Public exports
-
-- **`tui/standings/`**: Standings tab with view selection
-  - `state.rs`: `State { view: GroupBy, subtab_focused }`
-  - `view.rs`: `render_subtabs()` (Division/Conference/League), `render_content()` (standings table)
-  - `handler.rs`: `handle_key()` for cycling through views
-  - `mod.rs`: Public exports
-
-- **`tui/settings/`**: Settings tab (placeholder)
-  - `state.rs`: Empty state struct for future settings
-  - `view.rs`: Minimal rendering
-  - `handler.rs`: No key handling yet
-  - `mod.rs`: Public exports
-
-**Core TUI files:**
-- **`tui/app.rs`**: Composable `AppState` containing all tab states and `CurrentTab` enum
-  - `AppState { current_tab, scores, standings, settings }`
-  - Navigation methods: `navigate_tab_left()`, `navigate_tab_right()`, `enter_subtab_mode()`, `exit_subtab_mode()`
-  - Helper methods: `is_subtab_focused()`, `has_subtabs()`
-- **`tui/mod.rs`**: Main event loop, rendering orchestration, and top-level event dispatcher
-
-### SharedData Architecture
-
-The TUI mode uses a shared state pattern with `Arc<RwLock<SharedData>>`:
+The TUI uses a single source of truth `AppState`:
 
 ```rust
-pub struct SharedData {
-    pub standings: Vec<Standing>,
-    pub schedule: Option<DailySchedule>,
-    pub period_scores: HashMap<i64, PeriodScores>,
-    pub game_info: HashMap<i64, GameMatchup>,
-    pub config: Config,
-    pub last_refresh: Option<SystemTime>,
-    pub game_date: GameDate,
-    pub error_message: Option<String>,
+pub struct AppState {
+    pub navigation: NavigationState,  // current_tab, panel_stack, content_focused
+    pub data: DataState,              // API data (Arc-wrapped), loading states, errors
+    pub ui: UiState,                  // Tab-specific UI state (scores, standings, settings)
+    pub system: SystemState,          // last_refresh, config, status_message
 }
 ```
 
-- Shared between the background data fetching loop and the TUI rendering loop
-- Background loop (`fetch_data_loop`) periodically fetches standings and schedule data
-- TUI reads from SharedData for rendering
-- Uses `mpsc` channel for manual refresh triggers
+- **NavigationState**: Current tab, panel stack for drill-down views, content focus state
+- **DataState**: All API data wrapped in `Arc` for efficient cloning, loading flags, error messages
+- **UiState**: Per-tab UI state (selected indices, scroll positions, view modes)
+- **SystemState**: Last refresh time, configuration, status messages
 
-### Background Data Fetching
+### Action/Reducer Pattern
 
-The `fetch_data_loop` function runs in a separate tokio task:
-- Fetches standings via `client.current_league_standings()`
-- Fetches daily schedule via `client.daily_schedule()`
-- For started games, fetches game details via `client.landing()` **in parallel** using `futures::future::join_all()`
-- Updates SharedData with fetched data
-- Stores errors in `SharedData.error_message` for display in status bar
-- Responds to manual refresh triggers from the TUI
+**Actions** (`action.rs`):
+```rust
+pub enum Action {
+    // Navigation
+    NavigateTab(Tab), NavigateTabLeft, NavigateTabRight,
+    EnterContentFocus, ExitContentFocus,
+    PushPanel(Panel), PopPanel,
+
+    // Data
+    RefreshData, SetGameDate(GameDate),
+    StandingsLoaded(Result<...>), ScheduleLoaded(Result<...>), ...
+
+    // Tab-specific (nested)
+    ScoresAction(ScoresAction),
+    StandingsAction(StandingsAction),
+    SettingsAction(SettingsAction),
+
+    // System
+    Quit, Error(String), SetStatusMessage { ... },
+}
+```
+
+**Reducers** (`reducer.rs`, `reducers/`):
+- Main `reduce()` function delegates to sub-reducers
+- Each reducer returns `Option<(AppState, Effect)>` - None means didn't handle
+- Sub-reducers: `reduce_navigation`, `reduce_panels`, `reduce_data_loading`, `reduce_scores`, `reduce_standings`
+
+### Effects System
+
+```rust
+pub enum Effect {
+    None,
+    Action(Action),           // Dispatch immediately
+    Batch(Vec<Effect>),       // Process multiple effects
+    Async(Pin<Box<dyn Future<Output = Action> + Send>>),  // Async operation
+}
+```
+
+`DataEffects` provides async data fetching methods:
+- `fetch_standings()` -> Effect
+- `fetch_schedule(date)` -> Effect
+- `fetch_game_details(game_id)` -> Effect
+- `fetch_boxscore(game_id)` -> Effect
+- `fetch_team_roster_stats(abbrev)` -> Effect
+- `fetch_player_stats(player_id)` -> Effect
+
+All use caching via `cache` module.
+
+### Runtime
+
+The `Runtime` (`runtime.rs`) orchestrates the system:
+- Holds the current `AppState`
+- Dispatches actions through the reducer
+- Executes side effects asynchronously via `DataEffects`
+- Builds the virtual Element tree via `App.view()`
+- Uses mpsc channels for action queue and effect queue
+
+Key methods:
+- `dispatch(action)` - Process action through reducer, queue effects
+- `process_actions()` - Drain action queue, returns count processed
+- `build()` -> Element - Build virtual tree from current state
+- `action_sender()` - Get channel for external action dispatch
 
 ### TUI Navigation
 
+#### Key Event Flow
+
+```
+KeyEvent -> key_to_action(key, state) -> Option<Action>
+```
+
+Priority:
+1. Global keys (q=Quit, /=CommandPalette)
+2. ESC key (priority-based hierarchy: panel -> modal -> browse mode -> content focus)
+3. Panel navigation (when panel open)
+4. Number keys (1-6 direct tab switching)
+5. Tab bar focused: arrows navigate tabs
+6. Content focused: delegated to tab-specific handlers
+
+#### Focus Hierarchy
+1. Tab bar (top level)
+2. Content area (subtabs)
+3. Item selection (within content)
+4. Panel stack (drill-down views)
+
+#### Panel Stack
+- `panel_stack: Vec<PanelState>`
+- Panel types: Boxscore, TeamDetail, PlayerDetail
+- Each PanelState has: panel, scroll_offset, selected_index
+- Breadcrumb navigation shows path
+
 #### Main Tabs
 - Left/Right arrows: Navigate between Scores, Standings, Settings
-- Down arrow: Enter subtab mode (on Scores/Standings tabs)
-- Up arrow: Exit subtab mode back to main tabs
-- ESC: Exit application
+- Down arrow: Enter content focus (on Scores/Standings tabs)
+- ESC: Context-dependent (pop panel, close modal, exit content focus, or quit)
+- Number keys 1-6: Direct tab switching
 
-#### Scores Subtab Navigation (5-Date Sliding Window)
+#### Scores Tab Navigation (5-Date Sliding Window)
 
 **CRITICAL: This specification is MANDATORY and must be followed exactly when modifying date navigation code.**
 
@@ -227,7 +345,7 @@ Press Right at edge: game_date=11/03, selected_index=4, refresh
 
 ##### Implementation Files
 
-**View Calculation (`src/tui/scores/view.rs`):**
+**Date Window Calculation (`src/tui/components/scores_tab.rs`):**
 ```rust
 fn calculate_date_window(game_date: &GameDate, selected_index: usize) -> [GameDate; 5] {
     let window_base_date = game_date.add_days(-(selected_index as i64));
@@ -241,37 +359,10 @@ fn calculate_date_window(game_date: &GameDate, selected_index: usize) -> [GameDa
 }
 ```
 
-**Navigation Handler (`src/tui/scores/handler.rs`):**
-```rust
-async fn navigate_within_window(
-    old_index: usize,
-    new_index: usize,
-    shared_data: &SharedDataHandle,
-    refresh_tx: &mpsc::Sender<()>,
-) {
-    let mut data = shared_data.write().await;
-    // Calculate window base: leftmost date in current window
-    let window_base = data.game_date.add_days(-(old_index as i64));
-    // Update game_date to the new selected position in the same window
-    data.game_date = window_base.add_days(new_index as i64);
-    clear_schedule_data(&mut data);
-    // Triggers refresh
-}
-```
-
-##### MANDATORY Tests
-
-**When modifying date navigation code, you MUST run:**
-```bash
-cargo test --bin nhl handler::tests
-```
-
-**All tests must pass, especially:**
-- `test_complete_navigation_sequence_from_spec` - verifies the exact sequence above
-- `test_navigation_within_window` - verifies window stays same when navigating within
-- `test_navigation_at_left_edge_shifts_window` - verifies left edge shifting
-- `test_navigation_at_right_edge_shifts_window` - verifies right edge shifting
-- `test_window_calculation_from_base` - verifies window calculation formula
+**Navigation via Reducer (`src/tui/reducers/scores.rs`):**
+- Handles `ScoresAction::NavigateLeft`, `ScoresAction::NavigateRight`
+- Updates `game_date` and `selected_index` in `UiState`
+- Returns `Effect` to trigger data refresh
 
 ##### Critical Rules
 
@@ -294,8 +385,10 @@ cargo test --bin nhl handler::tests
 ✅ Refresh triggers on every date change
 ✅ Window only shifts at edges (index 0 or 4)
 
-#### Standings Subtab Navigation
-- Left/Right arrows cycle through Division → Conference → League views
+#### Standings Tab Navigation
+- Left/Right arrows cycle through Division → Conference → League → Wildcard views
+- Down arrow enters team selection mode
+- Enter on team opens TeamDetail panel
 
 ## User Navigation Behavior
 
@@ -392,10 +485,10 @@ When navigating teams with Up/Down arrows:
 ### Error Handling
 
 Network and deserialization errors are **never** output to stderr/stdout (conflicts with ratatui):
-- All errors stored in `SharedData.error_message`
+- All errors stored in `AppState.data.error_message`
 - Displayed on status bar with red background and white text
 - Format: `"ERROR: <message>"`
-- Errors automatically cleared on next successful standings fetch
+- Errors automatically cleared on next successful data fetch
 
 ### NHL API Integration
 
@@ -441,7 +534,7 @@ Key dependencies:
 Game data fetching uses parallel execution for performance:
 - Sequential: ~1730ms for 13 games
 - Parallel: ~170ms for 13 games (10x speedup)
-- Implementation in `fetch_data_loop` using `futures::future::join_all()`
+- Implementation via `DataEffects` using `futures::future::join_all()`
 
 ### TUI Terminal Management
 - Uses raw mode, alternate screen, and mouse capture
@@ -450,61 +543,45 @@ Game data fetching uses parallel execution for performance:
 
 ### Rendering Architecture
 
-The rendering is delegated to tab-specific modules:
+The TUI uses a virtual DOM-like rendering approach:
 
-**Common rendering:**
-- `common::tab_bar::render()`: Main navigation tabs with box-drawing characters
-- `common::status_bar::render()`: Status bar with last refresh time or error messages
+1. **Component Tree**: `App.view()` builds an `Element` tree from current `AppState`
+2. **Renderer**: `renderer.rs` takes the `Element` tree and renders to ratatui `Buffer`
+3. **Layout**: `vertical()` and `horizontal()` helpers handle layout composition
+4. **Widgets**: Leaf nodes implement `RenderableWidget` for direct buffer rendering
 
-**Tab-specific rendering** (in `tui/mod.rs` main loop):
-- `scores::render_subtabs()`: 3-date sliding window navigation
-- `scores::render_content()`: Game scores display
-- `standings::render_subtabs()`: Division/Conference/League selector
-- `standings::render_content()`: Standings table
-- `settings::render_content()`: Settings display (placeholder)
-
-### State Management
-
-**TUI State (AppState):**
-- Composable design: each tab owns its own state struct
-- `AppState` in `tui/app.rs` contains tab states: `scores`, `standings`, `settings`
-- Tab navigation state: `current_tab: CurrentTab` enum (Scores, Standings, Settings)
-- Each tab's state contains its specific UI state (e.g., `scores.selected_index`, `standings.view`)
-
-**Application Data (SharedData):**
-- Tracks application data fetched from API
-- Shared between background fetch loop and TUI via `Arc<RwLock<SharedData>>`
-- Clear separation: TUI state vs application data state
-
-**Benefits of modular architecture:**
-- Each tab is self-contained with its own state, view, and handler
-- Easy to add new tabs or modify existing ones
-- Clear separation of concerns
-- Better code organization and maintainability
+**Key rendering components:**
+- `components::App` - Root component, composes TabbedPanel + StatusBar
+- `components::TabbedPanel` - Tab bar + content area
+- `components::ScoresTab`, `StandingsTab`, `SettingsTab` - Tab content
+- `components::StatusBar` - Bottom status bar with refresh time
 
 ### Component vs Widget Architecture
 
-The codebase has two distinct UI architectures:
+The TUI has a unified architecture with two abstraction levels:
 
-#### Production TUI (`src/tui/mod.rs`)
-Uses **widgets** from `src/tui/widgets/`:
-- Direct implementation of `RenderableWidget` trait
-- Render directly to ratatui `Buffer` with `DisplayConfig`
-- Self-contained, reusable UI primitives with no framework overhead
-- Used in production code
-- Example: `widgets::TabBar`, `widgets::StatusBar`, `widgets::GameBox`
+#### Components (`src/tui/components/`)
+Components implement the `Component` trait for complex, composable UI:
+```rust
+pub trait Component: Send {
+    type Props: Clone;
+    type State: Default + Clone;
+    type Message;
 
-#### Experimental React-like Framework (`src/tui/mod_experimental.rs`)
-Uses **components** from `src/tui/components/`:
-- Implement the `Component` trait from `framework/component.rs`
-- Build virtual `Element` trees (like React's virtual DOM)
-- Compose using `vertical()` and `horizontal()` layout helpers
-- Managed by `Runtime` with reducer pattern for state updates
-- Experimental architecture - not used in production
-- Example: `components::App`, `components::ScoresTab`, `components::StandingsTab`
+    fn init(_props: &Self::Props) -> Self::State { ... }
+    fn update(&mut self, _msg: Self::Message, _state: &mut Self::State) -> Effect { ... }
+    fn view(&self, props: &Self::Props, state: &Self::State) -> Element;
+}
+```
 
-#### RenderableWidget Trait Unification
-Both architectures now share a **unified `RenderableWidget` trait**:
+**Use Components for:**
+- Composing UI hierarchies with `vertical()`/`horizontal()`
+- Building stateful, message-driven UIs
+- Tab content, panels, complex layouts
+- Examples: `App`, `TabbedPanel`, `ScoresTab`, `StandingsTab`, `BoxscorePanel`
+
+#### Widgets (`src/tui/widgets/`)
+Widgets implement `RenderableWidget` for leaf-level rendering:
 ```rust
 pub trait RenderableWidget: Send + Sync {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig);
@@ -514,51 +591,47 @@ pub trait RenderableWidget: Send + Sync {
 }
 ```
 
-This allows widgets to work in both systems.
+**Use Widgets for:**
+- Self-contained, reusable rendering primitives
+- Direct buffer rendering with no framework overhead
+- Leaf nodes in the element tree
+- Examples: `GameBox`, `ScoreTable`, `SettingsListWidget`, `ListModalWidget`
 
-#### When to Use Each
+### Testing Infrastructure
 
-**Use Widgets** (`src/tui/widgets/`):
-- For production TUI code
-- When you need a self-contained, reusable rendering primitive
-- When performance matters (direct rendering, no virtual DOM overhead)
-- For leaf-level display logic (tables, boxes, panels)
-
-**Use Components** (`src/tui/components/`):
-- For experimental React-like framework only
-- When composing UI hierarchies with `vertical()`/`horizontal()`
-- When building stateful, message-driven UIs
-- When experimenting with new architectural patterns
-
-**Note:** Legacy code in `src/tui/common/` (function-based renderers) has been removed. Only `widgets/` and `components/` remain.
+**Test utilities** (`tui/testing.rs`):
+- `setup_test_render!()` macro - Create test buffer/state/config
+- `assert_buffer()` - Compare buffer to expected lines
+- `create_client()` - Arc-wrapped NHL API client
+- `create_test_standings()` - Full 32-team fixtures
+- Widget-specific tests in `widgets/testing.rs`
 
 ## Requirements
 
+### General
 - Rust 1.65 or later
-- Use the tracing and tracing-subscriber crates for logging 
-- Always use anyhow (especially error! and result) when you can
-- inside the body of a function or struct, only comment things that are really not obvious.
-- do an import instead of explicitely calling crate::formatting::format_header
-- to only comment the non obvious inside a function body or structure
-- remember that you cannot launch the tui because it would not be in a real tty
-- avoid Unnecessary type repetition (e.g., GroupBy::Division should be Self::Division)%
+- Use the tracing and tracing-subscriber crates for logging
+- Always use anyhow (especially `anyhow::Result`) when you can
+- Never use any unsafe code
+- Remember that you cannot launch the TUI because it would not be in a real tty
+
+### Code Style
+- Inside the body of a function or struct, only comment things that are really not obvious
+- Use imports instead of explicitly calling `crate::formatting::format_header`
+- Avoid unnecessary type repetition (e.g., `GroupBy::Division` should be `Self::Division`)
+- Avoid writing functions longer than 100 lines unless necessary or really better
+- Always be unicode-aware, don't rely on byte length for string length
+
+### Testing
 - 90% minimum coverage for all new code
-- avoid writing functions longer than 100 lines unless necessary or really better
-- the lessons learned from this migration
-- always add regression tests after fixing a problem
-- remember to always be unicode-aware, dont rely on byte length for string length
-- when i ask to do test of rendering, don't use "contains" or comparing with substrings. I want you to compare with literal strings like this 
-let expected = "\ 
-foo 
-bar";
-- when i ask to do test of rendering, don't use "contains" or comparing with substrings. I want you to compare with an array or a vector. If your rect is 80x3, then your array should have 3 lines of 80 chars to compare againast.
-- never use any unsafe code
-- ALWAYS user assert_buffer to test rendering
-- if you have to modify a test and the test is not testing the rendering with assert_buffer, modify the test so it uses assert_buffer
-- if you have to modify a test and the test is not testing the rendering with assert_buffer, modify the test so it uses assert_buffer. this is a HARD rule.
-- mod_experinmental is gone, everything moved in mod.rs
-- from now on, what you call "Production", I want you to call it "legacy". What you call experimental, i want you to call it "current"
-- use the stuff in tui::testing when writing tests
-- remember all this as THE LEGACY NAVIGATION WAY.
-- assert_buffer doesn't need strings to be padded and dont use an expected variable, put the vec in the function call
-- after you wrote new code, always ask me if you should write unit tests. if i say yes, then target 100% coverage for the new code. In case achieving 100% would be impossible or require too much, please ask me if you should target 90% instead
+- Always add regression tests after fixing a problem
+- Use `tui::testing` utilities when writing tests
+- ALWAYS use `assert_buffer` to test rendering - this is a HARD rule
+- If modifying a test that doesn't use `assert_buffer`, update it to use `assert_buffer`
+- `assert_buffer` doesn't need strings to be padded; put the vec directly in the function call
+- When testing rendering, compare with a vector of lines, not substrings or "contains"
+- After writing new code, always ask if unit tests should be written. If yes, target 100% coverage. If that's impossible, ask about targeting 90% instead
+
+### Architecture Notes
+- The React-like framework is the current architecture (not "experimental")
+- What was previously called "legacy" navigation patterns may still be referenced in some places

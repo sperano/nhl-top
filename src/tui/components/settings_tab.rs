@@ -1,11 +1,11 @@
 use crate::config::Config;
+use crate::tui::widgets::{ListModalWidget, SettingsListWidget};
 use crate::tui::{
     component::{Component, Element},
     SettingsCategory,
 };
-use crate::tui::widgets::{ListModalWidget, SettingsListWidget};
 
-use super::{TabbedPanel, TabbedPanelProps, TabItem};
+use super::{TabItem, TabbedPanel, TabbedPanelProps};
 
 /// Props for SettingsTab component
 #[derive(Clone)]
@@ -86,7 +86,11 @@ impl SettingsTab {
     }
 
     /// Render the settings list for a category
-    fn render_settings_list(&self, category: SettingsCategory, props: &SettingsTabProps) -> Element {
+    fn render_settings_list(
+        &self,
+        category: SettingsCategory,
+        props: &SettingsTabProps,
+    ) -> Element {
         let selected_index = if props.settings_mode && category == props.selected_category {
             Some(props.selected_setting_index)
         } else {
@@ -124,9 +128,11 @@ impl SettingsTab {
             const TAB_BAR_HEIGHT: u16 = 2; // Tab labels line + separator line
             const NUM_TAB_BARS: u16 = 2; // Main tabs + settings category tabs
 
-            let max_key_len = settings_helpers::get_max_key_length(props.selected_category, &props.config) as u16;
+            let max_key_len =
+                settings_helpers::get_max_key_length(props.selected_category, &props.config) as u16;
             let position_x = MARGIN + SELECTOR_WIDTH + max_key_len + 1 + 2; // +1 for colon, +2 for spacing
-            let position_y = TAB_BAR_HEIGHT * NUM_TAB_BARS + TOP_MARGIN + props.selected_setting_index as u16;
+            let position_y =
+                TAB_BAR_HEIGHT * NUM_TAB_BARS + TOP_MARGIN + props.selected_setting_index as u16;
 
             let modal = Element::Widget(Box::new(ListModalWidget::new(
                 options,
@@ -260,10 +266,7 @@ mod tests {
             settings_tab.category_to_key(SettingsCategory::Display),
             "display"
         );
-        assert_eq!(
-            settings_tab.category_to_key(SettingsCategory::Data),
-            "data"
-        );
+        assert_eq!(settings_tab.category_to_key(SettingsCategory::Data), "data");
     }
 
     #[test]

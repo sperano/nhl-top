@@ -19,8 +19,8 @@
 //! ```
 
 use nhl_api::{Client, Standing};
-use std::sync::Arc;
 use ratatui::buffer::Buffer;
+use std::sync::Arc;
 
 /// Creates a test rendering setup with default configuration
 ///
@@ -238,9 +238,9 @@ pub fn create_test_standings_with_count(count: usize) -> Vec<Standing> {
                 &format!("T{}", i),
                 "Division",
                 "Conference",
-                0,  // wins
-                0,  // losses
-                0,  // ot
+                0,                       // wins
+                0,                       // losses
+                0,                       // ot
                 count as i32 - i as i32, // points (descending)
             )
         })
@@ -266,7 +266,16 @@ pub fn create_test_standings() -> Vec<Standing> {
         create_division_team("Capitals", "WSH", "Metropolitan", "Eastern", 10, 7, 1, 21),
         create_division_team("Islanders", "NYI", "Metropolitan", "Eastern", 9, 7, 2, 20),
         create_division_team("Flyers", "PHI", "Metropolitan", "Eastern", 8, 9, 1, 17),
-        create_division_team("Blue Jackets", "CBJ", "Metropolitan", "Eastern", 5, 11, 2, 12),
+        create_division_team(
+            "Blue Jackets",
+            "CBJ",
+            "Metropolitan",
+            "Eastern",
+            5,
+            11,
+            2,
+            12,
+        ),
         // Central (Western) - 8 teams
         create_division_team("Avalanche", "COL", "Central", "Western", 16, 2, 1, 33),
         create_division_team("Stars", "DAL", "Central", "Western", 14, 4, 2, 30),
@@ -337,9 +346,9 @@ mod tests {
 
     #[test]
     fn test_setup_test_render_with() {
-        use crate::tui::types::Tab;
         use crate::commands::standings::GroupBy;
         use crate::tui::state::AppState;
+        use crate::tui::types::Tab;
 
         let (state, _config, area, _buf) = setup_test_render_with!(|state: &mut AppState| {
             state.navigation.current_tab = Tab::Standings;
@@ -354,16 +363,9 @@ mod tests {
 
     #[test]
     fn test_format_stat_row() {
-        let row = format_stat_row!(
-            "Shots On Goal",
-            35,
-            28,
-            "█████░░░░░",
-            10
-        );
+        let row = format_stat_row!("Shots On Goal", 35, 28, "█████░░░░░", 10);
 
         let expected = "Shots On Goal         35  █████░░░░░  28 \n";
         assert_eq!(row, expected);
     }
 }
-

@@ -1,20 +1,20 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::{Modifier, Style},
     widgets::{Block, Borders, Paragraph},
-    style::{Style, Modifier},
 };
 
 use nhl_api::{PlayerLanding, Position, SeasonTotal};
 
+use super::table::TableWidget;
 use crate::config::DisplayConfig;
-use crate::tui::helpers::SeasonSorting;
 use crate::team_abbrev::common_name_to_abbrev;
+use crate::tui::helpers::SeasonSorting;
 use crate::tui::{
     component::{Component, Element, RenderableWidget},
     Alignment, CellValue, ColumnDef,
 };
-use super::table::TableWidget;
 
 /// Props for PlayerDetailPanel component
 #[derive(Clone)]
@@ -59,16 +59,22 @@ impl RenderableWidget for PlayerDetailPanelWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if self.loading {
             let text = format!("Loading player {} details...", self.player_id);
-            let widget = Paragraph::new(text)
-                .block(Block::default().borders(Borders::ALL).title("Player Detail"));
+            let widget = Paragraph::new(text).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Player Detail"),
+            );
             ratatui::widgets::Widget::render(widget, area, buf);
             return;
         }
 
         let Some(ref player) = self.player_data else {
             let text = format!("No data available for player {}", self.player_id);
-            let widget = Paragraph::new(text)
-                .block(Block::default().borders(Borders::ALL).title("Player Detail"));
+            let widget = Paragraph::new(text).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Player Detail"),
+            );
             ratatui::widgets::Widget::render(widget, area, buf);
             return;
         };
@@ -77,11 +83,13 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         let x = area.x + 2; // Left margin inside border
 
         // Render player info header
-        let full_name = format!("{} {}",
-            player.first_name.default,
-            player.last_name.default
+        let full_name = format!("{} {}", player.first_name.default, player.last_name.default);
+        buf.set_string(
+            x,
+            y,
+            &full_name,
+            Style::default().add_modifier(Modifier::BOLD),
         );
-        buf.set_string(x, y, &full_name, Style::default().add_modifier(Modifier::BOLD));
         y += 1;
 
         // Player details line 1
@@ -101,7 +109,11 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             sweater,
             player.position,
             player.shoots_catches,
-            if player.position == Position::Goalie { "Catches" } else { "Shoots" }
+            if player.position == Position::Goalie {
+                "Catches"
+            } else {
+                "Shoots"
+            }
         );
         buf.set_string(x, y, &details1, Style::default());
         y += 1;
@@ -111,10 +123,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         let height_inches = player.height_in_inches % 12;
         let details2 = format!(
             "Height: {}'{}\" | Weight: {} lbs | Born: {}",
-            height_feet,
-            height_inches,
-            player.weight_in_pounds,
-            player.birth_date
+            height_feet, height_inches, player.weight_in_pounds, player.birth_date
         );
         buf.set_string(x, y, &details2, Style::default());
         y += 2;
@@ -123,11 +132,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         if let Some(ref draft) = player.draft_details {
             let draft_info = format!(
                 "Draft: {} - Round {}, Pick {} (#{} overall) by {}",
-                draft.year,
-                draft.round,
-                draft.pick_in_round,
-                draft.overall_pick,
-                draft.team_abbrev
+                draft.year, draft.round, draft.pick_in_round, draft.overall_pick, draft.team_abbrev
             );
             buf.set_string(x, y, &draft_info, Style::default());
             y += 2;
@@ -136,7 +141,12 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         // Display career totals if available
         if let Some(ref career) = player.career_totals {
             let career_header = "CAREER TOTALS - Regular Season";
-            buf.set_string(x, y, career_header, Style::default().add_modifier(Modifier::BOLD));
+            buf.set_string(
+                x,
+                y,
+                career_header,
+                Style::default().add_modifier(Modifier::BOLD),
+            );
             y += 1;
 
             let career_stats = if player.position == Position::Goalie {
@@ -166,11 +176,15 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         }
 
         // Get regular season stats only
-        let mut season_stats: Vec<SeasonTotal> = player.season_totals
+        let mut season_stats: Vec<SeasonTotal> = player
+            .season_totals
             .as_ref()
             .map(|seasons| {
-                seasons.iter()
-                    .filter(|s| s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL")
+                seasons
+                    .iter()
+                    .filter(|s| {
+                        s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL"
+                    })
                     .cloned()
                     .collect()
             })
@@ -189,10 +203,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
                 vec![
                     ColumnDef::new("Season", 8, Alignment::Left, |s: &SeasonTotal| {
                         let season_str = s.season.to_string();
-                        let formatted = format!("{}-{}",
-                            &season_str[0..4],
-                            &season_str[4..8]
-                        );
+                        let formatted = format!("{}-{}", &season_str[0..4], &season_str[4..8]);
                         CellValue::Text(formatted)
                     }),
                     ColumnDef::new("Team", 25, Alignment::Left, |s: &SeasonTotal| {
@@ -222,10 +233,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
                 vec![
                     ColumnDef::new("Season", 8, Alignment::Left, |s: &SeasonTotal| {
                         let season_str = s.season.to_string();
-                        let formatted = format!("{}-{}",
-                            &season_str[0..4],
-                            &season_str[4..8]
-                        );
+                        let formatted = format!("{}-{}", &season_str[0..4], &season_str[4..8]);
                         CellValue::Text(formatted)
                     }),
                     ColumnDef::new("Team", 25, Alignment::Left, |s: &SeasonTotal| {
@@ -261,7 +269,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
                         CellValue::Text(
                             s.plus_minus
                                 .map(|v| format!("{:+}", v))
-                                .unwrap_or_else(|| "0".to_string())
+                                .unwrap_or_else(|| "0".to_string()),
                         )
                     }),
                     ColumnDef::new("PIM", 4, Alignment::Right, |s: &SeasonTotal| {
@@ -272,7 +280,8 @@ impl RenderableWidget for PlayerDetailPanelWidget {
 
             // Calculate windowing for scrolling
             let total_seasons = season_stats.len();
-            let available_height = area.height.saturating_sub(y - area.y).saturating_sub(4) as usize;
+            let available_height =
+                area.height.saturating_sub(y - area.y).saturating_sub(4) as usize;
             let visible_end = (self.scroll_offset + available_height).min(total_seasons);
             let show_from = self.scroll_offset.min(total_seasons);
             let show_to = visible_end;
@@ -286,7 +295,8 @@ impl RenderableWidget for PlayerDetailPanelWidget {
             let link_column = seasons_table.find_first_link_column().unwrap_or(0);
 
             // Adjust selection for windowing
-            let selected_row = self.selected_index
+            let selected_row = self
+                .selected_index
                 .filter(|&idx| idx >= show_from && idx < show_to)
                 .map(|idx| idx - show_from);
 

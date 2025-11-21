@@ -288,10 +288,16 @@ mod tests {
     #[test]
     fn test_vertical_helper() {
         let children = vec![Element::None, Element::None];
-        let element = vertical([Constraint::Length(10), Constraint::Min(5)], children.clone());
+        let element = vertical(
+            [Constraint::Length(10), Constraint::Min(5)],
+            children.clone(),
+        );
 
         match element {
-            Element::Container { children: c, layout } => {
+            Element::Container {
+                children: c,
+                layout,
+            } => {
                 assert_eq!(c.len(), 2);
                 matches!(layout, ContainerLayout::Vertical(_));
             }
@@ -305,7 +311,10 @@ mod tests {
         let element = horizontal([Constraint::Percentage(50)], children.clone());
 
         match element {
-            Element::Container { children: c, layout } => {
+            Element::Container {
+                children: c,
+                layout,
+            } => {
                 assert_eq!(c.len(), 1);
                 matches!(layout, ContainerLayout::Horizontal(_));
             }

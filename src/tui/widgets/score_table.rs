@@ -1,11 +1,11 @@
+use crate::config::DisplayConfig;
+use crate::layout_constants::{PERIOD_COL_WIDTH, SCORE_BOX_WIDTH, TEAM_ABBREV_COL_WIDTH};
+use crate::tui::widgets::RenderableWidget;
 /// ScoreTable widget - displays period-by-period score breakdown
 ///
 /// This widget renders a table showing scores for each period of a hockey game,
 /// with support for regular periods (1st, 2nd, 3rd), overtime, and shootout.
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
-use crate::config::DisplayConfig;
-use crate::tui::widgets::RenderableWidget;
-use crate::layout_constants::{SCORE_BOX_WIDTH, PERIOD_COL_WIDTH, TEAM_ABBREV_COL_WIDTH};
 
 /// Widget for displaying period-by-period scores
 #[derive(Debug, Clone)]
@@ -77,7 +77,8 @@ impl ScoreTable {
     fn calculate_padding(&self) -> usize {
         let total_cols = self.total_columns();
         // Current width = 1 (left border) + 5 (team) + (total_cols-1) * (1 sep + 4 data) + 1 (right border)
-        let current_width = 1 + TEAM_ABBREV_COL_WIDTH + (total_cols - 1) * (1 + PERIOD_COL_WIDTH) + 1;
+        let current_width =
+            1 + TEAM_ABBREV_COL_WIDTH + (total_cols - 1) * (1 + PERIOD_COL_WIDTH) + 1;
         (SCORE_BOX_WIDTH as usize).saturating_sub(current_width)
     }
 
@@ -396,14 +397,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ TOR │ -  │ -  │ -  │ -  │",
-            "│ MTL │ -  │ -  │ -  │ -  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ TOR │ -  │ -  │ -  │ -  │",
+                "│ MTL │ -  │ -  │ -  │ -  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -427,14 +431,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ BOS │ 1  │ 2  │ 0  │ 3  │",
-            "│ NYR │ 0  │ 1  │ 2  │ 3  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ BOS │ 1  │ 2  │ 0  │ 3  │",
+                "│ NYR │ 0  │ 1  │ 2  │ 3  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -458,14 +465,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ OT │ T  │",
-            "├─────┼────┼────┼────┼────┼────┤",
-            "│ EDM │ 1  │ 1  │ 1  │ 1  │ 4  │",
-            "│ VAN │ 1  │ 1  │ 1  │ 0  │ 3  │",
-            "╰─────┴────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ OT │ T  │",
+                "├─────┼────┼────┼────┼────┼────┤",
+                "│ EDM │ 1  │ 1  │ 1  │ 1  │ 4  │",
+                "│ VAN │ 1  │ 1  │ 1  │ 0  │ 3  │",
+                "╰─────┴────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -489,14 +499,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
-            "├─────┼────┼────┼────┼────┼────┼────┤",
-            "│ CAR │ 1  │ 1  │ 1  │ 0  │ 1  │ 4  │",
-            "│ NJD │ 1  │ 1  │ 1  │ 0  │ 0  │ 3  │",
-            "╰─────┴────┴────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
+                "├─────┼────┼────┼────┼────┼────┼────┤",
+                "│ CAR │ 1  │ 1  │ 1  │ 0  │ 1  │ 4  │",
+                "│ NJD │ 1  │ 1  │ 1  │ 0  │ 0  │ 3  │",
+                "╰─────┴────┴────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -520,14 +533,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ BOS │ 1  │ 1  │ -  │ 2  │",
-            "│ NYR │ 0  │ 1  │ -  │ 1  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ BOS │ 1  │ 1  │ -  │ 2  │",
+                "│ NYR │ 0  │ 1  │ -  │ 1  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -552,14 +568,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ TOR │ 1  │ -  │ -  │ 1  │",
-            "│ MTL │ 0  │ -  │ -  │ 0  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ TOR │ 1  │ -  │ -  │ 1  │",
+                "│ MTL │ 0  │ -  │ -  │ 0  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -584,14 +603,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 6, &config);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ BOS │ 1  │ 1  │ -  │ 2  │",
-            "│ NYR │ 0  │ 1  │ -  │ 1  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ BOS │ 1  │ 1  │ -  │ 2  │",
+                "│ NYR │ 0  │ 1  │ -  │ 1  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -660,36 +682,45 @@ mod tests {
 
         // Regular game: 5 columns (empty, 1, 2, 3, T)
         let buf1 = render_widget_with_config(&widget_no_ot_so, 37, 6, &config);
-        assert_buffer(&buf1, &[
-            "╭─────┬────┬────┬────┬────╮          ",
-            "│     │ 1  │ 2  │ 3  │ T  │          ",
-            "├─────┼────┼────┼────┼────┤          ",
-            "│  A  │ -  │ -  │ -  │ -  │          ",
-            "│  B  │ -  │ -  │ -  │ -  │          ",
-            "╰─────┴────┴────┴────┴────╯          ",
-        ]);
+        assert_buffer(
+            &buf1,
+            &[
+                "╭─────┬────┬────┬────┬────╮          ",
+                "│     │ 1  │ 2  │ 3  │ T  │          ",
+                "├─────┼────┼────┼────┼────┤          ",
+                "│  A  │ -  │ -  │ -  │ -  │          ",
+                "│  B  │ -  │ -  │ -  │ -  │          ",
+                "╰─────┴────┴────┴────┴────╯          ",
+            ],
+        );
 
         // With OT: 6 columns
         let buf2 = render_widget_with_config(&widget_with_ot, 37, 6, &config);
-        assert_buffer(&buf2, &[
-            "╭─────┬────┬────┬────┬────┬────╮     ",
-            "│     │ 1  │ 2  │ 3  │ OT │ T  │     ",
-            "├─────┼────┼────┼────┼────┼────┤     ",
-            "│  A  │ -  │ -  │ -  │ -  │ -  │     ",
-            "│  B  │ -  │ -  │ -  │ -  │ -  │     ",
-            "╰─────┴────┴────┴────┴────┴────╯     ",
-        ]);
+        assert_buffer(
+            &buf2,
+            &[
+                "╭─────┬────┬────┬────┬────┬────╮     ",
+                "│     │ 1  │ 2  │ 3  │ OT │ T  │     ",
+                "├─────┼────┼────┼────┼────┼────┤     ",
+                "│  A  │ -  │ -  │ -  │ -  │ -  │     ",
+                "│  B  │ -  │ -  │ -  │ -  │ -  │     ",
+                "╰─────┴────┴────┴────┴────┴────╯     ",
+            ],
+        );
 
         // With both: 7 columns
         let buf3 = render_widget_with_config(&widget_with_both, 37, 6, &config);
-        assert_buffer(&buf3, &[
-            "╭─────┬────┬────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
-            "├─────┼────┼────┼────┼────┼────┼────┤",
-            "│  A  │ -  │ -  │ -  │ -  │ -  │ -  │",
-            "│  B  │ -  │ -  │ -  │ -  │ -  │ -  │",
-            "╰─────┴────┴────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf3,
+            &[
+                "╭─────┬────┬────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
+                "├─────┼────┼────┼────┼────┼────┼────┤",
+                "│  A  │ -  │ -  │ -  │ -  │ -  │ -  │",
+                "│  B  │ -  │ -  │ -  │ -  │ -  │ -  │",
+                "╰─────┴────┴────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -715,15 +746,16 @@ mod tests {
         assert_eq!(buf.area.width, 37);
         assert_eq!(buf.area.height, 6);
 
-        assert_buffer(&buf, &[
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│  A  │ 1  │ 0  │ 0  │ 1  │",
-            "│  B  │ 0  │ 1  │ 1  │ 2  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│  A  │ 1  │ 0  │ 0  │ 1  │",
+                "│  B  │ 0  │ 1  │ 1  │ 2  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
-
 }
-

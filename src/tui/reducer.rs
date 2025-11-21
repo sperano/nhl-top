@@ -9,11 +9,7 @@ use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
 use crate::tui::reducers::{
-    reduce_navigation,
-    reduce_panels,
-    reduce_data_loading,
-    reduce_scores,
-    reduce_standings,
+    reduce_data_loading, reduce_navigation, reduce_panels, reduce_scores, reduce_standings,
 };
 
 /// Create an effect to save config to disk asynchronously
@@ -70,15 +66,21 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
         // Special cases that don't fit cleanly into sub-modules
         Action::SelectPlayer(player_id) => {
-            debug!("PLAYER: Opening player detail panel for player_id={}", player_id);
+            debug!(
+                "PLAYER: Opening player detail panel for player_id={}",
+                player_id
+            );
             let mut new_state = state;
 
             // Push PlayerDetail panel onto stack
-            new_state.navigation.panel_stack.push(super::state::PanelState {
-                panel: Panel::PlayerDetail { player_id },
-                scroll_offset: 0,
-                selected_index: Some(0), // Start with first season selected
-            });
+            new_state
+                .navigation
+                .panel_stack
+                .push(super::state::PanelState {
+                    panel: Panel::PlayerDetail { player_id },
+                    scroll_offset: 0,
+                    selected_index: Some(0), // Start with first season selected
+                });
 
             (new_state, Effect::None)
         }
@@ -88,11 +90,16 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
             let mut new_state = state;
 
             // Push TeamDetail panel onto stack
-            new_state.navigation.panel_stack.push(super::state::PanelState {
-                panel: Panel::TeamDetail { abbrev: team_abbrev },
-                scroll_offset: 0,
-                selected_index: Some(0), // Start with first player selected
-            });
+            new_state
+                .navigation
+                .panel_stack
+                .push(super::state::PanelState {
+                    panel: Panel::TeamDetail {
+                        abbrev: team_abbrev,
+                    },
+                    scroll_offset: 0,
+                    selected_index: Some(0), // Start with first player selected
+                });
 
             (new_state, Effect::None)
         }
@@ -119,7 +126,8 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
     match action {
         SettingsAction::NavigateCategoryLeft => {
             let mut new_state = state;
-            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category {
+            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category
+            {
                 SettingsCategory::Logging => SettingsCategory::Data,
                 SettingsCategory::Display => SettingsCategory::Logging,
                 SettingsCategory::Data => SettingsCategory::Display,
@@ -130,7 +138,8 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
 
         SettingsAction::NavigateCategoryRight => {
             let mut new_state = state;
-            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category {
+            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category
+            {
                 SettingsCategory::Logging => SettingsCategory::Display,
                 SettingsCategory::Display => SettingsCategory::Data,
                 SettingsCategory::Data => SettingsCategory::Logging,
@@ -173,14 +182,17 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
             let mut new_state = state;
             match key.as_str() {
                 "use_unicode" => {
-                    new_state.system.config.display.use_unicode = !new_state.system.config.display.use_unicode;
+                    new_state.system.config.display.use_unicode =
+                        !new_state.system.config.display.use_unicode;
                     // Update box_chars based on use_unicode
-                    new_state.system.config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(
-                        new_state.system.config.display.use_unicode
-                    );
+                    new_state.system.config.display.box_chars =
+                        crate::formatting::BoxChars::from_use_unicode(
+                            new_state.system.config.display.use_unicode,
+                        );
                 }
                 "western_teams_first" => {
-                    new_state.system.config.display_standings_western_first = !new_state.system.config.display_standings_western_first;
+                    new_state.system.config.display_standings_western_first =
+                        !new_state.system.config.display_standings_western_first;
                 }
                 _ => {
                     debug!("SETTINGS: Unknown boolean setting: {}", key);
@@ -335,7 +347,8 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
                             new_state.system.config.log_level = selected_value.to_string();
                         }
                         "theme" => {
-                            new_state.system.config.display.theme_name = Some(selected_value.to_string());
+                            new_state.system.config.display.theme_name =
+                                Some(selected_value.to_string());
                             new_state.system.config.display.apply_theme();
                         }
                         _ => {
@@ -485,7 +498,10 @@ mod tests {
         let (new_state, effect) = reduce(state.clone(), action);
 
         // State should remain unchanged
-        assert_eq!(new_state.navigation.current_tab, state.navigation.current_tab);
+        assert_eq!(
+            new_state.navigation.current_tab,
+            state.navigation.current_tab
+        );
         assert!(matches!(effect, Effect::None));
     }
 
@@ -497,7 +513,10 @@ mod tests {
         let (new_state, effect) = reduce(state.clone(), action);
 
         // State should remain unchanged
-        assert_eq!(new_state.navigation.current_tab, state.navigation.current_tab);
+        assert_eq!(
+            new_state.navigation.current_tab,
+            state.navigation.current_tab
+        );
         assert!(matches!(effect, Effect::None));
     }
 
@@ -509,7 +528,10 @@ mod tests {
         let (new_state, effect) = reduce(state.clone(), action);
 
         // State should remain unchanged
-        assert_eq!(new_state.navigation.current_tab, state.navigation.current_tab);
+        assert_eq!(
+            new_state.navigation.current_tab,
+            state.navigation.current_tab
+        );
         assert!(matches!(effect, Effect::None));
     }
 
@@ -523,7 +545,10 @@ mod tests {
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
         let (new_state, effect) = reduce(state, action);
 
-        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Data);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            SettingsCategory::Data
+        );
         assert_eq!(new_state.ui.settings.selected_setting_index, 0); // Reset to 0
         assert!(matches!(effect, Effect::None));
     }
@@ -537,7 +562,10 @@ mod tests {
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
         let (new_state, _) = reduce(state, action);
 
-        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Logging);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            SettingsCategory::Logging
+        );
         assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
@@ -550,7 +578,10 @@ mod tests {
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
         let (new_state, _) = reduce(state, action);
 
-        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            SettingsCategory::Display
+        );
         assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
@@ -563,7 +594,10 @@ mod tests {
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
         let (new_state, effect) = reduce(state, action);
 
-        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Display);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            SettingsCategory::Display
+        );
         assert_eq!(new_state.ui.settings.selected_setting_index, 0);
         assert!(matches!(effect, Effect::None));
     }
@@ -576,7 +610,10 @@ mod tests {
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
         let (new_state, _) = reduce(state, action);
 
-        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Data);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            SettingsCategory::Data
+        );
         assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
@@ -588,7 +625,10 @@ mod tests {
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
         let (new_state, _) = reduce(state, action);
 
-        assert_eq!(new_state.ui.settings.selected_category, SettingsCategory::Logging);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            SettingsCategory::Logging
+        );
         assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
@@ -660,8 +700,14 @@ mod tests {
         let (new_state, effect) = reduce(state.clone(), action);
 
         // State should remain unchanged
-        assert_eq!(new_state.ui.settings.selected_category, state.ui.settings.selected_category);
-        assert_eq!(new_state.ui.settings.selected_setting_index, state.ui.settings.selected_setting_index);
+        assert_eq!(
+            new_state.ui.settings.selected_category,
+            state.ui.settings.selected_category
+        );
+        assert_eq!(
+            new_state.ui.settings.selected_setting_index,
+            state.ui.settings.selected_setting_index
+        );
         assert!(matches!(effect, Effect::None));
     }
 
@@ -675,7 +721,10 @@ mod tests {
 
         let (new_state, effect) = reduce(state, action);
 
-        assert_eq!(new_state.system.status_message, Some("Test error message".to_string()));
+        assert_eq!(
+            new_state.system.status_message,
+            Some("Test error message".to_string())
+        );
         assert!(new_state.system.status_is_error);
         assert!(matches!(effect, Effect::None));
     }
@@ -690,7 +739,10 @@ mod tests {
 
         let (new_state, effect) = reduce(state, action);
 
-        assert_eq!(new_state.system.status_message, Some("Configuration saved".to_string()));
+        assert_eq!(
+            new_state.system.status_message,
+            Some("Configuration saved".to_string())
+        );
         assert!(!new_state.system.status_is_error);
         assert!(matches!(effect, Effect::None));
     }
@@ -698,12 +750,16 @@ mod tests {
     #[test]
     fn test_toggle_boolean_returns_save_effect() {
         let state = AppState::default();
-        let action = Action::SettingsAction(SettingsAction::ToggleBoolean("use_unicode".to_string()));
+        let action =
+            Action::SettingsAction(SettingsAction::ToggleBoolean("use_unicode".to_string()));
 
         let (new_state, effect) = reduce(state.clone(), action);
 
         // Config should be toggled
-        assert_eq!(new_state.system.config.display.use_unicode, !state.system.config.display.use_unicode);
+        assert_eq!(
+            new_state.system.config.display.use_unicode,
+            !state.system.config.display.use_unicode
+        );
 
         // Should return an Async effect (save_config_effect)
         assert!(matches!(effect, Effect::Async(_)));
@@ -714,20 +770,26 @@ mod tests {
         let mut state = AppState::default();
         state.system.config.display.use_unicode = true;
 
-        let action = Action::SettingsAction(SettingsAction::ToggleBoolean("use_unicode".to_string()));
+        let action =
+            Action::SettingsAction(SettingsAction::ToggleBoolean("use_unicode".to_string()));
 
         let (new_state, _) = reduce(state, action);
 
         // Should toggle to false
         assert!(!new_state.system.config.display.use_unicode);
         // box_chars should be updated to ASCII
-        assert_eq!(new_state.system.config.display.box_chars, crate::formatting::BoxChars::ascii());
+        assert_eq!(
+            new_state.system.config.display.box_chars,
+            crate::formatting::BoxChars::ascii()
+        );
     }
 
     #[test]
     fn test_toggle_boolean_western_teams_first() {
         let state = AppState::default();
-        let action = Action::SettingsAction(SettingsAction::ToggleBoolean("western_teams_first".to_string()));
+        let action = Action::SettingsAction(SettingsAction::ToggleBoolean(
+            "western_teams_first".to_string(),
+        ));
 
         let (new_state, _) = reduce(state.clone(), action);
 
@@ -740,12 +802,16 @@ mod tests {
     #[test]
     fn test_toggle_boolean_unknown_setting() {
         let state = AppState::default();
-        let action = Action::SettingsAction(SettingsAction::ToggleBoolean("unknown_setting".to_string()));
+        let action =
+            Action::SettingsAction(SettingsAction::ToggleBoolean("unknown_setting".to_string()));
 
         let (new_state, _) = reduce(state.clone(), action);
 
         // State should not change for unknown settings
-        assert_eq!(new_state.system.config.display.use_unicode, state.system.config.display.use_unicode);
+        assert_eq!(
+            new_state.system.config.display.use_unicode,
+            state.system.config.display.use_unicode
+        );
         assert_eq!(
             new_state.system.config.display_standings_western_first,
             state.system.config.display_standings_western_first
@@ -757,7 +823,8 @@ mod tests {
         let mut state = AppState::default();
         state.ui.settings.edit_buffer = "120".to_string();
 
-        let action = Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
+        let action =
+            Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
 
         let (new_state, effect) = reduce(state, action);
 
@@ -801,7 +868,8 @@ mod tests {
         state.ui.settings.edit_buffer = "invalid".to_string();
         state.system.config.refresh_interval = 60;
 
-        let action = Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
+        let action =
+            Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
 
         let (new_state, _) = reduce(state, action);
 
@@ -843,7 +911,10 @@ mod tests {
 
         let (new_state, _) = reduce(state, action);
 
-        assert_eq!(new_state.system.config.display.theme_name, Some("orange".to_string()));
+        assert_eq!(
+            new_state.system.config.display.theme_name,
+            Some("orange".to_string())
+        );
     }
 
     #[test]

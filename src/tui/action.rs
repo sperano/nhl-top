@@ -15,8 +15,8 @@ pub enum Action {
     NavigateTab(Tab),
     NavigateTabLeft,
     NavigateTabRight,
-    EnterContentFocus,  // Down key: move focus from tab bar to content
-    ExitContentFocus,   // Up key: move focus from content back to tab bar
+    EnterContentFocus, // Down key: move focus from tab bar to content
+    ExitContentFocus,  // Up key: move focus from content back to tab bar
     PushPanel(Panel),
     PopPanel,
     ToggleCommandPalette,
@@ -109,14 +109,13 @@ pub enum SettingsAction {
     AppendChar(char),
     DeleteChar,
     // Modal navigation actions
-    ModalMoveUp,    // Move selection up in modal
-    ModalMoveDown,  // Move selection down in modal
-    ModalConfirm,   // Confirm modal selection
-    ModalCancel,    // Cancel modal without selecting
+    ModalMoveUp,        // Move selection up in modal
+    ModalMoveDown,      // Move selection down in modal
+    ModalConfirm,       // Confirm modal selection
+    ModalCancel,        // Cancel modal without selecting
     CommitEdit(String), // Setting key to commit edit
     UpdateConfig(Box<crate::config::Config>),
 }
-
 
 impl Action {
     /// Returns true if this action should trigger a re-render

@@ -1,13 +1,13 @@
-pub mod standings;
 pub mod boxscore;
+pub mod franchises;
 pub mod schedule;
 pub mod scores;
 pub mod scores_format;
-pub mod franchises;
+pub mod standings;
 
-use nhl_api::GameDate;
-use chrono::NaiveDate;
 use anyhow::{Context, Result};
+use chrono::NaiveDate;
+use nhl_api::GameDate;
 
 /// Parse optional date string to GameDate, defaulting to today
 ///

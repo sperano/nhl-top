@@ -1,13 +1,13 @@
-use nhl::tui;
 use nhl::commands;
 use nhl::config;
 use nhl::data_provider::NHLDataProvider;
+use nhl::tui;
 
 #[cfg(feature = "development")]
 use nhl::dev::mock_client::MockClient;
 
-use nhl_api::Client;
 use clap::{Parser, Subcommand, ValueEnum};
+use nhl_api::Client;
 use std::sync::Arc;
 use tracing::Level;
 use tracing_subscriber::FmtSubscriber;
@@ -21,7 +21,10 @@ const DEFAULT_LOG_FILE: &str = "/dev/null";
 
 #[derive(Parser)]
 #[command(name = "nhl")]
-#[command(about = "NHL stats and standings CLI", long_about = "NHL stats and standings CLI\n\nIf no command is specified, the program starts in interactive mode.")]
+#[command(
+    about = "NHL stats and standings CLI",
+    long_about = "NHL stats and standings CLI\n\nIf no command is specified, the program starts in interactive mode."
+)]
 struct Cli {
     /// Set log level (trace, debug, info, warn, error)
     #[arg(short = 'L', long, global = true, default_value = DEFAULT_LOG_LEVEL)]
@@ -163,21 +166,33 @@ fn handle_config_command() {
         None => ("Unable to determine config path".to_string(), false),
     };
 
-    println!("Configuration File: {} (Exists: {})", path_str, if exists { "yes" } else { "no" });
+    println!(
+        "Configuration File: {} (Exists: {})",
+        path_str,
+        if exists { "yes" } else { "no" }
+    );
     println!();
     println!("Current Configuration:");
     println!("=====================");
     println!("log_level: {}", cfg.log_level);
     println!("log_file: {}", cfg.log_file);
     println!("refresh_interval: {} seconds", cfg.refresh_interval);
-    println!("display_standings_western_first: {}", cfg.display_standings_western_first);
+    println!(
+        "display_standings_western_first: {}",
+        cfg.display_standings_western_first
+    );
     println!("time_format: {}", cfg.time_format);
     println!();
     println!("[theme]");
     println!("selection_fg: {:?}", cfg.display.selection_fg);
-    println!("unfocused_selection_fg: {:?}{}",
+    println!(
+        "unfocused_selection_fg: {:?}{}",
         cfg.display.unfocused_selection_fg(),
-        if cfg.display.unfocused_selection_fg.is_none() { " (auto: 50% darker)" } else { "" }
+        if cfg.display.unfocused_selection_fg.is_none() {
+            " (auto: 50% darker)"
+        } else {
+            ""
+        }
     );
 }
 
@@ -207,25 +222,21 @@ async fn run_tui_mode(config: config::Config, mock_mode: bool) -> Result<(), std
 }
 
 /// Execute a CLI command by routing it to the appropriate command handler
-async fn execute_command(client: &dyn NHLDataProvider, command: Commands, config: &config::Config) -> anyhow::Result<()> {
+async fn execute_command(
+    client: &dyn NHLDataProvider,
+    command: Commands,
+    config: &config::Config,
+) -> anyhow::Result<()> {
     match command {
         Commands::Config => unreachable!("Config command should be handled before execute_command"),
         Commands::Standings { season, date, by } => {
             let group_by = by.to_standings_groupby();
             commands::standings::run(client, season, date, group_by, config).await
         }
-        Commands::Boxscore { game_id } => {
-            commands::boxscore::run(client, game_id, config).await
-        }
-        Commands::Schedule { date } => {
-            commands::schedule::run(client, date).await
-        }
-        Commands::Scores { date } => {
-            commands::scores::run(client, date).await
-        }
-        Commands::Franchises => {
-            commands::franchises::run(client).await
-        }
+        Commands::Boxscore { game_id } => commands::boxscore::run(client, game_id, config).await,
+        Commands::Schedule { date } => commands::schedule::run(client, date).await,
+        Commands::Scores { date } => commands::scores::run(client, date).await,
+        Commands::Franchises => commands::franchises::run(client).await,
     }
 }
 

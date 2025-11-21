@@ -74,7 +74,9 @@ impl RenderableWidget for StatusBarWidget {
 
         // Calculate where the vertical bar should be
         let right_text_with_margin = format!("{} ", right_text);
-        let bar_position = area.width.saturating_sub(right_text_with_margin.width() as u16 + 1);
+        let bar_position = area
+            .width
+            .saturating_sub(right_text_with_margin.width() as u16 + 1);
 
         // Determine styles based on theme
         let separator_style = if let Some(theme) = &config.theme {
@@ -91,7 +93,10 @@ impl RenderableWidget for StatusBarWidget {
 
         // First line: horizontal separator with connector
         let left_part = config.box_chars.horizontal.repeat(bar_position as usize);
-        let right_part = config.box_chars.horizontal.repeat((area.width.saturating_sub(bar_position + 1)) as usize);
+        let right_part = config
+            .box_chars
+            .horizontal
+            .repeat((area.width.saturating_sub(bar_position + 1)) as usize);
         let line1 = Line::from(vec![
             Span::styled(left_part, separator_style),
             Span::styled(&config.box_chars.connector3, separator_style),
@@ -106,10 +111,7 @@ impl RenderableWidget for StatusBarWidget {
         if !left_text.is_empty() {
             line2_spans.push(Span::raw(" "));
             if self.is_error {
-                line2_spans.push(Span::styled(
-                    &left_text,
-                    Style::default().fg(Color::Red),
-                ));
+                line2_spans.push(Span::styled(&left_text, Style::default().fg(Color::Red)));
             } else {
                 line2_spans.push(Span::styled(&left_text, text_style));
             }
@@ -172,7 +174,11 @@ mod tests {
         match element {
             Element::Widget(widget) => {
                 let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-                widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+                widget.render(
+                    Rect::new(0, 0, RENDER_WIDTH, 2),
+                    &mut buf,
+                    &DisplayConfig::default(),
+                );
                 assert_buffer(&buf, &[
                     "────────────────────────────────────────────────────────────────────┬───────────",
                     "                                                                    │ Loading...",
@@ -197,7 +203,11 @@ mod tests {
         match element {
             Element::Widget(widget) => {
                 let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-                widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+                widget.render(
+                    Rect::new(0, 0, RENDER_WIDTH, 2),
+                    &mut buf,
+                    &DisplayConfig::default(),
+                );
                 assert_buffer(&buf, &[
                     "────────────────────────────────────────────────────────────────┬───────────────",
                     "                                                                │ Refresh in 55s",
@@ -217,14 +227,22 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
         // Error message should appear on left side
-        let line2 = (0..RENDER_WIDTH).map(|x| {
-            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
-        }).collect::<String>();
+        let line2 = (0..RENDER_WIDTH)
+            .map(|x| buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or(""))
+            .collect::<String>();
 
-        assert!(line2.contains("ERROR: Network timeout"), "Error message not found in: {}", line2);
+        assert!(
+            line2.contains("ERROR: Network timeout"),
+            "Error message not found in: {}",
+            line2
+        );
     }
 
     #[test]
@@ -237,14 +255,22 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
         // Should show "Refreshing..." when time has elapsed
-        let line2 = (0..RENDER_WIDTH).map(|x| {
-            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
-        }).collect::<String>();
+        let line2 = (0..RENDER_WIDTH)
+            .map(|x| buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or(""))
+            .collect::<String>();
 
-        assert!(line2.contains("Refreshing..."), "Refreshing message not found in: {}", line2);
+        assert!(
+            line2.contains("Refreshing..."),
+            "Refreshing message not found in: {}",
+            line2
+        );
     }
 
     #[test]
@@ -258,14 +284,22 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
         // Should show "Refresh in ?s" when duration_since fails
-        let line2 = (0..RENDER_WIDTH).map(|x| {
-            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
-        }).collect::<String>();
+        let line2 = (0..RENDER_WIDTH)
+            .map(|x| buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or(""))
+            .collect::<String>();
 
-        assert!(line2.contains("Refresh in ?s"), "Error fallback not found in: {}", line2);
+        assert!(
+            line2.contains("Refresh in ?s"),
+            "Error fallback not found in: {}",
+            line2
+        );
     }
 
     #[test]
@@ -303,12 +337,19 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
-        assert_buffer(&buf, &[
-            "────────────────────────────────────────────────────────────────┬───────────────",
-            " Configuration saved                                            │ Refresh in 55s",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "────────────────────────────────────────────────────────────────┬───────────────",
+                " Configuration saved                                            │ Refresh in 55s",
+            ],
+        );
 
         // Verify success message is NOT styled red
         if let Some(cell) = buf.cell((1, 1)) {
@@ -326,12 +367,19 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
-        assert_buffer(&buf, &[
-            "────────────────────────────────────────────────────────────────┬───────────────",
-            " Failed to save config                                          │ Refresh in 55s",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "────────────────────────────────────────────────────────────────┬───────────────",
+                " Failed to save config                                          │ Refresh in 55s",
+            ],
+        );
 
         // Verify error message IS styled red
         if let Some(cell) = buf.cell((1, 1)) {
@@ -349,12 +397,19 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
-        assert_buffer(&buf, &[
-            "────────────────────────────────────────────────────────────────┬───────────────",
-            "                                                                │ Refresh in 55s",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "────────────────────────────────────────────────────────────────┬───────────────",
+                "                                                                │ Refresh in 55s",
+            ],
+        );
     }
 
     #[test]
@@ -377,7 +432,10 @@ mod tests {
         // Verify separator characters are styled with fg3
         // Check horizontal line character on line 1
         if let Some(cell) = buf.cell((0, 0)) {
-            assert_eq!(cell.fg, THEME_ORANGE.fg3, "Horizontal separator should use theme fg3");
+            assert_eq!(
+                cell.fg, THEME_ORANGE.fg3,
+                "Horizontal separator should use theme fg3"
+            );
         }
 
         // Check connector character (┬) on line 1
@@ -387,7 +445,10 @@ mod tests {
 
         // Check vertical bar character (│) on line 2
         if let Some(cell) = buf.cell((64, 1)) {
-            assert_eq!(cell.fg, THEME_ORANGE.fg3, "Vertical bar should use theme fg3");
+            assert_eq!(
+                cell.fg, THEME_ORANGE.fg3,
+                "Vertical bar should use theme fg3"
+            );
         }
     }
 
@@ -408,12 +469,20 @@ mod tests {
         // Verify separator characters use default color (Reset)
         // Check horizontal line character on line 1
         if let Some(cell) = buf.cell((0, 0)) {
-            assert_eq!(cell.fg, Color::Reset, "Separator should use default color when no theme");
+            assert_eq!(
+                cell.fg,
+                Color::Reset,
+                "Separator should use default color when no theme"
+            );
         }
 
         // Check vertical bar character (│) on line 2
         if let Some(cell) = buf.cell((64, 1)) {
-            assert_eq!(cell.fg, Color::Reset, "Vertical bar should use default color when no theme");
+            assert_eq!(
+                cell.fg,
+                Color::Reset,
+                "Vertical bar should use default color when no theme"
+            );
         }
     }
 
@@ -436,13 +505,19 @@ mod tests {
 
         // Verify success message uses fg2
         if let Some(cell) = buf.cell((1, 1)) {
-            assert_eq!(cell.fg, THEME_ORANGE.fg2, "Success message should use theme fg2");
+            assert_eq!(
+                cell.fg, THEME_ORANGE.fg2,
+                "Success message should use theme fg2"
+            );
         }
 
         // Verify refresh text uses fg2
         // Find the refresh text (right side of the vertical bar)
         if let Some(cell) = buf.cell((66, 1)) {
-            assert_eq!(cell.fg, THEME_ORANGE.fg2, "Refresh text should use theme fg2");
+            assert_eq!(
+                cell.fg, THEME_ORANGE.fg2,
+                "Refresh text should use theme fg2"
+            );
         }
     }
 
@@ -465,8 +540,15 @@ mod tests {
 
         // Verify error message still uses Color::Red, not theme fg2
         if let Some(cell) = buf.cell((1, 1)) {
-            assert_eq!(cell.fg, Color::Red, "Error message should use Color::Red even with theme set");
-            assert_ne!(cell.fg, THEME_ORANGE.fg2, "Error message should NOT use theme fg2");
+            assert_eq!(
+                cell.fg,
+                Color::Red,
+                "Error message should use Color::Red even with theme set"
+            );
+            assert_ne!(
+                cell.fg, THEME_ORANGE.fg2,
+                "Error message should NOT use theme fg2"
+            );
         }
     }
 
@@ -486,12 +568,20 @@ mod tests {
 
         // Verify success message uses default color when no theme
         if let Some(cell) = buf.cell((1, 1)) {
-            assert_eq!(cell.fg, Color::Reset, "Success message should use default color when no theme");
+            assert_eq!(
+                cell.fg,
+                Color::Reset,
+                "Success message should use default color when no theme"
+            );
         }
 
         // Verify refresh text uses default color when no theme
         if let Some(cell) = buf.cell((66, 1)) {
-            assert_eq!(cell.fg, Color::Reset, "Refresh text should use default color when no theme");
+            assert_eq!(
+                cell.fg,
+                Color::Reset,
+                "Refresh text should use default color when no theme"
+            );
         }
     }
 
@@ -505,15 +595,22 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
         // Should render without panic
         // The vertical bar should still be positioned correctly
-        let line1 = (0..RENDER_WIDTH).map(|x| {
-            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
-        }).collect::<String>();
+        let line1 = (0..RENDER_WIDTH)
+            .map(|x| buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or(""))
+            .collect::<String>();
 
-        assert!(line1.contains("Updated"), "Status message should be visible");
+        assert!(
+            line1.contains("Updated"),
+            "Status message should be visible"
+        );
         assert!(line1.contains("│"), "Vertical separator should be present");
     }
 
@@ -527,15 +624,25 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
         // Should render without panic or incorrect layout
-        let line1 = (0..RENDER_WIDTH).map(|x| {
-            buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or("")
-        }).collect::<String>();
+        let line1 = (0..RENDER_WIDTH)
+            .map(|x| buf.cell((x, 1)).map(|c| c.symbol()).unwrap_or(""))
+            .collect::<String>();
 
-        assert!(line1.contains("│"), "Vertical separator should be present despite CJK characters");
-        assert!(line1.contains("Refresh in"), "Refresh text should still be visible");
+        assert!(
+            line1.contains("│"),
+            "Vertical separator should be present despite CJK characters"
+        );
+        assert!(
+            line1.contains("Refresh in"),
+            "Refresh text should still be visible"
+        );
     }
 
     #[test]
@@ -548,7 +655,11 @@ mod tests {
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, RENDER_WIDTH, 2));
-        widget.render(Rect::new(0, 0, RENDER_WIDTH, 2), &mut buf, &DisplayConfig::default());
+        widget.render(
+            Rect::new(0, 0, RENDER_WIDTH, 2),
+            &mut buf,
+            &DisplayConfig::default(),
+        );
 
         // Should render without panic
         // Layout should still be functional

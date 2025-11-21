@@ -94,21 +94,30 @@ mod tests {
 
     #[test]
     fn test_format_header_single_line_unicode() {
-        let display = DisplayConfig { use_unicode: true, ..Default::default() };
+        let display = DisplayConfig {
+            use_unicode: true,
+            ..Default::default()
+        };
         let result = format_header("Test Header", false, &display);
         assert_eq!(result, "Test Header\n───────────\n");
     }
 
     #[test]
     fn test_format_header_double_line_unicode() {
-        let display = DisplayConfig { use_unicode: true, ..Default::default() };
+        let display = DisplayConfig {
+            use_unicode: true,
+            ..Default::default()
+        };
         let result = format_header("Test Header", true, &display);
         assert_eq!(result, "Test Header\n═══════════\n");
     }
 
     #[test]
     fn test_format_header_single_line_ascii() {
-        let mut display = DisplayConfig { use_unicode: false, ..Default::default() };
+        let mut display = DisplayConfig {
+            use_unicode: false,
+            ..Default::default()
+        };
         display.box_chars = BoxChars::ascii();
         let result = format_header("Test Header", false, &display);
         assert_eq!(result, "Test Header\n-----------\n");
@@ -116,7 +125,10 @@ mod tests {
 
     #[test]
     fn test_format_header_double_line_ascii() {
-        let mut display = DisplayConfig { use_unicode: false, ..Default::default() };
+        let mut display = DisplayConfig {
+            use_unicode: false,
+            ..Default::default()
+        };
         display.box_chars = BoxChars::ascii();
         let result = format_header("Test Header", true, &display);
         assert_eq!(result, "Test Header\n===========\n");
@@ -124,15 +136,24 @@ mod tests {
 
     #[test]
     fn test_empty_header() {
-        let display = DisplayConfig { use_unicode: true, ..Default::default() };
+        let display = DisplayConfig {
+            use_unicode: true,
+            ..Default::default()
+        };
         let result = format_header("", false, &display);
         assert_eq!(result, "\n\n");
     }
 
     #[test]
     fn test_long_header() {
-        let display = DisplayConfig { use_unicode: true, ..Default::default() };
+        let display = DisplayConfig {
+            use_unicode: true,
+            ..Default::default()
+        };
         let result = format_header("This is a very long header text", true, &display);
-        assert_eq!(result, "This is a very long header text\n═══════════════════════════════\n");
+        assert_eq!(
+            result,
+            "This is a very long header text\n═══════════════════════════════\n"
+        );
     }
 }

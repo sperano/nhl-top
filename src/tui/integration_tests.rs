@@ -7,14 +7,10 @@
 mod tests {
     use std::sync::Arc;
 
-    use crate::tui::{
-        action::Action,
-        effects::DataEffects,
-        runtime::Runtime,
-        state::AppState,
-        Tab,
-    };
     use crate::tui::testing::create_client;
+    use crate::tui::{
+        action::Action, effects::DataEffects, runtime::Runtime, state::AppState, Tab,
+    };
 
     fn create_test_runtime() -> Runtime {
         let client = create_client();
@@ -22,7 +18,6 @@ mod tests {
         let state = AppState::default();
         Runtime::new(state, data_effects)
     }
-
 
     #[tokio::test]
     async fn test_refresh_data_triggers_loading_state() {
@@ -52,7 +47,17 @@ mod tests {
 
         // State should now have standings
         assert!(runtime.state().data.standings.as_ref().is_some());
-        assert_eq!(runtime.state().data.standings.as_ref().as_ref().unwrap().len(), 0);
+        assert_eq!(
+            runtime
+                .state()
+                .data
+                .standings
+                .as_ref()
+                .as_ref()
+                .unwrap()
+                .len(),
+            0
+        );
     }
 
     #[tokio::test]

@@ -2,9 +2,8 @@
 use crate::data_provider::NHLDataProvider;
 use async_trait::async_trait;
 use nhl_api::{
-    GameDate, GameType, NHLApiError,
-    Boxscore, ClubStats, DailySchedule, Franchise, GameMatchup, PlayerLanding, Standing,
-    SeasonGameTypes,
+    Boxscore, ClubStats, DailySchedule, Franchise, GameDate, GameMatchup, GameType, NHLApiError,
+    PlayerLanding, SeasonGameTypes, Standing,
 };
 use tracing::info;
 
@@ -34,7 +33,10 @@ impl NHLDataProvider for MockClient {
     }
 
     async fn landing(&self, game_id: i64) -> Result<GameMatchup, NHLApiError> {
-        info!("MockClient: Returning mock game matchup for game {}", game_id);
+        info!(
+            "MockClient: Returning mock game matchup for game {}",
+            game_id
+        );
         Ok(fixtures::create_mock_game_matchup(game_id))
     }
 
@@ -53,10 +55,17 @@ impl NHLDataProvider for MockClient {
             "MockClient: Returning mock club stats for {} {} {}",
             team_abbrev, season, game_type
         );
-        Ok(fixtures::create_mock_club_stats(team_abbrev, season, game_type))
+        Ok(fixtures::create_mock_club_stats(
+            team_abbrev,
+            season,
+            game_type,
+        ))
     }
 
-    async fn club_stats_season(&self, team_abbr: &str) -> Result<Vec<SeasonGameTypes>, NHLApiError> {
+    async fn club_stats_season(
+        &self,
+        team_abbr: &str,
+    ) -> Result<Vec<SeasonGameTypes>, NHLApiError> {
         info!("MockClient: Returning mock seasons for {}", team_abbr);
         Ok(vec![
             SeasonGameTypes {
@@ -71,7 +80,10 @@ impl NHLDataProvider for MockClient {
     }
 
     async fn player_landing(&self, player_id: i64) -> Result<PlayerLanding, NHLApiError> {
-        info!("MockClient: Returning mock player landing for {}", player_id);
+        info!(
+            "MockClient: Returning mock player landing for {}",
+            player_id
+        );
         Ok(fixtures::create_mock_player_landing(player_id))
     }
 
@@ -80,14 +92,26 @@ impl NHLDataProvider for MockClient {
         Ok(fixtures::create_mock_franchises())
     }
 
-    async fn league_standings_for_season(&self, season_id: i64) -> Result<Vec<Standing>, NHLApiError> {
-        info!("MockClient: Returning mock standings for season {}", season_id);
+    async fn league_standings_for_season(
+        &self,
+        season_id: i64,
+    ) -> Result<Vec<Standing>, NHLApiError> {
+        info!(
+            "MockClient: Returning mock standings for season {}",
+            season_id
+        );
         // Just return current mock standings for any season
         Ok(fixtures::create_mock_standings())
     }
 
-    async fn league_standings_for_date(&self, date: &GameDate) -> Result<Vec<Standing>, NHLApiError> {
-        info!("MockClient: Returning mock standings for date {}", date.to_api_string());
+    async fn league_standings_for_date(
+        &self,
+        date: &GameDate,
+    ) -> Result<Vec<Standing>, NHLApiError> {
+        info!(
+            "MockClient: Returning mock standings for date {}",
+            date.to_api_string()
+        );
         // Just return current mock standings for any date
         Ok(fixtures::create_mock_standings())
     }

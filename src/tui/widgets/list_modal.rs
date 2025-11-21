@@ -1,3 +1,5 @@
+use crate::config::DisplayConfig;
+use crate::tui::component::RenderableWidget;
 /// ListModalWidget - renders a centered popup modal for list selection
 ///
 /// Features:
@@ -12,8 +14,6 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Widget},
 };
 use unicode_width::UnicodeWidthStr;
-use crate::config::DisplayConfig;
-use crate::tui::component::RenderableWidget;
 
 /// Widget for rendering a list selection modal
 #[derive(Clone)]
@@ -25,7 +25,12 @@ pub struct ListModalWidget {
 }
 
 impl ListModalWidget {
-    pub fn new(options: Vec<String>, selected_index: usize, position_x: u16, position_y: u16) -> Self {
+    pub fn new(
+        options: Vec<String>,
+        selected_index: usize,
+        position_x: u16,
+        position_y: u16,
+    ) -> Self {
         Self {
             options,
             selected_index,
@@ -142,8 +147,8 @@ pub fn render_list_modal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::widgets::testing::test_config;
     use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
+    use crate::tui::widgets::testing::test_config;
 
     #[test]
     fn test_list_modal_basic_render() {
@@ -154,13 +159,9 @@ mod tests {
         let options = vec!["Option 1".to_string(), "Option 2".to_string()];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            10, // position_x
+            &options, 0, 10, // position_x
             5,  // position_y
-            area,
-            &mut buf,
-            &config,
+            area, &mut buf, &config,
         );
 
         // Modal should be positioned at specified coordinates
@@ -177,28 +178,27 @@ mod tests {
         let options = vec!["Option 1".to_string()];
 
         render_list_modal(
-            &options,
-            0,
-            5,  // position_x
-            2,  // position_y
-            area,
-            &mut buf,
-            &config,
+            &options, 0, 5, // position_x
+            2, // position_y
+            area, &mut buf, &config,
         );
 
         // Modal should appear at position with option immediately inside border (no title)
-        assert_buffer(&buf, &[
-            "",
-            "",
-            "     ┌────────────┐",
-            "     │ ▶ Option 1 │",
-            "     └────────────┘",
-            "",
-            "",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "",
+                "",
+                "     ┌────────────┐",
+                "     │ ▶ Option 1 │",
+                "     └────────────┘",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     #[test]
@@ -210,26 +210,26 @@ mod tests {
         let options = vec!["First".to_string(), "Second".to_string()];
 
         render_list_modal(
-            &options,
-            0, // Select first
+            &options, 0, // Select first
             5, // position_x
             1, // position_y
-            area,
-            &mut buf,
-            &config,
+            area, &mut buf, &config,
         );
 
         // First option should have selection indicator (▸)
-        assert_buffer(&buf, &[
-            "",
-            "     ┌──────────┐",
-            "     │ ▶ First  │",
-            "     │   Second │",
-            "     └──────────┘",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "",
+                "     ┌──────────┐",
+                "     │ ▶ First  │",
+                "     │   Second │",
+                "     └──────────┘",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     #[test]
@@ -241,26 +241,26 @@ mod tests {
         let options = vec!["First".to_string(), "Second".to_string()];
 
         render_list_modal(
-            &options,
-            1, // Select second
+            &options, 1, // Select second
             5, // position_x
             1, // position_y
-            area,
-            &mut buf,
-            &config,
+            area, &mut buf, &config,
         );
 
         // Second option should have selection indicator (▸)
-        assert_buffer(&buf, &[
-            "",
-            "     ┌──────────┐",
-            "     │   First  │",
-            "     │ ▶ Second │",
-            "     └──────────┘",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "",
+                "     ┌──────────┐",
+                "     │   First  │",
+                "     │ ▶ Second │",
+                "     └──────────┘",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     #[test]
@@ -275,13 +275,9 @@ mod tests {
         ];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            10, // position_x
+            &options, 0, 10, // position_x
             5,  // position_y
-            area,
-            &mut buf,
-            &config,
+            area, &mut buf, &config,
         );
 
         // Width should accommodate the longest option
@@ -301,13 +297,9 @@ mod tests {
         let options: Vec<String> = vec![];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            10, // position_x
+            &options, 0, 10, // position_x
             5,  // position_y
-            area,
-            &mut buf,
-            &config,
+            area, &mut buf, &config,
         );
 
         // Should still render with minimal height (borders only, no title)
@@ -323,13 +315,9 @@ mod tests {
         let options = vec!["Option".to_string()];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            15, // position_x
+            &options, 0, 15, // position_x
             10, // position_y
-            area,
-            &mut buf,
-            &config,
+            area, &mut buf, &config,
         );
 
         // Modal should be positioned at specified coordinates
@@ -404,13 +392,9 @@ mod tests {
         ];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            5,  // position_x
-            2,  // position_y
-            area,
-            &mut buf,
-            &config,
+            &options, 0, 5, // position_x
+            2, // position_y
+            area, &mut buf, &config,
         );
 
         // Modal height should be limited by available area
@@ -437,19 +421,18 @@ mod tests {
         let options = vec!["Hockey 🏒".to_string(), "Goal 🥅".to_string()];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            5,  // position_x
-            2,  // position_y
-            area,
-            &mut buf,
-            &config,
+            &options, 0, 5, // position_x
+            2, // position_y
+            area, &mut buf, &config,
         );
 
         // Modal should accommodate the display width properly
         // "Hockey 🏒" has display width of 9 (6 + 1 space + 2 for emoji)
         // With +6 for borders and margins, modal should be ~15 wide
-        assert!(modal_area.width >= 15, "Modal width should accommodate emoji display width");
+        assert!(
+            modal_area.width >= 15,
+            "Modal width should accommodate emoji display width"
+        );
     }
 
     #[test]
@@ -462,18 +445,17 @@ mod tests {
         let options = vec!["日本語".to_string(), "中文".to_string()];
 
         let modal_area = render_list_modal(
-            &options,
-            0,
-            5,  // position_x
-            2,  // position_y
-            area,
-            &mut buf,
-            &config,
+            &options, 0, 5, // position_x
+            2, // position_y
+            area, &mut buf, &config,
         );
 
         // "日本語" has display width of 6 (3 chars × 2 width each)
         // With +6 for borders and margins, modal should be ~12 wide
-        assert!(modal_area.width >= 12, "Modal width should accommodate CJK character display width");
+        assert!(
+            modal_area.width >= 12,
+            "Modal width should accommodate CJK character display width"
+        );
     }
 
     #[test]
@@ -490,13 +472,9 @@ mod tests {
         ];
 
         let modal_area = render_list_modal(
-            &options,
-            1,
-            5,  // position_x
-            2,  // position_y
-            area,
-            &mut buf,
-            &config,
+            &options, 1, 5, // position_x
+            2, // position_y
+            area, &mut buf, &config,
         );
 
         // Should render without panic or overflow

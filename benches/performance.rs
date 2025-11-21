@@ -1,9 +1,9 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use nhl::tui::reducers::standings_layout::build_standings_layout;
-use nhl::tui::reducer::reduce;
-use nhl::tui::state::AppState;
-use nhl::tui::action::Action;
 use nhl::commands::standings::GroupBy;
+use nhl::tui::action::Action;
+use nhl::tui::reducer::reduce;
+use nhl::tui::reducers::standings_layout::build_standings_layout;
+use nhl::tui::state::AppState;
 use nhl_api::Standing;
 use std::sync::Arc;
 
@@ -19,7 +19,6 @@ fn create_sample_standings() -> Vec<Standing> {
         create_standing("Ottawa Senators", "Atlantic", "Eastern", 6, 80),
         create_standing("Detroit Red Wings", "Atlantic", "Eastern", 7, 75),
         create_standing("Montreal Canadiens", "Atlantic", "Eastern", 8, 70),
-
         create_standing("Carolina Hurricanes", "Metropolitan", "Eastern", 1, 98),
         create_standing("New Jersey Devils", "Metropolitan", "Eastern", 2, 94),
         create_standing("New York Rangers", "Metropolitan", "Eastern", 3, 90),
@@ -28,7 +27,6 @@ fn create_sample_standings() -> Vec<Standing> {
         create_standing("Washington Capitals", "Metropolitan", "Eastern", 6, 78),
         create_standing("Columbus Blue Jackets", "Metropolitan", "Eastern", 7, 74),
         create_standing("Philadelphia Flyers", "Metropolitan", "Eastern", 8, 68),
-
         create_standing("Colorado Avalanche", "Central", "Western", 1, 102),
         create_standing("Dallas Stars", "Central", "Western", 2, 96),
         create_standing("Minnesota Wild", "Central", "Western", 3, 91),
@@ -37,7 +35,6 @@ fn create_sample_standings() -> Vec<Standing> {
         create_standing("St. Louis Blues", "Central", "Western", 6, 79),
         create_standing("Arizona Coyotes", "Central", "Western", 7, 73),
         create_standing("Chicago Blackhawks", "Central", "Western", 8, 66),
-
         create_standing("Vegas Golden Knights", "Pacific", "Western", 1, 99),
         create_standing("Edmonton Oilers", "Pacific", "Western", 2, 93),
         create_standing("Los Angeles Kings", "Pacific", "Western", 3, 89),
@@ -64,13 +61,23 @@ fn create_standing(
     let ot_losses = remaining - losses;
 
     Standing {
-        team_name: LocalizedString { default: name.to_string() },
-        team_abbrev: LocalizedString {
-            default: name.split_whitespace().last().unwrap_or("UNK").to_uppercase()
+        team_name: LocalizedString {
+            default: name.to_string(),
         },
-        team_common_name: LocalizedString { default: name.to_string() },
-        team_logo: format!("https://assets.nhle.com/logos/teams/{}.svg",
-            name.split_whitespace().last().unwrap_or("UNK")),
+        team_abbrev: LocalizedString {
+            default: name
+                .split_whitespace()
+                .last()
+                .unwrap_or("UNK")
+                .to_uppercase(),
+        },
+        team_common_name: LocalizedString {
+            default: name.to_string(),
+        },
+        team_logo: format!(
+            "https://assets.nhle.com/logos/teams/{}.svg",
+            name.split_whitespace().last().unwrap_or("UNK")
+        ),
         division_name: division.to_string(),
         division_abbrev: division.chars().take(3).collect(),
         conference_name: Some(conference.to_string()),

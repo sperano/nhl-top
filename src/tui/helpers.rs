@@ -1,7 +1,7 @@
-/// Helper methods and extension traits for common TUI operations
-use nhl_api::{ClubGoalieStats, ClubSkaterStats, SeasonTotal, Standing};
 #[cfg(test)]
 use nhl_api::Position;
+/// Helper methods and extension traits for common TUI operations
+use nhl_api::{ClubGoalieStats, ClubSkaterStats, SeasonTotal, Standing};
 
 /// Extension trait for sorting standings by points (descending)
 pub trait StandingsSorting {
@@ -147,9 +147,15 @@ mod tests {
             conference_name: Some("Eastern".to_string()),
             division_abbrev: "A".to_string(),
             division_name: "Atlantic".to_string(),
-            team_name: LocalizedString { default: abbrev.to_string() },
-            team_common_name: LocalizedString { default: abbrev.to_string() },
-            team_abbrev: LocalizedString { default: abbrev.to_string() },
+            team_name: LocalizedString {
+                default: abbrev.to_string(),
+            },
+            team_common_name: LocalizedString {
+                default: abbrev.to_string(),
+            },
+            team_abbrev: LocalizedString {
+                default: abbrev.to_string(),
+            },
             team_logo: String::new(),
             wins: points / 2,
             losses: 0,
@@ -165,8 +171,12 @@ mod tests {
             goals: points / 2,
             assists: points - (points / 2),
             headshot: String::new(),
-            first_name: LocalizedString { default: "Test".to_string() },
-            last_name: LocalizedString { default: "Player".to_string() },
+            first_name: LocalizedString {
+                default: "Test".to_string(),
+            },
+            last_name: LocalizedString {
+                default: "Player".to_string(),
+            },
             position: Position::Center,
             games_played: 10,
             plus_minus: 0,
@@ -188,8 +198,12 @@ mod tests {
             player_id,
             games_played,
             headshot: String::new(),
-            first_name: LocalizedString { default: "Test".to_string() },
-            last_name: LocalizedString { default: "Goalie".to_string() },
+            first_name: LocalizedString {
+                default: "Test".to_string(),
+            },
+            last_name: LocalizedString {
+                default: "Goalie".to_string(),
+            },
             games_started: 0,
             wins: 0,
             losses: 0,
@@ -213,7 +227,9 @@ mod tests {
             season,
             game_type: nhl_api::GameType::RegularSeason,
             league_abbrev: "NHL".to_string(),
-            team_name: LocalizedString { default: "Test Team".to_string() },
+            team_name: LocalizedString {
+                default: "Test Team".to_string(),
+            },
             team_common_name: None,
             sequence: None,
             games_played: 0,

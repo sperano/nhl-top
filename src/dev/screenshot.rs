@@ -1,11 +1,10 @@
+use ratatui::{backend::Backend, buffer::Buffer, layout::Rect, Terminal};
 /// Screenshot utilities for capturing terminal output
 ///
 /// This module provides functionality to save terminal screenshots
 /// as text files for debugging and documentation purposes.
-
 use std::fs::File;
 use std::io::{self, Write};
-use ratatui::{backend::Backend, buffer::Buffer, layout::Rect, Terminal};
 
 /// Save a terminal screenshot from a buffer to a text file
 ///
@@ -21,11 +20,7 @@ use ratatui::{backend::Backend, buffer::Buffer, layout::Rect, Terminal};
 /// # Returns
 ///
 /// Returns `Ok(())` if successful, or an IO error if the file could not be written.
-pub fn save_buffer_screenshot(
-    buffer: &Buffer,
-    area: Rect,
-    filename: &str,
-) -> io::Result<()> {
+pub fn save_buffer_screenshot(buffer: &Buffer, area: Rect, filename: &str) -> io::Result<()> {
     let mut file = File::create(filename)?;
 
     // Write each line

@@ -30,7 +30,13 @@ impl Renderer {
     ///
     /// This is the main entry point for rendering.
     /// Uses tree diffing to only re-render changed subtrees.
-    pub fn render(&mut self, element: Element, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+    pub fn render(
+        &mut self,
+        element: Element,
+        area: Rect,
+        buf: &mut Buffer,
+        config: &DisplayConfig,
+    ) {
         // Check if we should skip rendering based on tree diffing
         if let Some(ref previous) = self.previous_tree {
             if Self::trees_equal(previous, &element) {
@@ -240,9 +246,7 @@ impl Renderer {
                     base: base_b,
                     overlay: overlay_b,
                 },
-            ) => {
-                Self::trees_equal(base_a, base_b) && Self::trees_equal(overlay_a, overlay_b)
-            }
+            ) => Self::trees_equal(base_a, base_b) && Self::trees_equal(overlay_a, overlay_b),
 
             (Element::Component(_), Element::Component(_)) => {
                 // Components should never reach the renderer
@@ -353,9 +357,7 @@ mod tests {
         renderer.render(element, buffer.area, &mut buffer, &config);
 
         // Should render "Hello" in the first row
-        let line = (0..10)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
+        let line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
         assert!(line.contains("Hello"));
     }
 
@@ -381,14 +383,10 @@ mod tests {
         renderer.render(element, buffer.area, &mut buffer, &config);
 
         // Top should be in first 3 rows, bottom in last 3 rows
-        let top_line = (0..10)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
+        let top_line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
         assert!(top_line.contains("TOP"));
 
-        let bottom_line = (0..10)
-            .map(|x| buffer[(x, 3)].symbol())
-            .collect::<String>();
+        let bottom_line = (0..10).map(|x| buffer[(x, 3)].symbol()).collect::<String>();
         assert!(bottom_line.contains("BOTTOM"));
     }
 
@@ -417,9 +415,7 @@ mod tests {
         renderer.render(element, buffer.area, &mut buffer, &config);
 
         // Left should be in first 10 columns, right in last 10 columns
-        let left_part = (0..10)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
+        let left_part = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
         assert!(left_part.contains("LEFT"));
 
         let right_part = (10..20)
@@ -449,9 +445,7 @@ mod tests {
         renderer.render(element, buffer.area, &mut buffer, &config);
 
         // Should render "Second" (overwrites "First")
-        let line = (0..10)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
+        let line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
         assert!(line.contains("Second"));
     }
 
@@ -554,9 +548,7 @@ mod tests {
         renderer.render(element2, buffer.area, &mut buffer, &config);
 
         // Verify the buffer changed
-        let line = (0..10)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
+        let line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
         assert!(line.contains("Changed"));
     }
 
@@ -590,10 +582,7 @@ mod tests {
             layout: layout.clone(),
             children: children.clone(),
         };
-        let elem2 = Element::Container {
-            layout,
-            children,
-        };
+        let elem2 = Element::Container { layout, children };
 
         assert!(Renderer::trees_equal(&elem1, &elem2));
     }
@@ -618,10 +607,8 @@ mod tests {
 
     #[test]
     fn test_tree_equality_containers_different_children_count() {
-        let layout = ContainerLayout::Vertical(vec![
-            Constraint::Length(10),
-            Constraint::Length(10),
-        ]);
+        let layout =
+            ContainerLayout::Vertical(vec![Constraint::Length(10), Constraint::Length(10)]);
 
         let elem1 = Element::Container {
             layout: layout.clone(),

@@ -1,8 +1,6 @@
-use cached::proc_macro::cached;
-use nhl_api::{
-    DailySchedule, GameDate, GameMatchup, NHLApiError, Standing,
-};
 use crate::data_provider::NHLDataProvider;
+use cached::proc_macro::cached;
+use nhl_api::{DailySchedule, GameDate, GameMatchup, NHLApiError, Standing};
 
 pub use cached::Cached;
 
@@ -47,7 +45,9 @@ pub async fn cache_stats() -> CacheStats {
     convert = r#"{ () }"#,
     result = true
 )]
-pub async fn fetch_standings_cached(client: &dyn NHLDataProvider) -> Result<Vec<Standing>, NHLApiError> {
+pub async fn fetch_standings_cached(
+    client: &dyn NHLDataProvider,
+) -> Result<Vec<Standing>, NHLApiError> {
     client.current_league_standings().await
 }
 
@@ -58,7 +58,10 @@ pub async fn fetch_standings_cached(client: &dyn NHLDataProvider) -> Result<Vec<
     convert = r#"{ format!("{}", date) }"#,
     result = true
 )]
-pub async fn fetch_schedule_cached(client: &dyn NHLDataProvider, date: GameDate) -> Result<DailySchedule, NHLApiError> {
+pub async fn fetch_schedule_cached(
+    client: &dyn NHLDataProvider,
+    date: GameDate,
+) -> Result<DailySchedule, NHLApiError> {
     client.daily_schedule(Some(date)).await
 }
 
@@ -69,7 +72,10 @@ pub async fn fetch_schedule_cached(client: &dyn NHLDataProvider, date: GameDate)
     convert = r#"{ game_id }"#,
     result = true
 )]
-pub async fn fetch_game_cached(client: &dyn NHLDataProvider, game_id: i64) -> Result<GameMatchup, NHLApiError> {
+pub async fn fetch_game_cached(
+    client: &dyn NHLDataProvider,
+    game_id: i64,
+) -> Result<GameMatchup, NHLApiError> {
     client.landing(game_id).await
 }
 
@@ -80,7 +86,10 @@ pub async fn fetch_game_cached(client: &dyn NHLDataProvider, game_id: i64) -> Re
     convert = r#"{ game_id }"#,
     result = true
 )]
-pub async fn fetch_boxscore_cached(client: &dyn NHLDataProvider, game_id: i64) -> Result<nhl_api::Boxscore, NHLApiError> {
+pub async fn fetch_boxscore_cached(
+    client: &dyn NHLDataProvider,
+    game_id: i64,
+) -> Result<nhl_api::Boxscore, NHLApiError> {
     client.boxscore(game_id).await
 }
 
@@ -96,7 +105,9 @@ pub async fn fetch_club_stats_cached(
     team_abbrev: &str,
     season: i32,
 ) -> Result<nhl_api::ClubStats, NHLApiError> {
-    client.club_stats(team_abbrev, season, nhl_api::GameType::RegularSeason).await
+    client
+        .club_stats(team_abbrev, season, nhl_api::GameType::RegularSeason)
+        .await
 }
 
 #[cached(
@@ -106,7 +117,10 @@ pub async fn fetch_club_stats_cached(
     convert = r#"{ player_id }"#,
     result = true
 )]
-pub async fn fetch_player_landing_cached(client: &dyn NHLDataProvider, player_id: i64) -> Result<nhl_api::PlayerLanding, NHLApiError> {
+pub async fn fetch_player_landing_cached(
+    client: &dyn NHLDataProvider,
+    player_id: i64,
+) -> Result<nhl_api::PlayerLanding, NHLApiError> {
     client.player_landing(player_id).await
 }
 
@@ -115,12 +129,18 @@ pub async fn refresh_standings(client: &dyn NHLDataProvider) -> Result<Vec<Stand
     fetch_standings_cached(client).await
 }
 
-pub async fn refresh_game(client: &dyn NHLDataProvider, game_id: i64) -> Result<GameMatchup, NHLApiError> {
+pub async fn refresh_game(
+    client: &dyn NHLDataProvider,
+    game_id: i64,
+) -> Result<GameMatchup, NHLApiError> {
     GAME_CACHE.lock().await.cache_remove(&game_id);
     fetch_game_cached(client, game_id).await
 }
 
-pub async fn refresh_schedule(client: &dyn NHLDataProvider, date: GameDate) -> Result<DailySchedule, NHLApiError> {
+pub async fn refresh_schedule(
+    client: &dyn NHLDataProvider,
+    date: GameDate,
+) -> Result<DailySchedule, NHLApiError> {
     let key = format!("{}", date);
     SCHEDULE_CACHE.lock().await.cache_remove(&key);
     fetch_schedule_cached(client, date).await
@@ -209,7 +229,10 @@ mod tests {
         }
 
         let stats = cache_stats().await;
-        assert!(stats.schedule_entries <= 7, "Schedule cache should not exceed 7 entries");
+        assert!(
+            stats.schedule_entries <= 7,
+            "Schedule cache should not exceed 7 entries"
+        );
     }
 
     #[tokio::test]

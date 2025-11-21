@@ -8,15 +8,13 @@ use std::sync::Arc;
 //
 use nhl_api::{DailySchedule, GameDate, GameMatchup};
 //
+use crate::commands::scores_format::{format_period_text, PeriodScores};
 use crate::config::DisplayConfig;
 use crate::layout_constants::SCORE_BOX_WIDTH;
-use crate::tui::{
-    component::{Component, Element, RenderableWidget},
-};
+use crate::tui::component::{Component, Element, RenderableWidget};
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
-use crate::commands::scores_format::{PeriodScores, format_period_text};
 //
-use super::{TabbedPanel, TabbedPanelProps, TabItem};
+use super::{TabItem, TabbedPanel, TabbedPanelProps};
 //
 /// Props for ScoresTab component
 #[derive(Clone)]
@@ -38,7 +36,7 @@ impl Component for ScoresTab {
     type Props = ScoresTabProps;
     type State = ();
     type Message = ();
-//
+    //
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
         // Use TabbedPanel for date navigation
         self.render_date_tabs(props)
@@ -49,13 +47,13 @@ impl ScoresTab {
     /// Render date tabs using TabbedPanel
     fn render_date_tabs(&self, props: &ScoresTabProps) -> Element {
         const DATE_WINDOW_SIZE: usize = 5;
-//
+        //
         // Calculate the 5-date window
         let window_base_date = props.game_date.add_days(-(props.selected_index as i64));
         let dates: Vec<GameDate> = (0..DATE_WINDOW_SIZE)
             .map(|i| window_base_date.add_days(i as i64))
             .collect();
-//
+        //
         // Create TabItems for each date
         let tabs: Vec<TabItem> = dates
             .iter()
@@ -63,14 +61,14 @@ impl ScoresTab {
                 let key = self.date_to_key(date);
                 let title = self.format_date_label(date);
                 let content = self.render_game_list(props);
-//
+                //
                 TabItem::new(key, title, content)
             })
             .collect();
-//
+        //
         // Active key is the current game_date
         let active_key = self.date_to_key(&props.game_date);
-//
+        //
         TabbedPanel.view(
             &TabbedPanelProps {
                 active_key,
@@ -80,7 +78,7 @@ impl ScoresTab {
             &(),
         )
     }
-//
+    //
     /// Convert GameDate to string key
     fn date_to_key(&self, date: &GameDate) -> String {
         match date {
@@ -88,15 +86,18 @@ impl ScoresTab {
             GameDate::Now => "now".to_string(),
         }
     }
-//
+    //
     /// Format date for tab label (MM/DD)
     fn format_date_label(&self, date: &GameDate) -> String {
         match date {
             GameDate::Date(naive_date) => naive_date.format("%m/%d").to_string(),
-            GameDate::Now => chrono::Local::now().date_naive().format("%m/%d").to_string(),
+            GameDate::Now => chrono::Local::now()
+                .date_naive()
+                .format("%m/%d")
+                .to_string(),
         }
     }
-//
+    //
     fn render_game_list(&self, props: &ScoresTabProps) -> Element {
         Element::Widget(Box::new(GameListWidget {
             schedule: props.schedule.clone(),
@@ -131,7 +132,7 @@ impl GameListWidget {
             if let Some(info) = self.game_info.get(&game.id) {
                 let period_text = format_period_text(
                     info.period_descriptor.period_type,
-                    info.period_descriptor.number
+                    info.period_descriptor.number,
                 );
                 let (time_remaining, in_intermission) = if let Some(clock) = &info.clock {
                     (Some(clock.time_remaining.clone()), clock.in_intermission)
@@ -152,15 +153,16 @@ impl GameListWidget {
             }
         } else {
             // Scheduled game - format start time
-            let start_time = if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&game.start_time_utc) {
-                let local_time: chrono::DateTime<chrono::Local> = parsed.into();
-                local_time.format("%I:%M %p").to_string()
-            } else {
-                game.start_time_utc.clone()
-            };
+            let start_time =
+                if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&game.start_time_utc) {
+                    let local_time: chrono::DateTime<chrono::Local> = parsed.into();
+                    local_time.format("%I:%M %p").to_string()
+                } else {
+                    game.start_time_utc.clone()
+                };
             WidgetGameState::Scheduled { start_time }
         };
-//
+        //
         // Get scores and period details
         let (away_score, home_score, away_periods, home_periods, has_ot, has_so) =
             if let Some(scores) = self.period_scores.get(&game.id) {
@@ -175,10 +177,13 @@ impl GameListWidget {
             } else {
                 (None, None, None, None, false, false)
             };
-//
+        //
         // Get current period
-        let current_period = self.game_info.get(&game.id).map(|info| info.period_descriptor.number);
-//
+        let current_period = self
+            .game_info
+            .get(&game.id)
+            .map(|info| info.period_descriptor.number);
+        //
         GameBox::new(
             game.away_team.abbrev.clone(),
             game.home_team.abbrev.clone(),
@@ -199,24 +204,22 @@ impl RenderableWidget for GameListWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
         match self.schedule.as_ref().as_ref() {
             None => {
-                let widget = Paragraph::new("Loading games...").block(
-                    Block::default().borders(Borders::ALL).title("Games"),
-                );
+                let widget = Paragraph::new("Loading games...")
+                    .block(Block::default().borders(Borders::ALL).title("Games"));
                 ratatui::widgets::Widget::render(widget, area, buf);
             }
             Some(schedule) if schedule.games.is_empty() => {
-                let widget = Paragraph::new("No games scheduled").block(
-                    Block::default().borders(Borders::ALL).title("Games"),
-                );
+                let widget = Paragraph::new("No games scheduled")
+                    .block(Block::default().borders(Borders::ALL).title("Games"));
                 ratatui::widgets::Widget::render(widget, area, buf);
             }
             Some(schedule) => {
                 const GAME_BOX_HEIGHT: u16 = 7;
                 const GAME_BOX_MARGIN: u16 = 2;
-//
+                //
                 // Calculate how many game boxes fit in a row
                 let boxes_per_row = (area.width / (SCORE_BOX_WIDTH + GAME_BOX_MARGIN)).max(1);
-//
+                //
                 // Create game boxes
                 let game_boxes: Vec<(GameBox, usize)> = schedule
                     .games
@@ -227,37 +230,39 @@ impl RenderableWidget for GameListWidget {
                         (self.create_game_box(game, selected), index)
                     })
                     .collect();
-//
+                //
                 // Render in grid layout
                 let rows = (game_boxes.len() as u16).div_ceil(boxes_per_row);
-//
+                //
                 for row_idx in 0..rows {
                     let row_y = area.y + row_idx * (GAME_BOX_HEIGHT + 1);
                     if row_y + GAME_BOX_HEIGHT > area.y + area.height {
                         break; // Don't render outside area
                     }
-//
+                    //
                     for col_idx in 0..boxes_per_row {
                         let game_idx = (row_idx * boxes_per_row + col_idx) as usize;
                         if game_idx >= game_boxes.len() {
                             break;
                         }
-//
+                        //
                         let col_x = area.x + col_idx * (SCORE_BOX_WIDTH + GAME_BOX_MARGIN);
                         let box_area = Rect::new(col_x, row_y, SCORE_BOX_WIDTH, GAME_BOX_HEIGHT);
-//
+                        //
                         if box_area.x + box_area.width <= area.x + area.width {
                             let (game_box, _) = &game_boxes[game_idx];
                             // Use default display config for rendering
                             let config = DisplayConfig::default();
-                            crate::tui::widgets::RenderableWidget::render(game_box, box_area, buf, &config);
+                            crate::tui::widgets::RenderableWidget::render(
+                                game_box, box_area, buf, &config,
+                            );
                         }
                     }
                 }
             }
         }
     }
-//
+    //
     fn clone_box(&self) -> Box<dyn RenderableWidget> {
         Box::new(GameListWidget {
             schedule: self.schedule.clone(),
@@ -271,7 +276,7 @@ impl RenderableWidget for GameListWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-//
+    //
     #[test]
     fn test_scores_tab_renders_with_no_schedule() {
         let scores_tab = ScoresTab;
@@ -285,9 +290,9 @@ mod tests {
             selected_game_index: None,
             focused: false,
         };
-//
+        //
         let element = scores_tab.view(&props, &());
-//
+        //
         match element {
             Element::Container { children, .. } => {
                 assert_eq!(children.len(), 2);
@@ -295,5 +300,5 @@ mod tests {
             _ => panic!("Expected container element"),
         }
     }
-//
+    //
 }

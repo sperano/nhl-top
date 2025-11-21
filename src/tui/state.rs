@@ -30,7 +30,6 @@ pub struct AppState {
     pub system: SystemState,
 }
 
-
 #[derive(Debug, Clone)]
 pub struct NavigationState {
     pub current_tab: Tab,
@@ -58,8 +57,7 @@ pub struct PanelState {
     pub selected_index: Option<usize>,
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DataState {
     // API data - wrapped in Arc to avoid deep clones on every reducer call
     pub standings: Arc<Option<Vec<Standing>>>,
@@ -77,7 +75,6 @@ pub struct DataState {
     pub errors: HashMap<String, String>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoadingKey {
     Standings,
@@ -88,14 +85,12 @@ pub enum LoadingKey {
     PlayerStats(i64),
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct UiState {
     pub scores: ScoresUiState,
     pub standings: StandingsUiState,
     pub settings: SettingsUiState,
 }
-
 
 #[derive(Debug, Clone)]
 pub struct ScoresUiState {
@@ -147,21 +142,18 @@ impl Default for StandingsUiState {
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SettingsUiState {
     pub selected_category: SettingsCategory,
     pub selected_setting_index: usize,
     pub settings_mode: bool, // true = navigating settings, false = navigating categories
-    pub editing: bool,        // true = editing a setting value, false = not editing
+    pub editing: bool,       // true = editing a setting value, false = not editing
     pub edit_buffer: String, // Buffer for editing string/int values
-    pub modal_open: bool,     // true = list selection modal is open
+    pub modal_open: bool,    // true = list selection modal is open
     pub modal_selected_index: usize, // Selected index within the modal
 }
 
-
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct SystemState {
     pub last_refresh: Option<SystemTime>,
     pub config: Config,
@@ -233,4 +225,3 @@ mod tests {
         assert!(state.status_is_error);
     }
 }
-

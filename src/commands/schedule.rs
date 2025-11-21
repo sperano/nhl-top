@@ -1,9 +1,9 @@
-use nhl_api::DailySchedule;
-use crate::data_provider::NHLDataProvider;
 use crate::commands::parse_game_date;
+use crate::data_provider::NHLDataProvider;
 use crate::layout_constants::{SCHEDULE_BOX_CONTENT_WIDTH, SCHEDULE_BOX_TOTAL_WIDTH};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local};
+use nhl_api::DailySchedule;
 
 pub fn format_schedule(schedule: &DailySchedule) -> String {
     let mut output = String::new();
@@ -20,31 +20,66 @@ pub fn format_schedule(schedule: &DailySchedule) -> String {
             if i > 0 {
                 output.push('\n');
             }
-            output.push_str(&format!("┌{:─<width$}┐\n", "", width = SCHEDULE_BOX_TOTAL_WIDTH));
+            output.push_str(&format!(
+                "┌{:─<width$}┐\n",
+                "",
+                width = SCHEDULE_BOX_TOTAL_WIDTH
+            ));
             let team_line = format!("{} @ {}", game.away_team.abbrev, game.home_team.abbrev);
-            output.push_str(&format!("│ {:<width$} │\n", team_line, width = SCHEDULE_BOX_CONTENT_WIDTH));
-            output.push_str(&format!("├{:─<width$}┤\n", "", width = SCHEDULE_BOX_TOTAL_WIDTH));
+            output.push_str(&format!(
+                "│ {:<width$} │\n",
+                team_line,
+                width = SCHEDULE_BOX_CONTENT_WIDTH
+            ));
+            output.push_str(&format!(
+                "├{:─<width$}┤\n",
+                "",
+                width = SCHEDULE_BOX_TOTAL_WIDTH
+            ));
             let status_line = format!("Status: {}", game.game_state);
-            output.push_str(&format!("│ {:<width$} │\n", status_line, width = SCHEDULE_BOX_CONTENT_WIDTH));
+            output.push_str(&format!(
+                "│ {:<width$} │\n",
+                status_line,
+                width = SCHEDULE_BOX_CONTENT_WIDTH
+            ));
 
-            let time_display = if let Ok(parsed) = DateTime::parse_from_rfc3339(&game.start_time_utc) {
-                let local_time: DateTime<Local> = parsed.into();
-                local_time.format("%I:%M %p").to_string()
-            } else {
-                game.start_time_utc.clone()
-            };
+            let time_display =
+                if let Ok(parsed) = DateTime::parse_from_rfc3339(&game.start_time_utc) {
+                    let local_time: DateTime<Local> = parsed.into();
+                    local_time.format("%I:%M %p").to_string()
+                } else {
+                    game.start_time_utc.clone()
+                };
             let time_line = format!("Time: {}", time_display);
-            output.push_str(&format!("│ {:<width$} │\n", time_line, width = SCHEDULE_BOX_CONTENT_WIDTH));
-            if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
-                output.push_str(&format!("├{:─<width$}┤\n", "", width = SCHEDULE_BOX_TOTAL_WIDTH));
+            output.push_str(&format!(
+                "│ {:<width$} │\n",
+                time_line,
+                width = SCHEDULE_BOX_CONTENT_WIDTH
+            ));
+            if let (Some(away_score), Some(home_score)) =
+                (game.away_team.score, game.home_team.score)
+            {
+                output.push_str(&format!(
+                    "├{:─<width$}┤\n",
+                    "",
+                    width = SCHEDULE_BOX_TOTAL_WIDTH
+                ));
                 let left_side = format!("{:<23} {:>2}", game.away_team.abbrev, away_score);
                 let right_side = format!("{:<2} {:>26}", home_score, game.home_team.abbrev);
                 let score_line = format!("{}  -  {}", left_side, right_side);
                 output.push_str(&format!("│ {} │\n", score_line));
             } else {
-                output.push_str(&format!("│ {:<width$} │\n", "Game not started", width = SCHEDULE_BOX_CONTENT_WIDTH));
+                output.push_str(&format!(
+                    "│ {:<width$} │\n",
+                    "Game not started",
+                    width = SCHEDULE_BOX_CONTENT_WIDTH
+                ));
             }
-            output.push_str(&format!("└{:─<width$}┘\n", "", width = SCHEDULE_BOX_TOTAL_WIDTH));
+            output.push_str(&format!(
+                "└{:─<width$}┘\n",
+                "",
+                width = SCHEDULE_BOX_TOTAL_WIDTH
+            ));
         }
     }
     output
@@ -52,7 +87,9 @@ pub fn format_schedule(schedule: &DailySchedule) -> String {
 
 pub async fn run(client: &dyn NHLDataProvider, date: Option<String>) -> Result<()> {
     let game_date = parse_game_date(date)?;
-    let schedule = client.daily_schedule(Some(game_date)).await
+    let schedule = client
+        .daily_schedule(Some(game_date))
+        .await
         .context("Failed to fetch schedule")?;
 
     print!("{}", format_schedule(&schedule));
@@ -125,14 +162,37 @@ mod tests {
         let output = format_schedule(&schedule);
         let lines: Vec<&str> = output.lines().skip(4).take(8).collect();
         assert_eq!(lines.len(), 8, "Should be 8 lines of output");
-        assert_eq!(lines[0], "┌──────────────────────────────────────────────────────────────┐", "Top border line");
-        assert_eq!(lines[1], "│ CHI @ SEA                                                    │", "Team line");
-        assert_eq!(lines[2], "├──────────────────────────────────────────────────────────────┤", "Middle border line");
-        assert_eq!(lines[3], "│ Status: LIVE                                                 │", "Status line");
-        assert_eq!(lines[4], "│ Time: 07:00 PM                                               │", "Time line");
-        assert_eq!(lines[5], "├──────────────────────────────────────────────────────────────┤", "Score border line");
-        assert_eq!(lines[6], "│ CHI                      0  -  0                         SEA │", "Score line");
-        assert_eq!(lines[7], "└──────────────────────────────────────────────────────────────┘", "Bottom border line");
+        assert_eq!(
+            lines[0], "┌──────────────────────────────────────────────────────────────┐",
+            "Top border line"
+        );
+        assert_eq!(
+            lines[1], "│ CHI @ SEA                                                    │",
+            "Team line"
+        );
+        assert_eq!(
+            lines[2], "├──────────────────────────────────────────────────────────────┤",
+            "Middle border line"
+        );
+        assert_eq!(
+            lines[3], "│ Status: LIVE                                                 │",
+            "Status line"
+        );
+        assert_eq!(
+            lines[4], "│ Time: 07:00 PM                                               │",
+            "Time line"
+        );
+        assert_eq!(
+            lines[5], "├──────────────────────────────────────────────────────────────┤",
+            "Score border line"
+        );
+        assert_eq!(
+            lines[6], "│ CHI                      0  -  0                         SEA │",
+            "Score line"
+        );
+        assert_eq!(
+            lines[7], "└──────────────────────────────────────────────────────────────┘",
+            "Bottom border line"
+        );
     }
-
 }

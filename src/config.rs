@@ -1,10 +1,10 @@
-use xdg::BaseDirectories;
+use phf::phf_map;
+use ratatui::style::{Color, Modifier};
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
 use std::fs;
 use std::path::PathBuf;
-use ratatui::style::{Color, Modifier};
-use phf::phf_map;
+use std::sync::OnceLock;
+use xdg::BaseDirectories;
 
 // TODO: darker_colorX should be renamed dimmer_colorX
 
@@ -141,18 +141,24 @@ pub static THEMES: phf::Map<&'static str, &Theme> = phf_map! {
 };
 
 impl Default for Theme {
-    fn default() -> Self { THEME_WHITE.clone() }
+    fn default() -> Self {
+        THEME_WHITE.clone()
+    }
 }
 
 impl Theme {
     /// Get a 50% darker version of fg2, computed lazily and cached
     pub fn fg2_dark(&self) -> Color {
-        *self.fg2_dark.get_or_init(|| darken_color(self.fg2, DARKENING_FACTOR))
+        *self
+            .fg2_dark
+            .get_or_init(|| darken_color(self.fg2, DARKENING_FACTOR))
     }
 
     /// Get a 50% darker version of fg3, computed lazily and cached
     pub fn fg3_dark(&self) -> Color {
-        *self.fg3_dark.get_or_init(|| darken_color(self.fg3, DARKENING_FACTOR))
+        *self
+            .fg3_dark
+            .get_or_init(|| darken_color(self.fg3, DARKENING_FACTOR))
     }
 }
 
@@ -204,7 +210,7 @@ impl Default for DisplayConfig {
             selection_fg: Color::Rgb(255, 165, 0), // Orange
             unfocused_selection_fg: None,
             division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
-            error_fg: Color::Rgb(255, 0, 0), // Red
+            error_fg: Color::Rgb(255, 0, 0),               // Red
             box_chars: crate::formatting::BoxChars::unicode(),
         }
     }
@@ -213,12 +219,15 @@ impl Default for DisplayConfig {
 impl DisplayConfig {
     /// Get the unfocused selection color, calculating 50% darker if not explicitly set
     pub fn unfocused_selection_fg(&self) -> Color {
-        self.unfocused_selection_fg.unwrap_or_else(|| darken_color(self.selection_fg, 0.5))
+        self.unfocused_selection_fg
+            .unwrap_or_else(|| darken_color(self.selection_fg, 0.5))
     }
 
     /// Apply theme from theme_name by looking it up in THEMES map
     pub fn apply_theme(&mut self) {
-        self.theme = self.theme_name.as_ref()
+        self.theme = self
+            .theme_name
+            .as_ref()
             .and_then(|name| THEMES.get(name.as_str()))
             .map(|theme| (*theme).clone());
     }
@@ -414,7 +423,8 @@ pub fn read() -> Config {
     let mut config: Config = toml::from_str(&content).unwrap_or_else(|_| Config::default());
 
     // Initialize box_chars based on use_unicode (since it's not serialized)
-    config.display.box_chars = crate::formatting::BoxChars::from_use_unicode(config.display.use_unicode);
+    config.display.box_chars =
+        crate::formatting::BoxChars::from_use_unicode(config.display.use_unicode);
 
     // Apply theme based on theme_name (since it's not serialized)
     config.display.apply_theme();
@@ -424,8 +434,7 @@ pub fn read() -> Config {
 
 /// Write a config to the config file
 pub fn write(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let config_path = get_config_path()
-        .ok_or("Failed to get config path")?;
+    let config_path = get_config_path().ok_or("Failed to get config path")?;
 
     // Create parent directory if it doesn't exist
     if let Some(parent) = config_path.parent() {
@@ -597,7 +606,10 @@ selection_fg = "128,0,128"
         let deserialized: Config = toml::from_str(&toml_str).unwrap();
 
         assert_eq!(deserialized.display.selection_fg, Color::Rgb(255, 100, 50));
-        assert_eq!(deserialized.display.unfocused_selection_fg, Some(Color::Cyan));
+        assert_eq!(
+            deserialized.display.unfocused_selection_fg,
+            Some(Color::Cyan)
+        );
         assert_eq!(deserialized.display.use_unicode, false);
         assert_eq!(deserialized.refresh_interval, 45);
         assert_eq!(deserialized.display_standings_western_first, true);
@@ -619,7 +631,10 @@ theme = "orange"
         let mut config: Config = toml::from_str(toml_str).unwrap();
 
         // Manually apply theme loading logic (simulating what read() does)
-        config.display.theme = config.display.theme_name.as_ref()
+        config.display.theme = config
+            .display
+            .theme_name
+            .as_ref()
             .and_then(|name| THEMES.get(name.as_str()))
             .map(|theme| (*theme).clone());
 
@@ -648,11 +663,17 @@ theme = "invalid_theme_name"
         let mut config: Config = toml::from_str(toml_str).unwrap();
 
         // Manually apply theme loading logic
-        config.display.theme = config.display.theme_name.as_ref()
+        config.display.theme = config
+            .display
+            .theme_name
+            .as_ref()
             .and_then(|name| THEMES.get(name.as_str()))
             .map(|theme| (*theme).clone());
 
-        assert_eq!(config.display.theme_name, Some("invalid_theme_name".to_string()));
+        assert_eq!(
+            config.display.theme_name,
+            Some("invalid_theme_name".to_string())
+        );
         assert!(config.display.theme.is_none());
     }
 
@@ -669,7 +690,10 @@ time_format = "%H:%M:%S"
         let mut config: Config = toml::from_str(toml_str).unwrap();
 
         // Manually apply theme loading logic
-        config.display.theme = config.display.theme_name.as_ref()
+        config.display.theme = config
+            .display
+            .theme_name
+            .as_ref()
             .and_then(|name| THEMES.get(name.as_str()))
             .map(|theme| (*theme).clone());
 
@@ -682,7 +706,8 @@ time_format = "%H:%M:%S"
         let theme_names = vec!["orange", "green", "blue", "purple", "white"];
 
         for theme_name in theme_names {
-            let toml_str = format!(r#"
+            let toml_str = format!(
+                r#"
 log_level = "info"
 log_file = "/dev/null"
 refresh_interval = 60
@@ -691,7 +716,9 @@ time_format = "%H:%M:%S"
 
 [display]
 theme = "{}"
-            "#, theme_name);
+            "#,
+                theme_name
+            );
 
             let mut config: Config = toml::from_str(&toml_str).unwrap();
 
@@ -699,7 +726,11 @@ theme = "{}"
             config.display.apply_theme();
 
             assert_eq!(config.display.theme_name, Some(theme_name.to_string()));
-            assert!(config.display.theme.is_some(), "Theme '{}' should load", theme_name);
+            assert!(
+                config.display.theme.is_some(),
+                "Theme '{}' should load",
+                theme_name
+            );
         }
     }
 
@@ -743,5 +774,4 @@ theme = "{}"
         let second_call = THEME_GREEN.fg3_dark();
         assert_eq!(first_call, second_call);
     }
-
 }

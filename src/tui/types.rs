@@ -23,15 +23,13 @@ pub enum Panel {
 }
 
 /// Settings category enum
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsCategory {
     #[default]
     Logging,
     Display,
     Data,
 }
-
 
 impl Panel {
     /// Get the display label for this panel (for breadcrumbs)

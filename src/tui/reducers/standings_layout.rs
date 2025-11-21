@@ -1,7 +1,7 @@
-use std::collections::BTreeMap;
-use nhl_api::Standing;
 use crate::commands::standings::GroupBy;
 use crate::tui::helpers::StandingsSorting;
+use nhl_api::Standing;
+use std::collections::BTreeMap;
 
 /// Build standings layout: layout[column][row] = team_abbrev
 ///
@@ -28,13 +28,11 @@ pub fn count_teams_in_conference_column(standings: &[Standing], column: usize) -
     // Group standings by conference
     let mut grouped: BTreeMap<String, Vec<&Standing>> = BTreeMap::new();
     for standing in standings {
-        let conference = standing.conference_name
+        let conference = standing
+            .conference_name
             .clone()
             .unwrap_or_else(|| "Unknown".to_string());
-        grouped
-            .entry(conference)
-            .or_default()
-            .push(standing);
+        grouped.entry(conference).or_default().push(standing);
     }
 
     // Convert to vec - BTreeMap gives us Eastern, Western alphabetically
@@ -125,7 +123,8 @@ pub fn count_teams_in_wildcard_column(
     // Eastern: Atlantic top 3 + Metropolitan top 3 + (remaining teams from both)
     let eastern_count = {
         let top_count = atlantic.len().min(3) + metropolitan.len().min(3);
-        let wildcard_count = atlantic.len().saturating_sub(3) + metropolitan.len().saturating_sub(3);
+        let wildcard_count =
+            atlantic.len().saturating_sub(3) + metropolitan.len().saturating_sub(3);
         top_count + wildcard_count
     };
 
@@ -138,8 +137,16 @@ pub fn count_teams_in_wildcard_column(
 
     // Determine which conference is in which column based on western_first
     if western_first {
-        if column == 0 { western_count } else { eastern_count }
-    } else if column == 0 { eastern_count } else { western_count }
+        if column == 0 {
+            western_count
+        } else {
+            eastern_count
+        }
+    } else if column == 0 {
+        eastern_count
+    } else {
+        western_count
+    }
 }
 
 // Private helper functions for building layouts
@@ -148,14 +155,20 @@ fn build_league_layout(standings: &[Standing]) -> Vec<Vec<String>> {
     // Single column, sorted by points
     let mut sorted = standings.to_vec();
     sorted.sort_by_points_desc();
-    vec![sorted.iter().map(|s| s.team_abbrev.default.clone()).collect()]
+    vec![sorted
+        .iter()
+        .map(|s| s.team_abbrev.default.clone())
+        .collect()]
 }
 
 fn build_conference_layout(standings: &[Standing], western_first: bool) -> Vec<Vec<String>> {
     // Two columns: Eastern, Western
     let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
     for standing in standings {
-        let conf = standing.conference_name.clone().unwrap_or_else(|| "Unknown".to_string());
+        let conf = standing
+            .conference_name
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string());
         grouped.entry(conf).or_default().push(standing.clone());
     }
 
@@ -168,8 +181,16 @@ fn build_conference_layout(standings: &[Standing], western_first: bool) -> Vec<V
         return Vec::new();
     }
 
-    let eastern: Vec<String> = groups[0].1.iter().map(|s| s.team_abbrev.default.clone()).collect();
-    let western: Vec<String> = groups[1].1.iter().map(|s| s.team_abbrev.default.clone()).collect();
+    let eastern: Vec<String> = groups[0]
+        .1
+        .iter()
+        .map(|s| s.team_abbrev.default.clone())
+        .collect();
+    let western: Vec<String> = groups[1]
+        .1
+        .iter()
+        .map(|s| s.team_abbrev.default.clone())
+        .collect();
 
     if western_first {
         vec![western, eastern]
@@ -182,7 +203,10 @@ fn build_division_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
     // Two columns: Eastern divisions, Western divisions
     let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
     for standing in standings {
-        grouped.entry(standing.division_name.clone()).or_default().push(standing.clone());
+        grouped
+            .entry(standing.division_name.clone())
+            .or_default()
+            .push(standing.clone());
     }
 
     for teams in grouped.values_mut() {
@@ -226,7 +250,10 @@ fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
     // Two columns: Eastern (top 3 + wildcards), Western (top 3 + wildcards)
     let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
     for standing in standings {
-        grouped.entry(standing.division_name.clone()).or_default().push(standing.clone());
+        grouped
+            .entry(standing.division_name.clone())
+            .or_default()
+            .push(standing.clone());
     }
 
     for teams in grouped.values_mut() {
@@ -242,20 +269,36 @@ fn build_wildcard_layout(standings: &[Standing], western_first: bool) -> Vec<Vec
         let mut teams = Vec::new();
         teams.extend(atlantic.iter().take(3).cloned());
         teams.extend(metropolitan.iter().take(3).cloned());
-        let mut wildcards: Vec<_> = atlantic.iter().skip(3).chain(metropolitan.iter().skip(3)).cloned().collect();
+        let mut wildcards: Vec<_> = atlantic
+            .iter()
+            .skip(3)
+            .chain(metropolitan.iter().skip(3))
+            .cloned()
+            .collect();
         wildcards.sort_by_points_desc();
         teams.extend(wildcards);
-        teams.iter().map(|s| s.team_abbrev.default.clone()).collect()
+        teams
+            .iter()
+            .map(|s| s.team_abbrev.default.clone())
+            .collect()
     };
 
     let western: Vec<String> = {
         let mut teams = Vec::new();
         teams.extend(central.iter().take(3).cloned());
         teams.extend(pacific.iter().take(3).cloned());
-        let mut wildcards: Vec<_> = central.iter().skip(3).chain(pacific.iter().skip(3)).cloned().collect();
+        let mut wildcards: Vec<_> = central
+            .iter()
+            .skip(3)
+            .chain(pacific.iter().skip(3))
+            .cloned()
+            .collect();
         wildcards.sort_by_points_desc();
         teams.extend(wildcards);
-        teams.iter().map(|s| s.team_abbrev.default.clone()).collect()
+        teams
+            .iter()
+            .map(|s| s.team_abbrev.default.clone())
+            .collect()
     };
 
     if western_first {
@@ -351,8 +394,14 @@ mod tests {
         assert_eq!(layout.len(), 2, "Should have 2 columns");
         assert_eq!(layout[0].len(), 8, "Western conference should have 8 teams");
         assert_eq!(layout[1].len(), 8, "Eastern conference should have 8 teams");
-        assert_eq!(layout[0][0], "COL", "COL should be first in Western (col 0)");
-        assert_eq!(layout[1][0], "TOR", "TOR should be first in Eastern (col 1)");
+        assert_eq!(
+            layout[0][0], "COL",
+            "COL should be first in Western (col 0)"
+        );
+        assert_eq!(
+            layout[1][0], "TOR",
+            "TOR should be first in Eastern (col 1)"
+        );
     }
 
     #[test]
@@ -365,12 +414,24 @@ mod tests {
         assert_eq!(layout[1].len(), 8, "Western divisions should have 8 teams");
 
         let eastern_teams: Vec<&str> = layout[0].iter().map(|s| s.as_str()).collect();
-        assert!(eastern_teams.contains(&"TOR"), "Should contain Atlantic teams");
-        assert!(eastern_teams.contains(&"NYR"), "Should contain Metropolitan teams");
+        assert!(
+            eastern_teams.contains(&"TOR"),
+            "Should contain Atlantic teams"
+        );
+        assert!(
+            eastern_teams.contains(&"NYR"),
+            "Should contain Metropolitan teams"
+        );
 
         let western_teams: Vec<&str> = layout[1].iter().map(|s| s.as_str()).collect();
-        assert!(western_teams.contains(&"COL"), "Should contain Central teams");
-        assert!(western_teams.contains(&"VGK"), "Should contain Pacific teams");
+        assert!(
+            western_teams.contains(&"COL"),
+            "Should contain Central teams"
+        );
+        assert!(
+            western_teams.contains(&"VGK"),
+            "Should contain Pacific teams"
+        );
     }
 
     #[test]
@@ -381,12 +442,24 @@ mod tests {
         assert_eq!(layout.len(), 2, "Should have 2 columns");
 
         let western_teams: Vec<&str> = layout[0].iter().map(|s| s.as_str()).collect();
-        assert!(western_teams.contains(&"COL"), "Col 0 should have Central teams");
-        assert!(western_teams.contains(&"VGK"), "Col 0 should have Pacific teams");
+        assert!(
+            western_teams.contains(&"COL"),
+            "Col 0 should have Central teams"
+        );
+        assert!(
+            western_teams.contains(&"VGK"),
+            "Col 0 should have Pacific teams"
+        );
 
         let eastern_teams: Vec<&str> = layout[1].iter().map(|s| s.as_str()).collect();
-        assert!(eastern_teams.contains(&"TOR"), "Col 1 should have Atlantic teams");
-        assert!(eastern_teams.contains(&"NYR"), "Col 1 should have Metropolitan teams");
+        assert!(
+            eastern_teams.contains(&"TOR"),
+            "Col 1 should have Atlantic teams"
+        );
+        assert!(
+            eastern_teams.contains(&"NYR"),
+            "Col 1 should have Metropolitan teams"
+        );
     }
 
     #[test]
@@ -463,10 +536,16 @@ mod tests {
         let standings = create_sample_standings();
 
         let western_count = count_teams_in_division_column(&standings, 0, true);
-        assert_eq!(western_count, 8, "Column 0 should be Western when western_first=true");
+        assert_eq!(
+            western_count, 8,
+            "Column 0 should be Western when western_first=true"
+        );
 
         let eastern_count = count_teams_in_division_column(&standings, 1, true);
-        assert_eq!(eastern_count, 8, "Column 1 should be Eastern when western_first=true");
+        assert_eq!(
+            eastern_count, 8,
+            "Column 1 should be Eastern when western_first=true"
+        );
     }
 
     #[test]
@@ -518,6 +597,10 @@ mod tests {
         ];
 
         let layout = build_conference_layout(&standings, false);
-        assert_eq!(layout.len(), 0, "Should return empty for less than 2 conferences");
+        assert_eq!(
+            layout.len(),
+            0,
+            "Should return empty for less than 2 conferences"
+        );
     }
 }

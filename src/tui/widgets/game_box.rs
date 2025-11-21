@@ -1,11 +1,11 @@
+use crate::config::DisplayConfig;
+use crate::layout_constants::SCORE_BOX_WIDTH;
+use crate::tui::widgets::{RenderableWidget, ScoreTable};
 /// GameBox widget - displays a single game's score in a compact box
 ///
 /// This is a composition widget that combines a header line with a ScoreTable.
 /// Fixed dimensions: 37 columns × 7 rows (1 for header + 6 for score table)
 use ratatui::{buffer::Buffer, layout::Rect, style::Style};
-use crate::config::DisplayConfig;
-use crate::tui::widgets::{RenderableWidget, ScoreTable};
-use crate::layout_constants::SCORE_BOX_WIDTH;
 
 /// Constants for game box layout
 const GAME_BOX_HEIGHT: usize = 7;
@@ -17,7 +17,11 @@ pub enum GameState {
     /// Game hasn't started - show start time
     Scheduled { start_time: String },
     /// Game in progress - show period and time
-    Live { period_text: String, time_remaining: Option<String>, in_intermission: bool },
+    Live {
+        period_text: String,
+        time_remaining: Option<String>,
+        in_intermission: bool,
+    },
     /// Game finished - show "Final Score"
     Final,
 }
@@ -84,7 +88,11 @@ impl GameBox {
     fn generate_header(&self) -> String {
         match &self.state {
             GameState::Final => "Final Score".to_string(),
-            GameState::Live { period_text, time_remaining, in_intermission } => {
+            GameState::Live {
+                period_text,
+                time_remaining,
+                in_intermission,
+            } => {
                 if *in_intermission {
                     format!("{} - Intermission", period_text)
                 } else if let Some(time) = time_remaining {
@@ -185,15 +193,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " 07:00 PM",
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ TOR │ -  │ -  │ -  │ -  │",
-            "│ MTL │ -  │ -  │ -  │ -  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " 07:00 PM",
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ TOR │ -  │ -  │ -  │ -  │",
+                "│ MTL │ -  │ -  │ -  │ -  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -219,15 +230,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " 2nd Period - 12:34",
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ BOS │ 1  │ 1  │ -  │ 2  │",
-            "│ NYR │ 0  │ 1  │ -  │ 1  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " 2nd Period - 12:34",
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ BOS │ 1  │ 1  │ -  │ 2  │",
+                "│ NYR │ 0  │ 1  │ -  │ 1  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -253,15 +267,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " 1st Period - Intermission",
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ TOR │ 1  │ -  │ -  │ 1  │",
-            "│ MTL │ 0  │ -  │ -  │ 0  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " 1st Period - Intermission",
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ TOR │ 1  │ -  │ -  │ 1  │",
+                "│ MTL │ 0  │ -  │ -  │ 0  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -283,15 +300,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " Final Score",
-            "╭─────┬────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ OT │ T  │",
-            "├─────┼────┼────┼────┼────┼────┤",
-            "│ EDM │ 1  │ 1  │ 1  │ 1  │ 4  │",
-            "│ VAN │ 1  │ 1  │ 1  │ 0  │ 3  │",
-            "╰─────┴────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " Final Score",
+                "╭─────┬────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ OT │ T  │",
+                "├─────┼────┼────┼────┼────┼────┤",
+                "│ EDM │ 1  │ 1  │ 1  │ 1  │ 4  │",
+                "│ VAN │ 1  │ 1  │ 1  │ 0  │ 3  │",
+                "╰─────┴────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -313,15 +333,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " Final Score",
-            "╭─────┬────┬────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
-            "├─────┼────┼────┼────┼────┼────┼────┤",
-            "│ CAR │ 1  │ 1  │ 1  │ 0  │ 1  │ 4  │",
-            "│ NJD │ 1  │ 1  │ 1  │ 0  │ 0  │ 3  │",
-            "╰─────┴────┴────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " Final Score",
+                "╭─────┬────┬────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ OT │ SO │ T  │",
+                "├─────┼────┼────┼────┼────┼────┼────┤",
+                "│ CAR │ 1  │ 1  │ 1  │ 0  │ 1  │ 4  │",
+                "│ NJD │ 1  │ 1  │ 1  │ 0  │ 0  │ 3  │",
+                "╰─────┴────┴────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -368,15 +391,18 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " Short",
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│  A  │ -  │ -  │ -  │ -  │",
-            "│  B  │ -  │ -  │ -  │ -  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " Short",
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│  A  │ -  │ -  │ -  │ -  │",
+                "│  B  │ -  │ -  │ -  │ -  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 
     #[test]
@@ -398,14 +424,17 @@ mod tests {
         let config = test_config();
         let buf = render_widget_with_config(&widget, 37, 7, &config);
 
-        assert_buffer(&buf, &[
-            " Final Score",
-            "╭─────┬────┬────┬────┬────╮",
-            "│     │ 1  │ 2  │ 3  │ T  │",
-            "├─────┼────┼────┼────┼────┤",
-            "│ TOR │ 1  │ 1  │ 1  │ 3  │",
-            "│ MTL │ 1  │ 1  │ 0  │ 2  │",
-            "╰─────┴────┴────┴────┴────╯",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                " Final Score",
+                "╭─────┬────┬────┬────┬────╮",
+                "│     │ 1  │ 2  │ 3  │ T  │",
+                "├─────┼────┼────┼────┼────┤",
+                "│ TOR │ 1  │ 1  │ 1  │ 3  │",
+                "│ MTL │ 1  │ 1  │ 0  │ 2  │",
+                "╰─────┴────┴────┴────┴────╯",
+            ],
+        );
     }
 }

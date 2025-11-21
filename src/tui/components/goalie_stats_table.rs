@@ -1,3 +1,4 @@
+use nhl_api::{GoalieDecision, GoalieStats};
 /// Reusable table widget for displaying goalie statistics
 ///
 /// This component provides a standardized table for both game-level and season-level
@@ -25,16 +26,11 @@
 ///
 /// table.render(area, buf, config);
 /// ```
-
 use ratatui::{buffer::Buffer, layout::Rect};
-use nhl_api::{GoalieDecision, GoalieStats};
 
-use crate::config::DisplayConfig;
-use crate::tui::{
-    component::RenderableWidget,
-    Alignment, CellValue, ColumnDef,
-};
 use super::table::TableWidget;
+use crate::config::DisplayConfig;
+use crate::tui::{component::RenderableWidget, Alignment, CellValue, ColumnDef};
 
 /// Creates column definitions for game-level goalie statistics
 ///
@@ -51,15 +47,13 @@ fn game_goalie_columns() -> Vec<ColumnDef<GoalieStats>> {
             CellValue::Text(
                 g.decision
                     .as_ref()
-                    .map(|d| {
-                        match d {
-                            GoalieDecision::Win => "W",
-                            GoalieDecision::Loss => "L",
-                            GoalieDecision::OvertimeLoss => "OT",
-                        }
+                    .map(|d| match d {
+                        GoalieDecision::Win => "W",
+                        GoalieDecision::Loss => "L",
+                        GoalieDecision::OvertimeLoss => "OT",
                     })
                     .unwrap_or("-")
-                    .to_string()
+                    .to_string(),
             )
         }),
         ColumnDef::new("SA", 3, Alignment::Right, |g: &GoalieStats| {
@@ -179,7 +173,13 @@ mod tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
 
-    fn create_test_goalie(id: i64, name: &str, decision: Option<GoalieDecision>, sa: i32, saves: i32) -> GoalieStats {
+    fn create_test_goalie(
+        id: i64,
+        name: &str,
+        decision: Option<GoalieDecision>,
+        sa: i32,
+        saves: i32,
+    ) -> GoalieStats {
         GoalieStats {
             player_id: id,
             sweater_number: 31,
@@ -209,7 +209,13 @@ mod tests {
     fn test_game_stats_table_renders() {
         let goalies = vec![
             create_test_goalie(8471679, "Carey Price", Some(GoalieDecision::Win), 30, 28),
-            create_test_goalie(8477424, "Andrei Vasilevskiy", Some(GoalieDecision::Loss), 25, 22),
+            create_test_goalie(
+                8477424,
+                "Andrei Vasilevskiy",
+                Some(GoalieDecision::Loss),
+                25,
+                22,
+            ),
         ];
 
         let table = GoalieStatsTableWidget::from_game_stats(goalies)
@@ -229,7 +235,13 @@ mod tests {
 
     #[test]
     fn test_player_link_column_is_first() {
-        let goalies = vec![create_test_goalie(8471679, "Carey Price", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Carey Price",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
 
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
@@ -256,9 +268,13 @@ mod tests {
     fn test_table_shows_goalie_names() {
         use crate::tui::testing::assert_buffer;
 
-        let goalies = vec![
-            create_test_goalie(8471679, "Carey Price", Some(GoalieDecision::Win), 30, 28),
-        ];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Carey Price",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
 
         let table = GoalieStatsTableWidget::from_game_stats(goalies)
             .with_header("Test")
@@ -270,25 +286,34 @@ mod tests {
 
         table.render(area, &mut buf, &config);
 
-        assert_buffer(&buf, &[
-            "  Test",
-            "  ════",
-            "",
-            "  Player                Dec  SA   Sa...  GA  SV%    TOI    EV...  PP...  SH...",
-            "  ────────────────────────────────────────────────────────────────────────────",
-            "  Carey Price            W    30     28   2  0....  60...     15      5      2",
-            "",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "  Test",
+                "  ════",
+                "",
+                "  Player                Dec  SA   Sa...  GA  SV%    TOI    EV...  PP...  SH...",
+                "  ────────────────────────────────────────────────────────────────────────────",
+                "  Carey Price            W    30     28   2  0....  60...     15      5      2",
+                "",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     #[test]
     fn test_decision_formatting() {
         let win_goalie = create_test_goalie(8471679, "Winner", Some(GoalieDecision::Win), 30, 28);
         let loss_goalie = create_test_goalie(8477424, "Loser", Some(GoalieDecision::Loss), 25, 20);
-        let ot_goalie = create_test_goalie(8475883, "OT Loss", Some(GoalieDecision::OvertimeLoss), 28, 25);
+        let ot_goalie = create_test_goalie(
+            8475883,
+            "OT Loss",
+            Some(GoalieDecision::OvertimeLoss),
+            28,
+            25,
+        );
         let no_decision = create_test_goalie(8478024, "Relief", None, 10, 9);
 
         let goalies = vec![win_goalie, loss_goalie, ot_goalie, no_decision];
@@ -309,7 +334,8 @@ mod tests {
 
     #[test]
     fn test_save_percentage_formatting() {
-        let perfect_goalie = create_test_goalie(8471679, "Perfect", Some(GoalieDecision::Win), 30, 30);
+        let perfect_goalie =
+            create_test_goalie(8471679, "Perfect", Some(GoalieDecision::Win), 30, 30);
         let good_goalie = create_test_goalie(8477424, "Good", Some(GoalieDecision::Win), 30, 27);
 
         let goalies = vec![perfect_goalie, good_goalie];
@@ -365,10 +391,16 @@ mod tests {
 
     #[test]
     fn test_with_selection_opt() {
-        let goalies = vec![create_test_goalie(8471679, "Test", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Test",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
 
-        let table = GoalieStatsTableWidget::from_game_stats(goalies)
-            .with_selection_opt(Some(0), Some(0));
+        let table =
+            GoalieStatsTableWidget::from_game_stats(goalies).with_selection_opt(Some(0), Some(0));
 
         let area = Rect::new(0, 0, 80, 6);
         let mut buf = Buffer::empty(area);
@@ -380,7 +412,13 @@ mod tests {
 
     #[test]
     fn test_find_next_link_column() {
-        let goalies = vec![create_test_goalie(8471679, "Test", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Test",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         // Player is column 0 (only link column), so there's no next link
@@ -389,7 +427,13 @@ mod tests {
 
     #[test]
     fn test_find_previous_link_column() {
-        let goalies = vec![create_test_goalie(8471679, "Test", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Test",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         // Column 0 is the first link, so no previous link
@@ -398,7 +442,13 @@ mod tests {
 
     #[test]
     fn test_clone_box() {
-        let goalies = vec![create_test_goalie(8471679, "Test", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Test",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         let _cloned: Box<dyn RenderableWidget> = table.clone_box();
@@ -407,7 +457,13 @@ mod tests {
 
     #[test]
     fn test_preferred_height() {
-        let goalies = vec![create_test_goalie(8471679, "Test", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Test",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         // Delegate to inner table, just verify it returns something
@@ -416,7 +472,13 @@ mod tests {
 
     #[test]
     fn test_preferred_width() {
-        let goalies = vec![create_test_goalie(8471679, "Test", Some(GoalieDecision::Win), 30, 28)];
+        let goalies = vec![create_test_goalie(
+            8471679,
+            "Test",
+            Some(GoalieDecision::Win),
+            30,
+            28,
+        )];
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         // Delegate to inner table, just verify it returns something

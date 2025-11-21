@@ -1,3 +1,4 @@
+use nhl_api::SkaterStats;
 /// Reusable table widget for displaying skater statistics
 ///
 /// This component provides a standardized table for both game-level and season-level
@@ -25,16 +26,11 @@
 ///
 /// table.render(area, buf, config);
 /// ```
-
 use ratatui::{buffer::Buffer, layout::Rect};
-use nhl_api::SkaterStats;
 
-use crate::config::DisplayConfig;
-use crate::tui::{
-    component::RenderableWidget,
-    Alignment, CellValue, ColumnDef,
-};
 use super::table::TableWidget;
+use crate::config::DisplayConfig;
+use crate::tui::{component::RenderableWidget, Alignment, CellValue, ColumnDef};
 
 /// Creates column definitions for game-level skater statistics
 ///
@@ -231,7 +227,13 @@ mod tests {
 
     #[test]
     fn test_player_link_column_is_first() {
-        let skaters = vec![create_test_skater(8479318, "Auston Matthews", Position::Center, 2, 1)];
+        let skaters = vec![create_test_skater(
+            8479318,
+            "Auston Matthews",
+            Position::Center,
+            2,
+            1,
+        )];
 
         let table = SkaterStatsTableWidget::from_game_stats(skaters);
 
@@ -258,9 +260,13 @@ mod tests {
     fn test_table_shows_player_names() {
         use crate::tui::testing::assert_buffer;
 
-        let skaters = vec![
-            create_test_skater(8479318, "Auston Matthews", Position::Center, 2, 1),
-        ];
+        let skaters = vec![create_test_skater(
+            8479318,
+            "Auston Matthews",
+            Position::Center,
+            2,
+            1,
+        )];
 
         let table = SkaterStatsTableWidget::from_game_stats(skaters)
             .with_header("Test")
@@ -272,18 +278,21 @@ mod tests {
 
         table.render(area, &mut buf, &config);
 
-        assert_buffer(&buf, &[
-            "  Test",
-            "  ════",
-            "",
-            "  Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI",
-            "  ──────────────────────────────────────────────────────────────────────────────",
-            "  Auston Matthews        C    2   1    3   +2    8     5    2    4   55.0  18...",
-            "",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "  Test",
+                "  ════",
+                "",
+                "  Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI",
+                "  ──────────────────────────────────────────────────────────────────────────────",
+                "  Auston Matthews        C    2   1    3   +2    8     5    2    4   55.0  18...",
+                "",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     #[test]

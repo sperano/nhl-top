@@ -157,10 +157,8 @@
 /// - `get_cell_value(row, col)` - Get CellValue at position
 /// - `row_count()` / `column_count()` - Get table dimensions
 use crate::config::DisplayConfig;
-use crate::tui::{
-    Alignment, CellValue, ColumnDef, Component, Element,
-};
 use crate::tui::component::RenderableWidget;
+use crate::tui::{Alignment, CellValue, ColumnDef, Component, Element};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -361,7 +359,9 @@ impl TableWidget {
         if is_selected && self.focused {
             // Focused selection: use REVERSED + BOLD modifier
             if let Some(theme) = &config.theme {
-                Style::default().fg(theme.fg2).add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
+                Style::default()
+                    .fg(theme.fg2)
+                    .add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
             } else {
                 Style::default().add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
             }
@@ -382,9 +382,10 @@ impl TableWidget {
     pub fn find_next_link_column(&self, current_col: usize) -> Option<usize> {
         for col_idx in (current_col + 1)..self.column_headers.len() {
             // Check if any cell in this column is a link
-            let has_link = self.cell_data.iter().any(|row| {
-                row.get(col_idx).map(|cell| cell.is_link()).unwrap_or(false)
-            });
+            let has_link = self
+                .cell_data
+                .iter()
+                .any(|row| row.get(col_idx).map(|cell| cell.is_link()).unwrap_or(false));
 
             if has_link {
                 return Some(col_idx);
@@ -403,9 +404,10 @@ impl TableWidget {
 
         for col_idx in (0..current_col).rev() {
             // Check if any cell in this column is a link
-            let has_link = self.cell_data.iter().any(|row| {
-                row.get(col_idx).map(|cell| cell.is_link()).unwrap_or(false)
-            });
+            let has_link = self
+                .cell_data
+                .iter()
+                .any(|row| row.get(col_idx).map(|cell| cell.is_link()).unwrap_or(false));
 
             if has_link {
                 return Some(col_idx);
@@ -419,9 +421,10 @@ impl TableWidget {
     /// Returns None if there are no link columns.
     pub fn find_first_link_column(&self) -> Option<usize> {
         for col_idx in 0..self.column_headers.len() {
-            let has_link = self.cell_data.iter().any(|row| {
-                row.get(col_idx).map(|cell| cell.is_link()).unwrap_or(false)
-            });
+            let has_link = self
+                .cell_data
+                .iter()
+                .any(|row| row.get(col_idx).map(|cell| cell.is_link()).unwrap_or(false));
 
             if has_link {
                 return Some(col_idx);
@@ -460,7 +463,8 @@ impl RenderableWidget for TableWidget {
         // Render header if present (margin first, then selector space)
         if let Some(ref header_text) = self.header {
             if y < area.bottom() {
-                let header_line = format!("{}{}{}",
+                let header_line = format!(
+                    "{}{}{}",
                     " ".repeat(margin),
                     " ".repeat(SELECTOR_WIDTH),
                     header_text
@@ -473,12 +477,7 @@ impl RenderableWidget for TableWidget {
                     Style::default().add_modifier(Modifier::BOLD)
                 };
 
-                buf.set_string(
-                    area.x,
-                    y,
-                    &header_line,
-                    header_style,
-                );
+                buf.set_string(area.x, y, &header_line, header_style);
                 y += 1;
             }
 
@@ -522,12 +521,7 @@ impl RenderableWidget for TableWidget {
             for (col_idx, header) in self.column_headers.iter().enumerate() {
                 let width = self.column_widths[col_idx];
                 let formatted = self.format_cell(header, width, Alignment::Left);
-                buf.set_string(
-                    x,
-                    y,
-                    &formatted,
-                    col_header_style,
-                );
+                buf.set_string(x, y, &formatted, col_header_style);
                 x += width as u16 + 2; // +2 for spacing between columns
             }
             y += 1;
@@ -540,7 +534,8 @@ impl RenderableWidget for TableWidget {
                 + (self.column_widths.len().saturating_sub(1) * 2); // spacing between columns
 
             let separator = config.box_chars.horizontal.repeat(total_width);
-            let separator_line = format!("{}{}{}",
+            let separator_line = format!(
+                "{}{}{}",
                 " ".repeat(margin),
                 " ".repeat(SELECTOR_WIDTH),
                 separator
@@ -608,8 +603,16 @@ impl RenderableWidget for TableWidget {
 
     fn preferred_height(&self) -> Option<u16> {
         let header_height = if self.header.is_some() { 3 } else { 0 }; // header + underline + blank
-        let col_header_height = if !self.column_headers.is_empty() { 1 } else { 0 };
-        let separator_height = if !self.column_headers.is_empty() { 1 } else { 0 }; // separator line under headers
+        let col_header_height = if !self.column_headers.is_empty() {
+            1
+        } else {
+            0
+        };
+        let separator_height = if !self.column_headers.is_empty() {
+            1
+        } else {
+            0
+        }; // separator line under headers
         let rows_height = self.cell_data.len() as u16;
         Some(header_height + col_header_height + separator_height + rows_height)
     }
@@ -751,9 +754,12 @@ mod tests {
             value: 5,
         }];
 
-        let columns = vec![ColumnDef::new("Name", 10, Alignment::Left, |r: &TestRow| {
-            CellValue::Text(r.name.clone())
-        })];
+        let columns = vec![ColumnDef::new(
+            "Name",
+            10,
+            Alignment::Left,
+            |r: &TestRow| CellValue::Text(r.name.clone()),
+        )];
 
         let widget = TableWidget::from_data(&columns, rows).with_header("Test Table");
         let config = test_config();
@@ -781,23 +787,19 @@ mod tests {
             value: 5,
         }];
 
-        let columns = vec![ColumnDef::new("Name", 10, Alignment::Left, |r: &TestRow| {
-            CellValue::Text(r.name.clone())
-        })];
+        let columns = vec![ColumnDef::new(
+            "Name",
+            10,
+            Alignment::Left,
+            |r: &TestRow| CellValue::Text(r.name.clone()),
+        )];
 
         let widget = TableWidget::from_data(&columns, rows).with_margin(2);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
 
-        assert_buffer(
-            &buf,
-            &[
-                "    Name",
-                "    ──────────",
-                "    Test",
-            ],
-        );
+        assert_buffer(&buf, &["    Name", "    ──────────", "    Test"]);
     }
 
     #[test]
@@ -843,23 +845,19 @@ mod tests {
             value: 5,
         }];
 
-        let columns = vec![ColumnDef::new("Name", 10, Alignment::Left, |r: &TestRow| {
-            CellValue::Text(r.name.clone())
-        })];
+        let columns = vec![ColumnDef::new(
+            "Name",
+            10,
+            Alignment::Left,
+            |r: &TestRow| CellValue::Text(r.name.clone()),
+        )];
 
         let widget = TableWidget::from_data(&columns, rows);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
 
-        assert_buffer(
-            &buf,
-            &[
-                "  Name",
-                "  ──────────",
-                "  Very Lo...",
-            ],
-        );
+        assert_buffer(&buf, &["  Name", "  ──────────", "  Very Lo..."]);
     }
 
     #[test]
@@ -891,9 +889,12 @@ mod tests {
             },
         ];
 
-        let columns = vec![ColumnDef::new("Name", 10, Alignment::Left, |r: &TestRow| {
-            CellValue::Text(r.name.clone())
-        })];
+        let columns = vec![ColumnDef::new(
+            "Name",
+            10,
+            Alignment::Left,
+            |r: &TestRow| CellValue::Text(r.name.clone()),
+        )];
 
         let widget = TableWidget::from_data(&columns, rows)
             .with_selection(1, 0) // Select row 1, col 0
@@ -1113,12 +1114,15 @@ mod tests {
     fn test_link_activation_player() {
         let rows = vec![create_test_rows()[0].clone()];
 
-        let columns = vec![ColumnDef::new("Player", 20, Alignment::Left, |r: &TestRow| {
-            CellValue::PlayerLink {
+        let columns = vec![ColumnDef::new(
+            "Player",
+            20,
+            Alignment::Left,
+            |r: &TestRow| CellValue::PlayerLink {
                 display: r.name.clone(),
                 player_id: r.id,
-            }
-        })];
+            },
+        )];
 
         let widget = TableWidget::from_data(&columns, rows);
 
@@ -1137,12 +1141,15 @@ mod tests {
     fn test_link_activation_team() {
         let rows = vec![create_test_rows()[0].clone()];
 
-        let columns = vec![ColumnDef::new("Team", 15, Alignment::Left, |_: &TestRow| {
-            CellValue::TeamLink {
+        let columns = vec![ColumnDef::new(
+            "Team",
+            15,
+            Alignment::Left,
+            |_: &TestRow| CellValue::TeamLink {
                 display: "Toronto Maple Leafs".to_string(),
                 team_abbrev: "TOR".to_string(),
-            }
-        })];
+            },
+        )];
 
         let widget = TableWidget::from_data(&columns, rows);
 

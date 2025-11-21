@@ -1,11 +1,11 @@
+use crate::config::{Config, DisplayConfig};
+use crate::tui::component::RenderableWidget;
+use crate::tui::SettingsCategory;
 /// SettingsListWidget - displays a read-only list of settings with their current values
 ///
 /// This widget renders a simple key-value table for configuration settings.
 /// Settings are displayed as "Setting Name: Current Value" pairs.
-use ratatui::{buffer::Buffer, layout::Rect, text::Line, style::Style};
-use crate::config::{Config, DisplayConfig};
-use crate::tui::component::RenderableWidget;
-use crate::tui::SettingsCategory;
+use ratatui::{buffer::Buffer, layout::Rect, style::Style, text::Line};
 
 /// Widget for displaying settings list
 #[derive(Debug, Clone)]
@@ -56,15 +56,41 @@ impl SettingsListWidget {
                 ("Log File".to_string(), self.config.log_file.clone()),
             ],
             SettingsCategory::Display => vec![
-                ("Theme".to_string(), self.config.display.theme.as_ref().map(|t| t.name.to_string()).unwrap_or_else(|| "none".to_string())),
-                ("Use Unicode".to_string(), self.config.display.use_unicode.to_string()),
-                ("Selection Color".to_string(), format_color(&self.config.display.selection_fg)),
-                ("Division Header Color".to_string(), format_color(&self.config.display.division_header_fg)),
-                ("Error Color".to_string(), format_color(&self.config.display.error_fg)),
+                (
+                    "Theme".to_string(),
+                    self.config
+                        .display
+                        .theme
+                        .as_ref()
+                        .map(|t| t.name.to_string())
+                        .unwrap_or_else(|| "none".to_string()),
+                ),
+                (
+                    "Use Unicode".to_string(),
+                    self.config.display.use_unicode.to_string(),
+                ),
+                (
+                    "Selection Color".to_string(),
+                    format_color(&self.config.display.selection_fg),
+                ),
+                (
+                    "Division Header Color".to_string(),
+                    format_color(&self.config.display.division_header_fg),
+                ),
+                (
+                    "Error Color".to_string(),
+                    format_color(&self.config.display.error_fg),
+                ),
             ],
             SettingsCategory::Data => vec![
-                ("Refresh Interval".to_string(), format!("{} seconds", self.config.refresh_interval)),
-                ("Western Teams First".to_string(), self.config.display_standings_western_first.to_string()),
+                (
+                    "Refresh Interval".to_string(),
+                    format!("{} seconds", self.config.refresh_interval),
+                ),
+                (
+                    "Western Teams First".to_string(),
+                    self.config.display_standings_western_first.to_string(),
+                ),
                 ("Time Format".to_string(), self.config.time_format.clone()),
             ],
         }
@@ -78,7 +104,8 @@ impl RenderableWidget for SettingsListWidget {
         let mut y = area.y + 1;
 
         // Calculate max key length (including colon) for alignment
-        let max_key_len = settings.iter()
+        let max_key_len = settings
+            .iter()
             .map(|(key, _)| key.len() + 1) // +1 for the colon
             .max()
             .unwrap_or(0);
@@ -89,7 +116,8 @@ impl RenderableWidget for SettingsListWidget {
             }
 
             // Check if this setting is being edited
-            let is_editing = self.editing && self.settings_mode && self.selected_index == Some(index);
+            let is_editing =
+                self.editing && self.settings_mode && self.selected_index == Some(index);
 
             // Format value with cursor if editing
             let display_value = if is_editing {
@@ -110,7 +138,13 @@ impl RenderableWidget for SettingsListWidget {
 
             // Format as "Key:  Value" with padding for alignment
             let key_with_colon = format!("{}:", key);
-            let line_text = format!("{}{:width$}  {}", selector, key_with_colon, display_value, width = max_key_len);
+            let line_text = format!(
+                "{}{:width$}  {}",
+                selector,
+                key_with_colon,
+                display_value,
+                width = max_key_len
+            );
 
             // Apply fg2 style from theme (or default if no theme), with REVERSED and BOLD for selection
             let style = if let Some(theme) = &config.theme {
@@ -168,8 +202,8 @@ fn format_color(color: &ratatui::style::Color) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::{buffer::Buffer, layout::Rect};
     use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
+    use ratatui::{buffer::Buffer, layout::Rect};
 
     #[test]
     fn test_settings_list_logging_category() {
@@ -191,11 +225,14 @@ mod tests {
         widget.render(area, &mut buf, &display_config);
 
         // Verify both settings are rendered with aligned values (margin + selector space)
-        assert_buffer(&buf, &[
-            "",
-            &format!("    Log Level:  {}", config.log_level),
-            &format!("    Log File:   {}", config.log_file),
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "",
+                &format!("    Log Level:  {}", config.log_level),
+                &format!("    Log File:   {}", config.log_file),
+            ],
+        );
     }
 
     #[test]
@@ -233,7 +270,10 @@ mod tests {
         let settings = widget.get_settings();
         assert_eq!(settings.len(), 3);
         assert_eq!(settings[0].0, "Refresh Interval");
-        assert_eq!(settings[0].1, format!("{} seconds", config.refresh_interval));
+        assert_eq!(
+            settings[0].1,
+            format!("{} seconds", config.refresh_interval)
+        );
     }
 
     #[test]
@@ -267,11 +307,14 @@ mod tests {
         widget.render(area, &mut buf, &display_config);
 
         // Log File should show with edit cursor
-        assert_buffer(&buf, &[
-            "",
-            &format!("    Log Level:  {}", config.log_level),
-            "  ▶ Log File:   /tmp/test.log█",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "",
+                &format!("    Log Level:  {}", config.log_level),
+                "  ▶ Log File:   /tmp/test.log█",
+            ],
+        );
     }
 
     #[test]
@@ -296,11 +339,14 @@ mod tests {
         widget.render(area, &mut buf, &display_config);
 
         // Log File should show without edit cursor
-        assert_buffer(&buf, &[
-            "",
-            &format!("    Log Level:  {}", config.log_level),
-            &format!("  ▶ Log File:   {}", config.log_file),
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "",
+                &format!("    Log Level:  {}", config.log_level),
+                &format!("  ▶ Log File:   {}", config.log_file),
+            ],
+        );
     }
 
     #[test]
@@ -312,9 +358,9 @@ mod tests {
             SettingsCategory::Logging,
             config,
             2,
-            Some(1), // Select "Log File"
-            true,    // settings_mode = true
-            true,    // editing = true
+            Some(1),       // Select "Log File"
+            true,          // settings_mode = true
+            true,          // editing = true
             String::new(), // Empty buffer
         );
 
@@ -325,11 +371,7 @@ mod tests {
         widget.render(area, &mut buf, &display_config);
 
         // Log File should show with just cursor
-        assert_buffer(&buf, &[
-            "",
-            "    Log Level:  info",
-            "  ▶ Log File:   █",
-        ]);
+        assert_buffer(&buf, &["", "    Log Level:  info", "  ▶ Log File:   █"]);
     }
 
     #[test]

@@ -1,7 +1,7 @@
-use nhl_api::{Boxscore, GameClock};
-use crate::data_provider::NHLDataProvider;
 use crate::commands::parse_game_date;
+use crate::data_provider::NHLDataProvider;
 use anyhow::{Context, Result};
+use nhl_api::{Boxscore, GameClock};
 
 // Layout Constants
 /// Width of the game box border
@@ -25,7 +25,9 @@ const HEADER_SEPARATOR_WIDTH: usize = 90;
 pub async fn run(client: &dyn NHLDataProvider, date: Option<String>) -> Result<()> {
     let game_date = parse_game_date(date)?;
 
-    let schedule = client.daily_schedule(Some(game_date)).await
+    let schedule = client
+        .daily_schedule(Some(game_date))
+        .await
         .context("Failed to fetch schedule")?;
 
     // Display header
@@ -80,11 +82,17 @@ fn display_detailed_score(boxscore: &Boxscore) {
     println!("{}", build_box_border('┌'));
 
     // Teams and final score line
-    println!("│ {:<15} {:>2}     FINAL     {:>2}  {:<15}                                │",
-        away_abbrev, away_score, home_score, home_abbrev);
+    println!(
+        "│ {:<15} {:>2}     FINAL     {:>2}  {:<15}                                │",
+        away_abbrev, away_score, home_score, home_abbrev
+    );
 
     // Game status line
-    let status_text = format_game_status(boxscore.game_state, &boxscore.period_descriptor.number, &boxscore.clock);
+    let status_text = format_game_status(
+        boxscore.game_state,
+        &boxscore.period_descriptor.number,
+        &boxscore.clock,
+    );
     println!("│ {:<86} │", status_text);
 
     // Separator line
@@ -134,10 +142,15 @@ fn build_period_header(max_period: i32) -> String {
 }
 
 fn build_period_header_separator(max_period: i32) -> String {
-    let mut separator = format!("│ {:<width$}   {:─<col_width$}{:─<col_width$}{:─<col_width$}",
-        "", "", "", "",
+    let mut separator = format!(
+        "│ {:<width$}   {:─<col_width$}{:─<col_width$}{:─<col_width$}",
+        "",
+        "",
+        "",
+        "",
         width = TEAM_ABBREV_WIDTH,
-        col_width = PERIOD_COL_WIDTH);
+        col_width = PERIOD_COL_WIDTH
+    );
 
     if max_period > 3 {
         separator.push_str(&format!("{:─<width$}", "", width = PERIOD_COL_WIDTH));
@@ -177,11 +190,15 @@ fn display_simple_score(game: &nhl_api::ScheduleGame) {
     println!("┌{:─<width$}┐", "", width = BOX_WIDTH);
 
     if let (Some(away_score), Some(home_score)) = (game.away_team.score, game.home_team.score) {
-        println!("│ {:<15} {:>2}           {:>2}  {:<15}                                    │",
-            game.away_team.abbrev, away_score, home_score, game.home_team.abbrev);
+        println!(
+            "│ {:<15} {:>2}           {:>2}  {:<15}                                    │",
+            game.away_team.abbrev, away_score, home_score, game.home_team.abbrev
+        );
     } else {
-        println!("│ {:<15}  @  {:<15}                                                │",
-            game.away_team.abbrev, game.home_team.abbrev);
+        println!(
+            "│ {:<15}  @  {:<15}                                                │",
+            game.away_team.abbrev, game.home_team.abbrev
+        );
     }
 
     let status = if game.game_state.is_scheduled() {

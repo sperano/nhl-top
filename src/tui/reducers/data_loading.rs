@@ -4,26 +4,38 @@ use tracing::debug;
 
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
-use crate::tui::state::{AppState, LoadingKey};
 use crate::tui::reducers::standings_layout::build_standings_layout;
+use crate::tui::state::{AppState, LoadingKey};
 
 /// Handle all data loading actions (API responses)
 pub fn reduce_data_loading(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
     match action {
-        Action::StandingsLoaded(result) => Some(handle_standings_loaded(state.clone(), result.clone())),
-        Action::ScheduleLoaded(result) => Some(handle_schedule_loaded(state.clone(), result.clone())),
-        Action::GameDetailsLoaded(game_id, result) => {
-            Some(handle_game_details_loaded(state.clone(), *game_id, result.clone()))
+        Action::StandingsLoaded(result) => {
+            Some(handle_standings_loaded(state.clone(), result.clone()))
         }
-        Action::BoxscoreLoaded(game_id, result) => {
-            Some(handle_boxscore_loaded(state.clone(), *game_id, result.clone()))
+        Action::ScheduleLoaded(result) => {
+            Some(handle_schedule_loaded(state.clone(), result.clone()))
         }
-        Action::TeamRosterStatsLoaded(team_abbrev, result) => {
-            Some(handle_team_roster_loaded(state.clone(), team_abbrev.clone(), result.clone()))
-        }
-        Action::PlayerStatsLoaded(player_id, result) => {
-            Some(handle_player_stats_loaded(state.clone(), *player_id, result.clone()))
-        }
+        Action::GameDetailsLoaded(game_id, result) => Some(handle_game_details_loaded(
+            state.clone(),
+            *game_id,
+            result.clone(),
+        )),
+        Action::BoxscoreLoaded(game_id, result) => Some(handle_boxscore_loaded(
+            state.clone(),
+            *game_id,
+            result.clone(),
+        )),
+        Action::TeamRosterStatsLoaded(team_abbrev, result) => Some(handle_team_roster_loaded(
+            state.clone(),
+            team_abbrev.clone(),
+            result.clone(),
+        )),
+        Action::PlayerStatsLoaded(player_id, result) => Some(handle_player_stats_loaded(
+            state.clone(),
+            *player_id,
+            result.clone(),
+        )),
         Action::RefreshData => Some(handle_refresh_data(state.clone())),
         Action::SetGameDate(date) => Some(handle_set_game_date(state.clone(), date.clone())),
         _ => None,
@@ -52,7 +64,10 @@ fn handle_standings_loaded(
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
-            new_state.data.errors.insert("standings".to_string(), format!("Failed to load standings: {}", e));
+            new_state.data.errors.insert(
+                "standings".to_string(),
+                format!("Failed to load standings: {}", e),
+            );
             new_state.data.loading.remove(&LoadingKey::Standings);
         }
     }
@@ -75,7 +90,10 @@ fn handle_schedule_loaded(
         }
         Err(e) => {
             debug!("DATA: Failed to load schedule: {}", e);
-            new_state.data.errors.insert("error".to_string(), format!("Failed to load schedule: {}", e));
+            new_state.data.errors.insert(
+                "error".to_string(),
+                format!("Failed to load schedule: {}", e),
+            );
             // TODO: Remove Schedule loading key - needs date string
         }
     }
@@ -103,11 +121,17 @@ fn handle_game_details_loaded(
             // Store game info
             Arc::make_mut(&mut new_state.data.game_info).insert(game_id, game_matchup);
 
-            new_state.data.loading.remove(&LoadingKey::GameDetails(game_id));
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::GameDetails(game_id));
         }
         Err(e) => {
             debug!("DATA: Failed to load game details for {}: {}", game_id, e);
-            new_state.data.loading.remove(&LoadingKey::GameDetails(game_id));
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::GameDetails(game_id));
         }
     }
 
@@ -125,12 +149,21 @@ fn handle_boxscore_loaded(
         Ok(boxscore) => {
             debug!("DATA: Loaded boxscore for game {}", game_id);
             Arc::make_mut(&mut new_state.data.boxscores).insert(game_id, boxscore);
-            new_state.data.loading.remove(&LoadingKey::Boxscore(game_id));
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::Boxscore(game_id));
         }
         Err(e) => {
             debug!("DATA: Failed to load boxscore for {}: {}", game_id, e);
-            new_state.data.errors.insert("error".to_string(), format!("Failed to load boxscore: {}", e));
-            new_state.data.loading.remove(&LoadingKey::Boxscore(game_id));
+            new_state.data.errors.insert(
+                "error".to_string(),
+                format!("Failed to load boxscore: {}", e),
+            );
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::Boxscore(game_id));
         }
     }
 
@@ -147,13 +180,26 @@ fn handle_team_roster_loaded(
     match result {
         Ok(roster) => {
             debug!("DATA: Loaded roster for team {}", team_abbrev);
-            Arc::make_mut(&mut new_state.data.team_roster_stats).insert(team_abbrev.clone(), roster);
-            new_state.data.loading.remove(&LoadingKey::TeamRosterStats(team_abbrev));
+            Arc::make_mut(&mut new_state.data.team_roster_stats)
+                .insert(team_abbrev.clone(), roster);
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::TeamRosterStats(team_abbrev));
         }
         Err(e) => {
-            debug!("DATA: Failed to load team roster for {}: {}", team_abbrev, e);
-            new_state.data.errors.insert("error".to_string(), format!("Failed to load team roster: {}", e));
-            new_state.data.loading.remove(&LoadingKey::TeamRosterStats(team_abbrev));
+            debug!(
+                "DATA: Failed to load team roster for {}: {}",
+                team_abbrev, e
+            );
+            new_state.data.errors.insert(
+                "error".to_string(),
+                format!("Failed to load team roster: {}", e),
+            );
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::TeamRosterStats(team_abbrev));
         }
     }
 
@@ -171,12 +217,21 @@ fn handle_player_stats_loaded(
         Ok(stats) => {
             debug!("DATA: Loaded stats for player {}", player_id);
             Arc::make_mut(&mut new_state.data.player_data).insert(player_id, stats);
-            new_state.data.loading.remove(&LoadingKey::PlayerStats(player_id));
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::PlayerStats(player_id));
         }
         Err(e) => {
             debug!("DATA: Failed to load player stats for {}: {}", player_id, e);
-            new_state.data.errors.insert("error".to_string(), format!("Failed to load player stats: {}", e));
-            new_state.data.loading.remove(&LoadingKey::PlayerStats(player_id));
+            new_state.data.errors.insert(
+                "error".to_string(),
+                format!("Failed to load player stats: {}", e),
+            );
+            new_state
+                .data
+                .loading
+                .remove(&LoadingKey::PlayerStats(player_id));
         }
     }
 
@@ -218,10 +273,14 @@ mod tests {
 
         // Verify the function signature exists and handles both Ok and Err cases
         let result_ok: Result<nhl_api::GameMatchup, String> = Err("test".to_string());
-        let (new_state, _effect) = handle_game_details_loaded(state.clone(), TEST_GAME_ID, result_ok);
+        let (new_state, _effect) =
+            handle_game_details_loaded(state.clone(), TEST_GAME_ID, result_ok);
 
         // Verify loading key is removed on error
-        assert!(!new_state.data.loading.contains(&LoadingKey::GameDetails(TEST_GAME_ID)));
+        assert!(!new_state
+            .data
+            .loading
+            .contains(&LoadingKey::GameDetails(TEST_GAME_ID)));
 
         // The actual test with real GameMatchup data would require constructing
         // a complex struct with all required fields. The key behavior to test is:

@@ -2,14 +2,12 @@ use tracing::debug;
 
 use crate::commands::standings::GroupBy;
 use crate::tui::action::StandingsAction;
-use crate::tui::types::Panel;
 use crate::tui::component::Effect;
 use crate::tui::state::{AppState, PanelState};
+use crate::tui::types::Panel;
 
 use super::standings_layout::{
-    build_standings_layout,
-    count_teams_in_conference_column,
-    count_teams_in_division_column,
+    build_standings_layout, count_teams_in_conference_column, count_teams_in_division_column,
     count_teams_in_wildcard_column,
 };
 
@@ -95,7 +93,10 @@ fn handle_exit_browse_mode(state: AppState) -> (AppState, Effect) {
 fn handle_select_team(state: AppState) -> (AppState, Effect) {
     // Use cached layout instead of rebuilding
     // Extract team_abbrev from cached layout before moving state
-    let team_abbrev_opt = state.ui.standings.layout
+    let team_abbrev_opt = state
+        .ui
+        .standings
+        .layout
         .get(state.ui.standings.selected_column)
         .and_then(|col| col.get(state.ui.standings.selected_row))
         .cloned();
@@ -103,9 +104,7 @@ fn handle_select_team(state: AppState) -> (AppState, Effect) {
     if let Some(team_abbrev) = team_abbrev_opt {
         debug!(
             "STANDINGS: Selected team: {} (row={}, col={})",
-            team_abbrev,
-            state.ui.standings.selected_row,
-            state.ui.standings.selected_column
+            team_abbrev, state.ui.standings.selected_row, state.ui.standings.selected_column
         );
 
         // Push TeamDetail panel onto navigation stack
@@ -126,15 +125,18 @@ fn handle_select_team(state: AppState) -> (AppState, Effect) {
     } else {
         debug!(
             "STANDINGS: No team at position (row={}, col={})",
-            state.ui.standings.selected_row,
-            state.ui.standings.selected_column
+            state.ui.standings.selected_row, state.ui.standings.selected_column
         );
     }
 
     (state, Effect::None)
 }
 
-fn handle_select_team_by_position(state: AppState, column: usize, row: usize) -> (AppState, Effect) {
+fn handle_select_team_by_position(
+    state: AppState,
+    column: usize,
+    row: usize,
+) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.ui.standings.selected_column = column;
     new_state.ui.standings.selected_row = row;
@@ -206,7 +208,10 @@ fn handle_move_selection_left(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Conference, Division, and Wildcard views have 2 columns for navigation
-    if matches!(new_state.ui.standings.view, GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard) {
+    if matches!(
+        new_state.ui.standings.view,
+        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard
+    ) {
         // Wrap around: 0 -> 1
         new_state.ui.standings.selected_column = if new_state.ui.standings.selected_column == 0 {
             1
@@ -225,7 +230,10 @@ fn handle_move_selection_right(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Conference, Division, and Wildcard views have 2 columns for navigation
-    if matches!(new_state.ui.standings.view, GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard) {
+    if matches!(
+        new_state.ui.standings.view,
+        GroupBy::Conference | GroupBy::Division | GroupBy::Wildcard
+    ) {
         // Wrap around: 1 -> 0
         new_state.ui.standings.selected_column = if new_state.ui.standings.selected_column == 1 {
             0
@@ -260,7 +268,11 @@ fn handle_page_up(state: AppState) -> (AppState, Effect) {
     let team_count = get_team_count(&new_state);
 
     if team_count > 0 {
-        let new_row = new_state.ui.standings.selected_row.saturating_sub(PAGE_SIZE);
+        let new_row = new_state
+            .ui
+            .standings
+            .selected_row
+            .saturating_sub(PAGE_SIZE);
         new_state.ui.standings.selected_row = new_row;
         ensure_selection_visible(&mut new_state);
         debug!("STANDINGS: PageUp - moved to row {}", new_row);
@@ -551,7 +563,8 @@ mod tests {
     fn test_select_team_by_position() {
         let state = AppState::default();
 
-        let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 5));
+        let (new_state, effect) =
+            reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 5));
 
         assert_eq!(new_state.ui.standings.selected_column, 1);
         assert_eq!(new_state.ui.standings.selected_row, 5);
@@ -764,7 +777,8 @@ mod tests {
         state.data.standings = Arc::new(Some(create_test_standings()));
         state.ui.standings.view = GroupBy::Conference;
 
-        let (new_state, effect) = reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 3));
+        let (new_state, effect) =
+            reduce_standings(state, StandingsAction::SelectTeamByPosition(1, 3));
 
         // Should set the selected position (no panel push)
         assert_eq!(new_state.ui.standings.selected_column, 1);
@@ -951,13 +965,18 @@ mod tests {
         let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
 
         assert_eq!(new_state.ui.standings.selected_row, 20);
-        assert_eq!(new_state.ui.standings.scroll_offset, 1,
-            "Should scroll down by 1 to keep row 20 visible (20 - 20 + 1 = 1)");
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, 1,
+            "Should scroll down by 1 to keep row 20 visible (20 - 20 + 1 = 1)"
+        );
 
         // Selection should be within visible window
         let viewport_height = new_state.ui.standings.viewport_height;
         assert!(new_state.ui.standings.selected_row >= new_state.ui.standings.scroll_offset);
-        assert!(new_state.ui.standings.selected_row < new_state.ui.standings.scroll_offset + viewport_height);
+        assert!(
+            new_state.ui.standings.selected_row
+                < new_state.ui.standings.scroll_offset + viewport_height
+        );
     }
 
     #[test]
@@ -973,15 +992,19 @@ mod tests {
 
         // Move down 25 times
         for i in 1..=25 {
-            let (new_state, _) = reduce_standings(state.clone(), StandingsAction::MoveSelectionDown);
+            let (new_state, _) =
+                reduce_standings(state.clone(), StandingsAction::MoveSelectionDown);
             state = new_state;
 
             assert_eq!(state.ui.standings.selected_row, i);
             // Scroll should track selection to keep it visible
             let viewport_height = state.ui.standings.viewport_height;
             if i >= viewport_height {
-                assert!(state.ui.standings.scroll_offset > 0,
-                    "After moving to row {}, scroll should have started", i);
+                assert!(
+                    state.ui.standings.scroll_offset > 0,
+                    "After moving to row {}, scroll should have started",
+                    i
+                );
             }
         }
     }
@@ -1000,8 +1023,10 @@ mod tests {
         let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionUp);
 
         assert_eq!(new_state.ui.standings.selected_row, 14);
-        assert_eq!(new_state.ui.standings.scroll_offset, 10,
-            "Should not scroll yet - row 14 is still visible (10-29)");
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, 10,
+            "Should not scroll yet - row 14 is still visible (10-29)"
+        );
 
         // Move up more
         let mut state = new_state;
@@ -1011,8 +1036,10 @@ mod tests {
         }
 
         assert_eq!(state.ui.standings.selected_row, 9);
-        assert_eq!(state.ui.standings.scroll_offset, 9,
-            "Should scroll up to keep row 9 visible");
+        assert_eq!(
+            state.ui.standings.scroll_offset, 9,
+            "Should scroll up to keep row 9 visible"
+        );
     }
 
     #[test]
@@ -1029,8 +1056,10 @@ mod tests {
         let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
 
         assert_eq!(new_state.ui.standings.selected_row, 0);
-        assert_eq!(new_state.ui.standings.scroll_offset, 0,
-            "Wrapping to top should reset scroll_offset");
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, 0,
+            "Wrapping to top should reset scroll_offset"
+        );
     }
 
     #[test]
@@ -1050,8 +1079,10 @@ mod tests {
         assert_eq!(new_state.ui.standings.selected_row, 31);
         // With viewport_height=20, last visible row is scroll_offset + 19
         // To show row 31, scroll_offset should be 31 - 19 = 12
-        assert_eq!(new_state.ui.standings.scroll_offset, 12,
-            "Wrapping to bottom should auto-scroll to show last team");
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, 12,
+            "Wrapping to bottom should auto-scroll to show last team"
+        );
     }
 
     #[test]
@@ -1070,8 +1101,10 @@ mod tests {
         let (new_state, _) = reduce_standings(state, StandingsAction::MoveSelectionDown);
 
         assert_eq!(new_state.ui.standings.selected_row, 11);
-        assert_eq!(new_state.ui.standings.scroll_offset, initial_scroll,
-            "Scroll should not change when selection moves within visible window");
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, initial_scroll,
+            "Scroll should not change when selection moves within visible window"
+        );
     }
 
     #[test]
@@ -1110,8 +1143,10 @@ mod tests {
 
         ensure_selection_visible(&mut state);
 
-        assert_eq!(state.ui.standings.scroll_offset, 5,
-            "Should scroll up to make row 5 visible");
+        assert_eq!(
+            state.ui.standings.scroll_offset, 5,
+            "Should scroll up to make row 5 visible"
+        );
     }
 
     #[test]
@@ -1122,8 +1157,10 @@ mod tests {
 
         ensure_selection_visible(&mut state);
 
-        assert_eq!(state.ui.standings.scroll_offset, 5,
-            "Should not change scroll when selection is visible");
+        assert_eq!(
+            state.ui.standings.scroll_offset, 5,
+            "Should not change scroll when selection is visible"
+        );
     }
 
     // Page navigation tests
@@ -1139,8 +1176,10 @@ mod tests {
 
         let (new_state, _) = reduce_standings(state, StandingsAction::PageDown);
 
-        assert_eq!(new_state.ui.standings.selected_row, 15,
-            "PageDown should move 10 rows (PAGE_SIZE)");
+        assert_eq!(
+            new_state.ui.standings.selected_row, 15,
+            "PageDown should move 10 rows (PAGE_SIZE)"
+        );
         // Should trigger auto-scroll since row 15 is outside initial viewport (0-19)
     }
 
@@ -1156,8 +1195,10 @@ mod tests {
 
         let (new_state, _) = reduce_standings(state, StandingsAction::PageDown);
 
-        assert_eq!(new_state.ui.standings.selected_row, 31,
-            "PageDown should clamp to last team (31)");
+        assert_eq!(
+            new_state.ui.standings.selected_row, 31,
+            "PageDown should clamp to last team (31)"
+        );
     }
 
     #[test]
@@ -1172,8 +1213,10 @@ mod tests {
 
         let (new_state, _) = reduce_standings(state, StandingsAction::PageUp);
 
-        assert_eq!(new_state.ui.standings.selected_row, 10,
-            "PageUp should move up 10 rows (PAGE_SIZE)");
+        assert_eq!(
+            new_state.ui.standings.selected_row, 10,
+            "PageUp should move up 10 rows (PAGE_SIZE)"
+        );
     }
 
     #[test]
@@ -1188,8 +1231,10 @@ mod tests {
 
         let (new_state, _) = reduce_standings(state, StandingsAction::PageUp);
 
-        assert_eq!(new_state.ui.standings.selected_row, 0,
-            "PageUp should clamp to first team when near top");
+        assert_eq!(
+            new_state.ui.standings.selected_row, 0,
+            "PageUp should clamp to first team when near top"
+        );
     }
 
     #[test]
@@ -1204,10 +1249,14 @@ mod tests {
 
         let (new_state, _) = reduce_standings(state, StandingsAction::GoToTop);
 
-        assert_eq!(new_state.ui.standings.selected_row, 0,
-            "GoToTop should move to first team");
-        assert_eq!(new_state.ui.standings.scroll_offset, 0,
-            "GoToTop should reset scroll to 0");
+        assert_eq!(
+            new_state.ui.standings.selected_row, 0,
+            "GoToTop should move to first team"
+        );
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, 0,
+            "GoToTop should reset scroll to 0"
+        );
     }
 
     #[test]
@@ -1222,9 +1271,13 @@ mod tests {
 
         let (new_state, _) = reduce_standings(state, StandingsAction::GoToBottom);
 
-        assert_eq!(new_state.ui.standings.selected_row, 31,
-            "GoToBottom should move to last team (31)");
-        assert_eq!(new_state.ui.standings.scroll_offset, 0,
-            "GoToBottom should reset scroll to 0");
+        assert_eq!(
+            new_state.ui.standings.selected_row, 31,
+            "GoToBottom should move to last team (31)"
+        );
+        assert_eq!(
+            new_state.ui.standings.scroll_offset, 0,
+            "GoToBottom should reset scroll to 0"
+        );
     }
 }

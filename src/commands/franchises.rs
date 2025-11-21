@@ -1,5 +1,5 @@
-use anyhow::Result;
 use crate::data_provider::NHLDataProvider;
+use anyhow::Result;
 
 pub async fn run(client: &dyn NHLDataProvider) -> Result<()> {
     let franchises = client.franchises().await?;
@@ -7,7 +7,10 @@ pub async fn run(client: &dyn NHLDataProvider) -> Result<()> {
     println!("\nNHL Franchises");
     println!("==============\n");
 
-    println!("{:<5} {:<40} {:<25} Place Name", "ID", "Full Name", "Common Name");
+    println!(
+        "{:<5} {:<40} {:<25} Place Name",
+        "ID", "Full Name", "Common Name"
+    );
     println!("{}", "─".repeat(100));
 
     for franchise in franchises {

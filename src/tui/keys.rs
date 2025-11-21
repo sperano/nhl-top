@@ -221,7 +221,9 @@ fn handle_settings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Actio
     // In category navigation mode - arrows navigate categories, Down enters settings
     match key_code {
         KeyCode::Left => Some(Action::SettingsAction(SettingsAction::NavigateCategoryLeft)),
-        KeyCode::Right => Some(Action::SettingsAction(SettingsAction::NavigateCategoryRight)),
+        KeyCode::Right => Some(Action::SettingsAction(
+            SettingsAction::NavigateCategoryRight,
+        )),
         KeyCode::Down => Some(Action::SettingsAction(SettingsAction::EnterSettingsMode)),
         _ => None,
     }
@@ -368,8 +370,8 @@ fn get_editable_setting_key_for_index(category: SettingsCategory, index: usize) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use crate::commands::standings::GroupBy;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn make_key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
@@ -392,11 +394,14 @@ mod tests {
     #[test]
     fn test_esc_pops_panel_when_panel_open() {
         let mut state = AppState::default();
-        state.navigation.panel_stack.push(super::super::state::PanelState {
-            panel: super::super::types::Panel::Boxscore { game_id: 123 },
-            scroll_offset: 0,
-            selected_index: None,
-        });
+        state
+            .navigation
+            .panel_stack
+            .push(super::super::state::PanelState {
+                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+                scroll_offset: 0,
+                selected_index: None,
+            });
 
         let action = key_to_action(make_key(KeyCode::Esc), &state);
         assert!(matches!(action, Some(Action::PopPanel)));
@@ -416,7 +421,10 @@ mod tests {
         let state = AppState::default(); // content_focused = false by default
 
         let action = key_to_action(make_key(KeyCode::Esc), &state);
-        assert!(action.is_none(), "ESC at tab bar should do nothing, not quit");
+        assert!(
+            action.is_none(),
+            "ESC at tab bar should do nothing, not quit"
+        );
     }
 
     #[test]
@@ -607,11 +615,14 @@ mod tests {
     #[test]
     fn test_panel_up_key_selects_previous() {
         let mut state = AppState::default();
-        state.navigation.panel_stack.push(super::super::state::PanelState {
-            panel: super::super::types::Panel::Boxscore { game_id: 123 },
-            scroll_offset: 0,
-            selected_index: Some(1),
-        });
+        state
+            .navigation
+            .panel_stack
+            .push(super::super::state::PanelState {
+                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+                scroll_offset: 0,
+                selected_index: Some(1),
+            });
 
         let action = key_to_action(make_key(KeyCode::Up), &state);
         assert!(matches!(action, Some(Action::PanelSelectPrevious)));
@@ -620,11 +631,14 @@ mod tests {
     #[test]
     fn test_panel_down_key_selects_next() {
         let mut state = AppState::default();
-        state.navigation.panel_stack.push(super::super::state::PanelState {
-            panel: super::super::types::Panel::Boxscore { game_id: 123 },
-            scroll_offset: 0,
-            selected_index: Some(0),
-        });
+        state
+            .navigation
+            .panel_stack
+            .push(super::super::state::PanelState {
+                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+                scroll_offset: 0,
+                selected_index: Some(0),
+            });
 
         let action = key_to_action(make_key(KeyCode::Down), &state);
         assert!(matches!(action, Some(Action::PanelSelectNext)));
@@ -633,11 +647,14 @@ mod tests {
     #[test]
     fn test_panel_enter_key_selects_item() {
         let mut state = AppState::default();
-        state.navigation.panel_stack.push(super::super::state::PanelState {
-            panel: super::super::types::Panel::Boxscore { game_id: 123 },
-            scroll_offset: 0,
-            selected_index: Some(0),
-        });
+        state
+            .navigation
+            .panel_stack
+            .push(super::super::state::PanelState {
+                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+                scroll_offset: 0,
+                selected_index: Some(0),
+            });
 
         let action = key_to_action(make_key(KeyCode::Enter), &state);
         assert!(matches!(action, Some(Action::PanelSelectItem)));
@@ -1069,7 +1086,9 @@ mod tests {
         let action = key_to_action(make_key(KeyCode::Right), &state);
         assert!(matches!(
             action,
-            Some(Action::SettingsAction(SettingsAction::NavigateCategoryRight))
+            Some(Action::SettingsAction(
+                SettingsAction::NavigateCategoryRight
+            ))
         ));
     }
 
@@ -1090,8 +1109,14 @@ mod tests {
     // Helper function tests - get_setting_key_for_index
     #[test]
     fn test_get_setting_key_logging_returns_none() {
-        assert_eq!(get_setting_key_for_index(SettingsCategory::Logging, 0), None);
-        assert_eq!(get_setting_key_for_index(SettingsCategory::Logging, 1), None);
+        assert_eq!(
+            get_setting_key_for_index(SettingsCategory::Logging, 0),
+            None
+        );
+        assert_eq!(
+            get_setting_key_for_index(SettingsCategory::Logging, 1),
+            None
+        );
     }
 
     #[test]
@@ -1105,8 +1130,14 @@ mod tests {
 
     #[test]
     fn test_get_setting_key_display_other_indices() {
-        assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 0), None); // Theme is editable, not boolean
-        assert_eq!(get_setting_key_for_index(SettingsCategory::Display, 2), None);
+        assert_eq!(
+            get_setting_key_for_index(SettingsCategory::Display, 0),
+            None
+        ); // Theme is editable, not boolean
+        assert_eq!(
+            get_setting_key_for_index(SettingsCategory::Display, 2),
+            None
+        );
     }
 
     #[test]
@@ -1142,7 +1173,10 @@ mod tests {
 
     #[test]
     fn test_get_editable_setting_key_logging_out_of_bounds() {
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Logging, 2), None);
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Logging, 2),
+            None
+        );
     }
 
     #[test]
@@ -1156,8 +1190,14 @@ mod tests {
 
     #[test]
     fn test_get_editable_setting_key_display_other_indices() {
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 1), None); // Use Unicode is boolean
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Display, 2), None); // Colors not editable
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Display, 1),
+            None
+        ); // Use Unicode is boolean
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Display, 2),
+            None
+        ); // Colors not editable
     }
 
     #[test]
@@ -1178,8 +1218,14 @@ mod tests {
 
     #[test]
     fn test_get_editable_setting_key_data_other_indices() {
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Data, 1), None);
-        assert_eq!(get_editable_setting_key_for_index(SettingsCategory::Data, 3), None);
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Data, 1),
+            None
+        );
+        assert_eq!(
+            get_editable_setting_key_for_index(SettingsCategory::Data, 3),
+            None
+        );
     }
 
     // Edge cases

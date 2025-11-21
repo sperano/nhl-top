@@ -227,7 +227,12 @@ impl DivisionStandingsPanel {
                 left_elements,
             )
         } else {
-            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT)], left_elements)
+            vertical(
+                [Constraint::Length(
+                    DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT,
+                )],
+                left_elements,
+            )
         };
 
         let right_column = if right_elements.len() == 3 {
@@ -248,7 +253,12 @@ impl DivisionStandingsPanel {
                 right_elements,
             )
         } else {
-            vertical([Constraint::Length(DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT)], right_elements)
+            vertical(
+                [Constraint::Length(
+                    DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT,
+                )],
+                right_elements,
+            )
         };
 
         // Return horizontal layout with both columns
@@ -331,12 +341,19 @@ impl WildcardStandingsPanel {
         let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
 
         // Build Eastern Conference column
-        let eastern_elements =
-            Self::build_wildcard_conference_column("Atlantic", &atlantic, "Metropolitan", &metropolitan, props, 0);
+        let eastern_elements = Self::build_wildcard_conference_column(
+            "Atlantic",
+            &atlantic,
+            "Metropolitan",
+            &metropolitan,
+            props,
+            0,
+        );
 
         // Build Western Conference column
-        let western_elements =
-            Self::build_wildcard_conference_column("Central", &central, "Pacific", &pacific, props, 1);
+        let western_elements = Self::build_wildcard_conference_column(
+            "Central", &central, "Pacific", &pacific, props, 1,
+        );
 
         // Determine column order based on western_first config
         let (left_elements, right_elements) = if props.config.display_standings_western_first {
@@ -378,7 +395,13 @@ impl WildcardStandingsPanel {
         // Division 1 - top 3 teams
         let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
         if !div1_top3.is_empty() {
-            let table = Self::create_wildcard_table(div1_name, &div1_top3, team_offset, props, actual_column);
+            let table = Self::create_wildcard_table(
+                div1_name,
+                &div1_top3,
+                team_offset,
+                props,
+                actual_column,
+            );
             elements.push(Element::Widget(Box::new(table)));
             elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
             team_offset += div1_top3.len();
@@ -387,7 +410,13 @@ impl WildcardStandingsPanel {
         // Division 2 - top 3 teams
         let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
         if !div2_top3.is_empty() {
-            let table = Self::create_wildcard_table(div2_name, &div2_top3, team_offset, props, actual_column);
+            let table = Self::create_wildcard_table(
+                div2_name,
+                &div2_top3,
+                team_offset,
+                props,
+                actual_column,
+            );
             elements.push(Element::Widget(Box::new(table)));
             elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
             team_offset += div2_top3.len();
@@ -401,7 +430,13 @@ impl WildcardStandingsPanel {
         wildcard_teams.sort_by_points_desc();
 
         if !wildcard_teams.is_empty() {
-            let table = Self::create_wildcard_table("Wildcard", &wildcard_teams, team_offset, props, actual_column);
+            let table = Self::create_wildcard_table(
+                "Wildcard",
+                &wildcard_teams,
+                team_offset,
+                props,
+                actual_column,
+            );
             elements.push(Element::Widget(Box::new(table)));
         }
 
@@ -443,7 +478,10 @@ impl WildcardStandingsPanel {
             0 => Element::None,
             1 => vertical([Constraint::Min(0)], elements),
             2 => vertical(
-                [Constraint::Length(TABLE_HEIGHT), Constraint::Length(SPACER_HEIGHT)],
+                [
+                    Constraint::Length(TABLE_HEIGHT),
+                    Constraint::Length(SPACER_HEIGHT),
+                ],
                 elements,
             ),
             3 => vertical(
@@ -516,7 +554,9 @@ impl RenderableWidget for SpacerWidget {
     }
 
     fn clone_box(&self) -> Box<dyn RenderableWidget> {
-        Box::new(SpacerWidget { height: self.height })
+        Box::new(SpacerWidget {
+            height: self.height,
+        })
     }
 
     fn preferred_height(&self) -> Option<u16> {
@@ -536,7 +576,12 @@ mod tests {
     const RENDER_HEIGHT: u16 = 40;
 
     /// Helper to render element to buffer
-    fn render_element_to_buffer(element: &Element, width: u16, height: u16, config: &DisplayConfig) -> Buffer {
+    fn render_element_to_buffer(
+        element: &Element,
+        width: u16,
+        height: u16,
+        config: &DisplayConfig,
+    ) -> Buffer {
         let mut buf = Buffer::empty(Rect::new(0, 0, width, height));
         let mut renderer = Renderer::new();
         renderer.render(element.clone(), buf.area, &mut buf, config);
@@ -565,48 +610,51 @@ mod tests {
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
-        assert_buffer(&buf, &[
-            "  Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────",
-            "  Panthers                      19    14    3    2     30",
-            "  Bruins                        18    13    4    1     27",
-            "  Maple Leafs                   19    12    5    2     26",
-            "  Lightning                     18    11    6    1     23",
-            "  Canadiens                     18    10    5    3     23",
-            "  Senators                      18     9    7    2     20",
-            "  Red Wings                     18     8    8    2     18",
-            "  Sabres                        18     6   10    2     14",
-            "  Devils                        18    15    2    1     31",
-            "  Hurricanes                    19    14    3    2     30",
-            "  Rangers                       18    12    5    1     25",
-            "  Penguins                      19    11    6    2     24",
-            "  Capitals                      18    10    7    1     21",
-            "  Islanders                     18     9    7    2     20",
-            "  Flyers                        18     8    9    1     17",
-            "  Blue Jackets                  18     5   11    2     12",
-            "  Avalanche                     19    16    2    1     33",
-            "  Stars                         20    14    4    2     30",
-            "  Jets                          19    13    5    1     27",
-            "  Wild                          19    11    6    2     24",
-            "  Predators                     19    10    7    2     22",
-            "  Blues                         19     8    8    3     19",
-            "  Blackhawks                    18     7   10    1     15",
-            "  Coyotes                       18     4   13    1      9",
-            "  Golden Knights                19    15    3    1     31",
-            "  Oilers                        20    14    4    2     30",
-            "  Kings                         19    12    6    1     25",
-            "  Kraken                        19    11    6    2     24",
-            "  Canucks                       19    10    7    2     22",
-            "  Flames                        19     9    8    2     20",
-            "  Ducks                         19     7   10    2     16",
-            "  Sharks                        18     5   12    1     11",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "  Team                        GP    W     L    OT   PTS",
+                "  ───────────────────────────────────────────────────────",
+                "  Panthers                      19    14    3    2     30",
+                "  Bruins                        18    13    4    1     27",
+                "  Maple Leafs                   19    12    5    2     26",
+                "  Lightning                     18    11    6    1     23",
+                "  Canadiens                     18    10    5    3     23",
+                "  Senators                      18     9    7    2     20",
+                "  Red Wings                     18     8    8    2     18",
+                "  Sabres                        18     6   10    2     14",
+                "  Devils                        18    15    2    1     31",
+                "  Hurricanes                    19    14    3    2     30",
+                "  Rangers                       18    12    5    1     25",
+                "  Penguins                      19    11    6    2     24",
+                "  Capitals                      18    10    7    1     21",
+                "  Islanders                     18     9    7    2     20",
+                "  Flyers                        18     8    9    1     17",
+                "  Blue Jackets                  18     5   11    2     12",
+                "  Avalanche                     19    16    2    1     33",
+                "  Stars                         20    14    4    2     30",
+                "  Jets                          19    13    5    1     27",
+                "  Wild                          19    11    6    2     24",
+                "  Predators                     19    10    7    2     22",
+                "  Blues                         19     8    8    3     19",
+                "  Blackhawks                    18     7   10    1     15",
+                "  Coyotes                       18     4   13    1      9",
+                "  Golden Knights                19    15    3    1     31",
+                "  Oilers                        20    14    4    2     30",
+                "  Kings                         19    12    6    1     25",
+                "  Kraken                        19    11    6    2     24",
+                "  Canucks                       19    10    7    2     22",
+                "  Flames                        19     9    8    2     20",
+                "  Ducks                         19     7   10    2     16",
+                "  Sharks                        18     5   12    1     11",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     #[test]
@@ -619,48 +667,51 @@ mod tests {
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
-        assert_buffer(&buf, &[
-            "  Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────",
-            "  Panthers                      19    14    3    2     30",
-            "  Bruins                        18    13    4    1     27",
-            "▶ Maple Leafs                   19    12    5    2     26",
-            "  Lightning                     18    11    6    1     23",
-            "  Canadiens                     18    10    5    3     23",
-            "  Senators                      18     9    7    2     20",
-            "  Red Wings                     18     8    8    2     18",
-            "  Sabres                        18     6   10    2     14",
-            "  Devils                        18    15    2    1     31",
-            "  Hurricanes                    19    14    3    2     30",
-            "  Rangers                       18    12    5    1     25",
-            "  Penguins                      19    11    6    2     24",
-            "  Capitals                      18    10    7    1     21",
-            "  Islanders                     18     9    7    2     20",
-            "  Flyers                        18     8    9    1     17",
-            "  Blue Jackets                  18     5   11    2     12",
-            "  Avalanche                     19    16    2    1     33",
-            "  Stars                         20    14    4    2     30",
-            "  Jets                          19    13    5    1     27",
-            "  Wild                          19    11    6    2     24",
-            "  Predators                     19    10    7    2     22",
-            "  Blues                         19     8    8    3     19",
-            "  Blackhawks                    18     7   10    1     15",
-            "  Coyotes                       18     4   13    1      9",
-            "  Golden Knights                19    15    3    1     31",
-            "  Oilers                        20    14    4    2     30",
-            "  Kings                         19    12    6    1     25",
-            "  Kraken                        19    11    6    2     24",
-            "  Canucks                       19    10    7    2     22",
-            "  Flames                        19     9    8    2     20",
-            "  Ducks                         19     7   10    2     16",
-            "  Sharks                        18     5   12    1     11",
-            "",
-            "",
-            "",
-            "",
-            "",
-            "",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "  Team                        GP    W     L    OT   PTS",
+                "  ───────────────────────────────────────────────────────",
+                "  Panthers                      19    14    3    2     30",
+                "  Bruins                        18    13    4    1     27",
+                "▶ Maple Leafs                   19    12    5    2     26",
+                "  Lightning                     18    11    6    1     23",
+                "  Canadiens                     18    10    5    3     23",
+                "  Senators                      18     9    7    2     20",
+                "  Red Wings                     18     8    8    2     18",
+                "  Sabres                        18     6   10    2     14",
+                "  Devils                        18    15    2    1     31",
+                "  Hurricanes                    19    14    3    2     30",
+                "  Rangers                       18    12    5    1     25",
+                "  Penguins                      19    11    6    2     24",
+                "  Capitals                      18    10    7    1     21",
+                "  Islanders                     18     9    7    2     20",
+                "  Flyers                        18     8    9    1     17",
+                "  Blue Jackets                  18     5   11    2     12",
+                "  Avalanche                     19    16    2    1     33",
+                "  Stars                         20    14    4    2     30",
+                "  Jets                          19    13    5    1     27",
+                "  Wild                          19    11    6    2     24",
+                "  Predators                     19    10    7    2     22",
+                "  Blues                         19     8    8    3     19",
+                "  Blackhawks                    18     7   10    1     15",
+                "  Coyotes                       18     4   13    1      9",
+                "  Golden Knights                19    15    3    1     31",
+                "  Oilers                        20    14    4    2     30",
+                "  Kings                         19    12    6    1     25",
+                "  Kraken                        19    11    6    2     24",
+                "  Canucks                       19    10    7    2     22",
+                "  Flames                        19     9    8    2     20",
+                "  Ducks                         19     7   10    2     16",
+                "  Sharks                        18     5   12    1     11",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+        );
     }
 
     // ========================================================================

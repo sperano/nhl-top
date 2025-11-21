@@ -2,9 +2,9 @@ use std::sync::Arc;
 use tracing::{debug, trace};
 
 use crate::tui::action::{Action, ScoresAction};
-use crate::tui::types::Panel;
 use crate::tui::component::Effect;
 use crate::tui::state::{AppState, PanelState};
+use crate::tui::types::Panel;
 
 /// Sub-reducer for scores tab
 pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {
@@ -19,7 +19,9 @@ pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect
         ScoresAction::MoveGameSelectionDown => handle_move_game_selection_down(state),
         ScoresAction::MoveGameSelectionLeft => handle_move_game_selection_left(state),
         ScoresAction::MoveGameSelectionRight => handle_move_game_selection_right(state),
-        ScoresAction::UpdateBoxesPerRow(boxes_per_row) => handle_update_boxes_per_row(state, boxes_per_row),
+        ScoresAction::UpdateBoxesPerRow(boxes_per_row) => {
+            handle_update_boxes_per_row(state, boxes_per_row)
+        }
     }
 }
 
@@ -115,7 +117,10 @@ fn handle_enter_box_selection(state: AppState) -> (AppState, Effect) {
             }
         }
     }
-    trace!("  Selected game index: {:?}", new_state.ui.scores.selected_game_index);
+    trace!(
+        "  Selected game index: {:?}",
+        new_state.ui.scores.selected_game_index
+    );
     (new_state, Effect::None)
 }
 
@@ -139,12 +144,19 @@ fn handle_move_game_selection_up(state: AppState) -> (AppState, Effect) {
             let boxes_per_row = new_state.ui.scores.boxes_per_row as usize;
             if num_games > 0 && current_index >= boxes_per_row {
                 new_state.ui.scores.selected_game_index = Some(current_index - boxes_per_row);
-                trace!("Game selection: moved up from {} to {}", current_index, current_index - boxes_per_row);
+                trace!(
+                    "Game selection: moved up from {} to {}",
+                    current_index,
+                    current_index - boxes_per_row
+                );
             }
         }
     }
     if old_index != new_state.ui.scores.selected_game_index {
-        debug!("SELECTION: Game index changed: {:?} -> {:?}", old_index, new_state.ui.scores.selected_game_index);
+        debug!(
+            "SELECTION: Game index changed: {:?} -> {:?}",
+            old_index, new_state.ui.scores.selected_game_index
+        );
     }
     (new_state, Effect::None)
 }
@@ -250,7 +262,10 @@ mod tests {
         let (new_state, effect) = reduce_scores(state, ScoresAction::DateLeft);
 
         assert_eq!(new_state.ui.scores.selected_date_index, 0);
-        assert_eq!(new_state.ui.scores.game_date, GameDate::from_ymd(2024, 11, 14).unwrap());
+        assert_eq!(
+            new_state.ui.scores.game_date,
+            GameDate::from_ymd(2024, 11, 14).unwrap()
+        );
         assert!(matches!(effect, Effect::Action(Action::RefreshData)));
     }
 
@@ -275,7 +290,10 @@ mod tests {
         let (new_state, effect) = reduce_scores(state, ScoresAction::DateRight);
 
         assert_eq!(new_state.ui.scores.selected_date_index, 4);
-        assert_eq!(new_state.ui.scores.game_date, GameDate::from_ymd(2024, 11, 16).unwrap());
+        assert_eq!(
+            new_state.ui.scores.game_date,
+            GameDate::from_ymd(2024, 11, 16).unwrap()
+        );
         assert!(matches!(effect, Effect::Action(Action::RefreshData)));
     }
 
@@ -424,7 +442,6 @@ mod tests {
         // Should not change
         assert_eq!(new_state.ui.scores.selected_game_index, Some(0));
     }
-
 
     #[test]
     fn test_update_boxes_per_row() {

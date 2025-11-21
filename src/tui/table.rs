@@ -5,7 +5,6 @@
 /// - ColumnDef: Column definition with cell extraction function
 /// - Alignment: Text alignment for cells
 /// - TableProps: Props for Table component
-
 use std::fmt;
 
 /// Value types that can appear in table cells
@@ -18,10 +17,7 @@ pub enum CellValue {
     Text(String),
 
     /// Link to player profile (focusable)
-    PlayerLink {
-        display: String,
-        player_id: i64,
-    },
+    PlayerLink { display: String, player_id: i64 },
 
     /// Link to team page (focusable)
     TeamLink {
@@ -52,7 +48,10 @@ impl CellValue {
             Self::PlayerLink { display, player_id } => {
                 format!("PlayerLink(display='{}', id={})", display, player_id)
             }
-            Self::TeamLink { display, team_abbrev } => {
+            Self::TeamLink {
+                display,
+                team_abbrev,
+            } => {
                 format!("TeamLink(display='{}', abbrev='{}')", display, team_abbrev)
             }
         }
@@ -123,12 +122,7 @@ impl<T> ColumnDef<T> {
     /// - `width`: Column width in characters
     /// - `align`: Text alignment (Left, Right, Center)
     /// - `cell_fn`: Function to extract CellValue from row data
-    pub fn new<F>(
-        header: impl Into<String>,
-        width: usize,
-        align: Alignment,
-        cell_fn: F,
-    ) -> Self
+    pub fn new<F>(header: impl Into<String>, width: usize, align: Alignment, cell_fn: F) -> Self
     where
         F: Fn(&T) -> CellValue + Send + Sync + 'static,
     {
@@ -245,12 +239,9 @@ mod tests {
             value: i32,
         }
 
-        let col = ColumnDef::new(
-            "Test Column",
-            20,
-            Alignment::Left,
-            |row: &TestRow| CellValue::Text(row.name.clone()),
-        );
+        let col = ColumnDef::new("Test Column", 20, Alignment::Left, |row: &TestRow| {
+            CellValue::Text(row.name.clone())
+        });
 
         assert_eq!(col.header, "Test Column");
         assert_eq!(col.width, 20);
@@ -273,15 +264,12 @@ mod tests {
             id: i64,
         }
 
-        let col = ColumnDef::new(
-            "Player",
-            25,
-            Alignment::Left,
-            |p: &Player| CellValue::PlayerLink {
+        let col = ColumnDef::new("Player", 25, Alignment::Left, |p: &Player| {
+            CellValue::PlayerLink {
                 display: p.name.clone(),
                 player_id: p.id,
-            },
-        );
+            }
+        });
 
         let player = Player {
             name: "Auston Matthews".to_string(),
@@ -304,12 +292,9 @@ mod tests {
     fn test_column_def_clone_panics() {
         struct TestRow;
 
-        let col = ColumnDef::new(
-            "Test",
-            10,
-            Alignment::Left,
-            |_: &TestRow| CellValue::Text("test".to_string()),
-        );
+        let col = ColumnDef::new("Test", 10, Alignment::Left, |_: &TestRow| {
+            CellValue::Text("test".to_string())
+        });
 
         let _cloned = col.clone();
     }
@@ -318,12 +303,9 @@ mod tests {
     fn test_column_def_debug() {
         struct TestRow;
 
-        let col = ColumnDef::new(
-            "Test Header",
-            15,
-            Alignment::Right,
-            |_: &TestRow| CellValue::Text("test".to_string()),
-        );
+        let col = ColumnDef::new("Test Header", 15, Alignment::Right, |_: &TestRow| {
+            CellValue::Text("test".to_string())
+        });
 
         let debug_str = format!("{:?}", col);
         assert!(debug_str.contains("Test Header"));

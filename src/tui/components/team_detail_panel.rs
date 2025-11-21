@@ -1,19 +1,19 @@
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::{Modifier, Style},
     widgets::{Block, Borders, Paragraph},
-    style::{Style, Modifier},
 };
 
 use nhl_api::{ClubStats, Standing};
 
+use super::table::TableWidget;
 use crate::config::DisplayConfig;
-use crate::tui::helpers::{ClubSkaterStatsSorting, ClubGoalieStatsSorting};
+use crate::tui::helpers::{ClubGoalieStatsSorting, ClubSkaterStatsSorting};
 use crate::tui::{
     component::{Component, Element, RenderableWidget},
     Alignment, CellValue, ColumnDef,
 };
-use super::table::TableWidget;
 
 /// Props for TeamDetailPanel component
 #[derive(Clone)]
@@ -119,16 +119,21 @@ impl RenderableWidget for TeamDetailPanelWidget {
         let show_skaters_from = self.scroll_offset.min(total_skaters);
         let show_skaters_to = visible_end.min(total_skaters);
         let show_goalies_from = self.scroll_offset.saturating_sub(total_skaters);
-        let show_goalies_to = visible_end.saturating_sub(total_skaters).min(sorted_goalies.len());
+        let show_goalies_to = visible_end
+            .saturating_sub(total_skaters)
+            .min(sorted_goalies.len());
 
         // Create skaters table (windowed)
         let skater_columns = vec![
-            ColumnDef::new("Player", 20, Alignment::Left, |s: &nhl_api::ClubSkaterStats| {
-                CellValue::PlayerLink {
+            ColumnDef::new(
+                "Player",
+                20,
+                Alignment::Left,
+                |s: &nhl_api::ClubSkaterStats| CellValue::PlayerLink {
                     display: format!("{} {}", s.first_name.default, s.last_name.default),
                     player_id: s.player_id,
-                }
-            }),
+                },
+            ),
             ColumnDef::new("Pos", 3, Alignment::Left, |s: &nhl_api::ClubSkaterStats| {
                 CellValue::Text(s.position.to_string())
             }),
@@ -141,15 +146,24 @@ impl RenderableWidget for TeamDetailPanelWidget {
             ColumnDef::new("A", 3, Alignment::Right, |s: &nhl_api::ClubSkaterStats| {
                 CellValue::Text(s.assists.to_string())
             }),
-            ColumnDef::new("PTS", 4, Alignment::Right, |s: &nhl_api::ClubSkaterStats| {
-                CellValue::Text(s.points.to_string())
-            }),
-            ColumnDef::new("+/-", 4, Alignment::Right, |s: &nhl_api::ClubSkaterStats| {
-                CellValue::Text(format!("{:+}", s.plus_minus))
-            }),
-            ColumnDef::new("PIM", 4, Alignment::Right, |s: &nhl_api::ClubSkaterStats| {
-                CellValue::Text(s.penalty_minutes.to_string())
-            }),
+            ColumnDef::new(
+                "PTS",
+                4,
+                Alignment::Right,
+                |s: &nhl_api::ClubSkaterStats| CellValue::Text(s.points.to_string()),
+            ),
+            ColumnDef::new(
+                "+/-",
+                4,
+                Alignment::Right,
+                |s: &nhl_api::ClubSkaterStats| CellValue::Text(format!("{:+}", s.plus_minus)),
+            ),
+            ColumnDef::new(
+                "PIM",
+                4,
+                Alignment::Right,
+                |s: &nhl_api::ClubSkaterStats| CellValue::Text(s.penalty_minutes.to_string()),
+            ),
         ];
 
         // Only render skaters table if any skaters are visible in window
@@ -162,14 +176,18 @@ impl RenderableWidget for TeamDetailPanelWidget {
 
         // Determine which row is selected in skaters table (if any)
         // Adjust selection index to account for windowing
-        let skater_selected_row = self.selected_index
+        let skater_selected_row = self
+            .selected_index
             .filter(|&idx| idx >= show_skaters_from && idx < show_skaters_to)
             .map(|idx| idx - show_skaters_from);
 
         let skaters_table = TableWidget::from_data(&skater_columns, windowed_skaters)
             .with_selection_opt(skater_selected_row, Some(0))
             .with_focused(true)
-            .with_header(format!("SKATERS ({}) - Regular Season", stats.skaters.len()))
+            .with_header(format!(
+                "SKATERS ({}) - Regular Season",
+                stats.skaters.len()
+            ))
             .with_margin(2);
 
         // Render skaters table if visible
@@ -184,12 +202,15 @@ impl RenderableWidget for TeamDetailPanelWidget {
 
         // Create goalies table
         let goalie_columns = vec![
-            ColumnDef::new("Player", 20, Alignment::Left, |g: &nhl_api::ClubGoalieStats| {
-                CellValue::PlayerLink {
+            ColumnDef::new(
+                "Player",
+                20,
+                Alignment::Left,
+                |g: &nhl_api::ClubGoalieStats| CellValue::PlayerLink {
                     display: format!("{} {}", g.first_name.default, g.last_name.default),
                     player_id: g.player_id,
-                }
-            }),
+                },
+            ),
             ColumnDef::new("GP", 4, Alignment::Right, |g: &nhl_api::ClubGoalieStats| {
                 CellValue::Text(g.games_played.to_string())
             }),
@@ -199,15 +220,26 @@ impl RenderableWidget for TeamDetailPanelWidget {
             ColumnDef::new("L", 3, Alignment::Right, |g: &nhl_api::ClubGoalieStats| {
                 CellValue::Text(g.losses.to_string())
             }),
-            ColumnDef::new("OTL", 3, Alignment::Right, |g: &nhl_api::ClubGoalieStats| {
-                CellValue::Text(g.overtime_losses.to_string())
-            }),
-            ColumnDef::new("GAA", 5, Alignment::Right, |g: &nhl_api::ClubGoalieStats| {
-                CellValue::Text(format!("{:.2}", g.goals_against_average))
-            }),
-            ColumnDef::new("SV%", 5, Alignment::Right, |g: &nhl_api::ClubGoalieStats| {
-                CellValue::Text(format!("{:.3}", g.save_percentage))
-            }),
+            ColumnDef::new(
+                "OTL",
+                3,
+                Alignment::Right,
+                |g: &nhl_api::ClubGoalieStats| CellValue::Text(g.overtime_losses.to_string()),
+            ),
+            ColumnDef::new(
+                "GAA",
+                5,
+                Alignment::Right,
+                |g: &nhl_api::ClubGoalieStats| {
+                    CellValue::Text(format!("{:.2}", g.goals_against_average))
+                },
+            ),
+            ColumnDef::new(
+                "SV%",
+                5,
+                Alignment::Right,
+                |g: &nhl_api::ClubGoalieStats| CellValue::Text(format!("{:.3}", g.save_percentage)),
+            ),
             ColumnDef::new("SO", 3, Alignment::Right, |g: &nhl_api::ClubGoalieStats| {
                 CellValue::Text(g.shutouts.to_string())
             }),
@@ -223,7 +255,8 @@ impl RenderableWidget for TeamDetailPanelWidget {
 
         // Determine which row is selected in goalies table (if any)
         // Adjust selection index to account for windowing
-        let goalie_selected_row = self.selected_index
+        let goalie_selected_row = self
+            .selected_index
             .and_then(|idx| idx.checked_sub(total_skaters))
             .filter(|&idx| idx >= show_goalies_from && idx < show_goalies_to)
             .map(|idx| idx - show_goalies_from);
@@ -231,7 +264,10 @@ impl RenderableWidget for TeamDetailPanelWidget {
         let goalies_table = TableWidget::from_data(&goalie_columns, windowed_goalies)
             .with_selection_opt(goalie_selected_row, Some(0))
             .with_focused(true)
-            .with_header(format!("GOALIES ({}) - Regular Season", stats.goalies.len()))
+            .with_header(format!(
+                "GOALIES ({}) - Regular Season",
+                stats.goalies.len()
+            ))
             .with_margin(2);
 
         // Render goalies table if visible
@@ -394,7 +430,13 @@ mod tests {
 
         let mut goalies = vec![];
         for i in 0..5 {
-            goalies.push(create_test_goalie(i + 100, "Test", &format!("Goalie{}", i), 15, 8));
+            goalies.push(create_test_goalie(
+                i + 100,
+                "Test",
+                &format!("Goalie{}", i),
+                15,
+                8,
+            ));
         }
 
         let club_stats = ClubStats {
@@ -435,7 +477,16 @@ mod tests {
     /// exactly y = height, which would cause an index out of bounds.
     #[test]
     fn test_rendering_at_exact_boundary_height() {
-        let skaters = vec![create_test_skater(1, "John", "Doe", Position::Center, 20, 10, 15, 25)];
+        let skaters = vec![create_test_skater(
+            1,
+            "John",
+            "Doe",
+            Position::Center,
+            20,
+            10,
+            15,
+            25,
+        )];
         let goalies = vec![create_test_goalie(2, "Jane", "Smith", 15, 8)];
 
         let club_stats = ClubStats {

@@ -159,7 +159,11 @@ impl TabBarWidget {
     }
 
     /// Build the separator line with connectors under tab gaps
-    fn build_separator_line(&self, area_width: usize, config: &DisplayConfig) -> Vec<(String, Style)> {
+    fn build_separator_line(
+        &self,
+        area_width: usize,
+        config: &DisplayConfig,
+    ) -> Vec<(String, Style)> {
         use unicode_width::UnicodeWidthStr;
 
         let horizontal = &config.box_chars.horizontal;
@@ -193,7 +197,12 @@ impl TabBarWidget {
 }
 
 impl crate::tui::component::RenderableWidget for TabBarWidget {
-    fn render(&self, area: ratatui::layout::Rect, buf: &mut ratatui::buffer::Buffer, config: &DisplayConfig) {
+    fn render(
+        &self,
+        area: ratatui::layout::Rect,
+        buf: &mut ratatui::buffer::Buffer,
+        config: &DisplayConfig,
+    ) {
         use unicode_width::UnicodeWidthStr;
 
         if self.labels.is_empty() || area.width == 0 || area.height < 2 {
@@ -210,7 +219,7 @@ impl crate::tui::component::RenderableWidget for TabBarWidget {
                 break;
             }
             buf.set_string(x, area.y, &text, style);
-            x += text.width() as u16;  // Use display width, not byte length
+            x += text.width() as u16; // Use display width, not byte length
         }
 
         // Render separator line
@@ -220,7 +229,7 @@ impl crate::tui::component::RenderableWidget for TabBarWidget {
                 break;
             }
             buf.set_string(x, area.y + 1, &text, style);
-            x += text.width() as u16;  // Use display width, not byte length
+            x += text.width() as u16; // Use display width, not byte length
         }
     }
 
@@ -239,11 +248,15 @@ impl crate::tui::component::RenderableWidget for TabBarWidget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::component::Element;
     use crate::config::DisplayConfig;
     use crate::formatting::BoxChars;
-    use ratatui::{buffer::Buffer, layout::Rect, style::{Color, Modifier}};
-    use crate::tui::testing::{RENDER_WIDTH, assert_buffer};
+    use crate::tui::component::Element;
+    use crate::tui::testing::{assert_buffer, RENDER_WIDTH};
+    use ratatui::{
+        buffer::Buffer,
+        layout::Rect,
+        style::{Color, Modifier},
+    };
 
     // Helper functions for testing framework widgets
 
@@ -394,9 +407,7 @@ mod tests {
         let panel = TabbedPanel;
         let props = TabbedPanelProps {
             active_key: "nonexistent".into(),
-            tabs: vec![
-                TabItem::new("tab1", "Tab 1", Element::None),
-            ],
+            tabs: vec![TabItem::new("tab1", "Tab 1", Element::None)],
             focused: true,
         };
 
@@ -438,30 +449,34 @@ mod tests {
 
         let buf = render_widget(&widget, RENDER_WIDTH, 2);
 
-        assert_buffer(&buf, &[
-            "Home │ Profile │ Settings",
-            "─────┴─────────┴────────────────────────────────────────────────────────────────",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "Home │ Profile │ Settings",
+                "─────┴─────────┴────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
     fn test_tab_bar_widget_single_tab() {
         let widget = TabBarWidget {
-            labels: vec![
-                TabLabel {
-                    title: "Only Tab".into(),
-                    key: "only".into(),
-                    active: true,
-                },
-            ],
+            labels: vec![TabLabel {
+                title: "Only Tab".into(),
+                key: "only".into(),
+                active: true,
+            }],
             focused: true,
         };
 
         let buf = render_widget(&widget, RENDER_WIDTH, 2);
-        assert_buffer(&buf, &[
-            "Only Tab",
-            "────────────────────────────────────────────────────────────────────────────────",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "Only Tab",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -501,10 +516,13 @@ mod tests {
         let config = test_config_ascii();
         let buf = render_widget_with_config(&widget, RENDER_WIDTH, 2, &config);
 
-        assert_buffer(&buf, &[
-            "Tab A | Tab B",
-            "--------------------------------------------------------------------------------",
-        ]);
+        assert_buffer(
+            &buf,
+            &[
+                "Tab A | Tab B",
+                "--------------------------------------------------------------------------------",
+            ],
+        );
     }
 
     #[test]
@@ -558,13 +576,11 @@ mod tests {
     #[test]
     fn test_tab_bar_widget_zero_height() {
         let widget = TabBarWidget {
-            labels: vec![
-                TabLabel {
-                    title: "Test".into(),
-                    key: "test".into(),
-                    active: true,
-                },
-            ],
+            labels: vec![TabLabel {
+                title: "Test".into(),
+                key: "test".into(),
+                active: true,
+            }],
             focused: true,
         };
 
@@ -577,13 +593,11 @@ mod tests {
     #[test]
     fn test_tab_bar_widget_insufficient_height() {
         let widget = TabBarWidget {
-            labels: vec![
-                TabLabel {
-                    title: "Test".into(),
-                    key: "test".into(),
-                    active: true,
-                },
-            ],
+            labels: vec![TabLabel {
+                title: "Test".into(),
+                key: "test".into(),
+                active: true,
+            }],
             focused: true,
         };
 
@@ -668,7 +682,13 @@ mod tests {
     }
 
     impl crate::tui::component::RenderableWidget for TestWidget {
-        fn render(&self, _area: ratatui::layout::Rect, _buf: &mut ratatui::buffer::Buffer, _config: &DisplayConfig) {}
+        fn render(
+            &self,
+            _area: ratatui::layout::Rect,
+            _buf: &mut ratatui::buffer::Buffer,
+            _config: &DisplayConfig,
+        ) {
+        }
         fn clone_box(&self) -> Box<dyn crate::tui::component::RenderableWidget> {
             Box::new(TestWidget { id: self.id })
         }

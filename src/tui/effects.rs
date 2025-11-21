@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use nhl_api::GameDate;
 
-use crate::cache;
-use crate::data_provider::NHLDataProvider;
 use super::action::Action;
 use super::component::Effect;
-use super::state::{AppState};
+use super::state::AppState;
+use crate::cache;
+use crate::data_provider::NHLDataProvider;
 
 /// Regular season game type identifier
 const REGULAR_SEASON: nhl_api::GameType = nhl_api::GameType::RegularSeason;
@@ -97,14 +97,17 @@ impl DataEffects {
                     match current_season {
                         Some(season_info) => {
                             // Fetch stats for the current season (with caching)
-                            cache::fetch_club_stats_cached(client.as_ref(), &abbrev, season_info.season).await
+                            cache::fetch_club_stats_cached(
+                                client.as_ref(),
+                                &abbrev,
+                                season_info.season,
+                            )
+                            .await
                         }
-                        None => {
-                            Err(nhl_api::NHLApiError::ApiError {
-                                message: "No regular season data available for team".to_string(),
-                                status_code: 404,
-                            })
-                        }
+                        None => Err(nhl_api::NHLApiError::ApiError {
+                            message: "No regular season data available for team".to_string(),
+                            status_code: 404,
+                        }),
                     }
                 }
                 Err(e) => Err(e),
@@ -136,8 +139,8 @@ impl DataEffects {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::types::Tab;
     use crate::tui::state::{NavigationState, SystemState, UiState};
+    use crate::tui::types::Tab;
 
     fn create_test_state() -> AppState {
         AppState {

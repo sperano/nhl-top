@@ -7,11 +7,9 @@
 ///
 /// The fixtures represent realistic NHL data with all 32 teams and various game states.
 use nhl_api::{
-    GameDate,
-    Boxscore, BoxscoreTeam, DailySchedule, Franchise,
-    GameMatchup, GameState, Standing, ScheduleGame, ScheduleTeam,
-    PeriodDescriptor, GameClock, PeriodType, PlayerLanding, Position, Handedness,
-    LocalizedString, PlayerByGameStats, TeamPlayerStats,
+    Boxscore, BoxscoreTeam, DailySchedule, Franchise, GameClock, GameDate, GameMatchup, GameState,
+    Handedness, LocalizedString, PeriodDescriptor, PeriodType, PlayerByGameStats, PlayerLanding,
+    Position, ScheduleGame, ScheduleTeam, Standing, TeamPlayerStats,
 };
 
 /// Create mock standings data - reusing the test data structure
@@ -25,30 +23,10 @@ pub fn create_mock_schedule(date: Option<GameDate>) -> DailySchedule {
     let date_string = date.to_api_string();
 
     let games = vec![
-        create_mock_game(
-            2024020001,
-            "BOS",
-            "MTL",
-            GameState::Future,
-        ),
-        create_mock_game(
-            2024020002,
-            "TOR",
-            "OTT",
-            GameState::Live,
-        ),
-        create_mock_game(
-            2024020003,
-            "NYR",
-            "NJD",
-            GameState::Final,
-        ),
-        create_mock_game(
-            2024020004,
-            "VGK",
-            "LA",
-            GameState::Final,
-        ),
+        create_mock_game(2024020001, "BOS", "MTL", GameState::Future),
+        create_mock_game(2024020002, "TOR", "OTT", GameState::Live),
+        create_mock_game(2024020003, "NYR", "NJD", GameState::Final),
+        create_mock_game(2024020004, "VGK", "LA", GameState::Final),
     ];
 
     DailySchedule {
@@ -76,15 +54,29 @@ fn create_mock_game(
         away_team: ScheduleTeam {
             id: away_abbrev.chars().map(|c| c as i32).sum::<i32>() as i64,
             abbrev: away_abbrev.to_string(),
-            score: if status == GameState::Live || status == GameState::Final { Some(2) } else { None },
-            logo: format!("https://assets.nhle.com/logos/nhl/svg/{}_light.svg", away_abbrev),
+            score: if status == GameState::Live || status == GameState::Final {
+                Some(2)
+            } else {
+                None
+            },
+            logo: format!(
+                "https://assets.nhle.com/logos/nhl/svg/{}_light.svg",
+                away_abbrev
+            ),
             place_name: None,
         },
         home_team: ScheduleTeam {
             id: home_abbrev.chars().map(|c| c as i32).sum::<i32>() as i64,
             abbrev: home_abbrev.to_string(),
-            score: if status == GameState::Live || status == GameState::Final { Some(3) } else { None },
-            logo: format!("https://assets.nhle.com/logos/nhl/svg/{}_light.svg", home_abbrev),
+            score: if status == GameState::Live || status == GameState::Final {
+                Some(3)
+            } else {
+                None
+            },
+            logo: format!(
+                "https://assets.nhle.com/logos/nhl/svg/{}_light.svg",
+                home_abbrev
+            ),
             place_name: None,
         },
     }
@@ -174,8 +166,19 @@ fn create_game_matchup_in_progress(period: i32) -> GameMatchup {
         game_state: GameState::Live,
         game_schedule_state: nhl_api::GameScheduleState::Ok,
         special_event: None,
-        away_team: create_matchup_team("TOR", "Maple Leafs", "Toronto", 12, 5, 2, away_score, shots_away),
-        home_team: create_matchup_team("OTT", "Senators", "Ottawa", 9, 7, 2, home_score, shots_home),
+        away_team: create_matchup_team(
+            "TOR",
+            "Maple Leafs",
+            "Toronto",
+            12,
+            5,
+            2,
+            away_score,
+            shots_away,
+        ),
+        home_team: create_matchup_team(
+            "OTT", "Senators", "Ottawa", 9, 7, 2, home_score, shots_home,
+        ),
         shootout_in_use: true,
         max_periods: 5,
         reg_periods: 3,
@@ -205,18 +208,37 @@ fn create_game_matchup_final(overtime: bool) -> GameMatchup {
         limited_scoring: false,
         game_date: "2024-11-20".to_string(),
         venue: nhl_api::LocalizedString {
-            default: if overtime { "T-Mobile Arena" } else { "Rogers Place" }.to_string(),
+            default: if overtime {
+                "T-Mobile Arena"
+            } else {
+                "Rogers Place"
+            }
+            .to_string(),
         },
         venue_location: nhl_api::LocalizedString {
-            default: if overtime { "Las Vegas, NV" } else { "Edmonton, AB" }.to_string(),
+            default: if overtime {
+                "Las Vegas, NV"
+            } else {
+                "Edmonton, AB"
+            }
+            .to_string(),
         },
         start_time_utc: "2024-11-21T03:00:00Z".to_string(),
         eastern_utc_offset: "-05:00".to_string(),
         venue_utc_offset: if overtime { "-08:00" } else { "-07:00" }.to_string(),
-        venue_timezone: if overtime { "America/Los_Angeles" } else { "America/Edmonton" }.to_string(),
+        venue_timezone: if overtime {
+            "America/Los_Angeles"
+        } else {
+            "America/Edmonton"
+        }
+        .to_string(),
         period_descriptor: nhl_api::PeriodDescriptor {
             number: if overtime { 4 } else { 3 },
-            period_type: if overtime { PeriodType::Overtime } else { PeriodType::Regulation },
+            period_type: if overtime {
+                PeriodType::Overtime
+            } else {
+                PeriodType::Regulation
+            },
             max_regulation_periods: 3,
         },
         tv_broadcasts: vec![],
@@ -231,7 +253,7 @@ fn create_game_matchup_final(overtime: bool) -> GameMatchup {
             if overtime { 3 } else { 8 },
             if overtime { 1 } else { 2 },
             away_score,
-            shots_away
+            shots_away,
         ),
         home_team: create_matchup_team(
             if overtime { "LA" } else { "EDM" },
@@ -241,14 +263,18 @@ fn create_game_matchup_final(overtime: bool) -> GameMatchup {
             if overtime { 6 } else { 4 },
             if overtime { 1 } else { 2 },
             home_score,
-            shots_home
+            shots_home,
         ),
         shootout_in_use: true,
         max_periods: 5,
         reg_periods: 3,
         ot_in_use: true,
         ties_in_use: false,
-        summary: Some(create_game_summary(if overtime { 4 } else { 3 }, away_score, home_score)),
+        summary: Some(create_game_summary(
+            if overtime { 4 } else { 3 },
+            away_score,
+            home_score,
+        )),
         clock: None,
     }
 }
@@ -294,10 +320,15 @@ fn create_game_summary(_period: i32, _away_score: i32, _home_score: i32) -> nhl_
 /// Create mock boxscore
 pub fn create_mock_boxscore(game_id: i64) -> Boxscore {
     let is_live = game_id == 2024020002 || game_id == 2024020003 || game_id == 2024020004;
-    let period = if game_id == 2024020002 { 1 }
-                 else if game_id == 2024020003 { 2 }
-                 else if game_id == 2024020004 { 3 }
-                 else { 3 };
+    let period = if game_id == 2024020002 {
+        1
+    } else if game_id == 2024020003 {
+        2
+    } else if game_id == 2024020004 {
+        3
+    } else {
+        3
+    };
 
     Boxscore {
         id: game_id,
@@ -330,7 +361,11 @@ pub fn create_mock_boxscore(game_id: i64) -> Boxscore {
                 sequence_number: 2,
             },
         ],
-        game_state: if is_live { GameState::Live } else { GameState::Final },
+        game_state: if is_live {
+            GameState::Live
+        } else {
+            GameState::Final
+        },
         game_schedule_state: "OK".to_string(),
         period_descriptor: PeriodDescriptor {
             number: period,
@@ -439,7 +474,11 @@ pub fn create_mock_franchises() -> Vec<Franchise> {
 }
 
 /// Create mock club stats
-pub fn create_mock_club_stats(_team: &str, season: i32, game_type: nhl_api::GameType) -> nhl_api::ClubStats {
+pub fn create_mock_club_stats(
+    _team: &str,
+    season: i32,
+    game_type: nhl_api::GameType,
+) -> nhl_api::ClubStats {
     nhl_api::ClubStats {
         season: season.to_string(),
         game_type,

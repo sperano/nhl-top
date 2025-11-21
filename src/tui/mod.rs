@@ -1,6 +1,6 @@
 // Module declarations
-pub mod widgets;
 pub mod components;
+pub mod widgets;
 
 // Core modules
 pub mod action;
@@ -34,21 +34,18 @@ pub use state::AppState;
 pub use table::{Alignment, CellValue, ColumnDef};
 pub use types::{Panel, SettingsCategory, Tab};
 
-use std::io;
-use std::sync::Arc;
-use std::time::Duration;
+use crate::config::Config;
+use crate::data_provider::NHLDataProvider;
+use crate::layout_constants::GAME_BOX_WITH_MARGIN;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
-use crate::data_provider::NHLDataProvider;
-use crate::config::Config;
-use crate::layout_constants::GAME_BOX_WITH_MARGIN;
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io;
+use std::sync::Arc;
+use std::time::Duration;
 
 /// Calculate how many game boxes fit per row based on terminal width
 fn calculate_boxes_per_row(terminal_width: u16) -> u16 {
@@ -73,7 +70,10 @@ fn get_next_screenshot_counter() -> u32 {
                 // Match pattern: nhl-screenshot-NNN.txt where NNN is 3 digits
                 if filename.starts_with("nhl-screenshot-") && filename.ends_with(".txt") {
                     // Extract the part between "nhl-screenshot-" and ".txt"
-                    if let Some(middle) = filename.strip_prefix("nhl-screenshot-").and_then(|s| s.strip_suffix(".txt")) {
+                    if let Some(middle) = filename
+                        .strip_prefix("nhl-screenshot-")
+                        .and_then(|s| s.strip_suffix(".txt"))
+                    {
                         // Only accept if it's exactly 3 digits
                         if middle.len() == 3 && middle.chars().all(|c| c.is_ascii_digit()) {
                             if let Ok(counter) = middle.parse::<u32>() {
@@ -90,10 +90,7 @@ fn get_next_screenshot_counter() -> u32 {
 }
 
 /// Main entry point for TUI mode
-pub async fn run(
-    client: Arc<dyn NHLDataProvider>,
-    config: Config,
-) -> Result<(), io::Error> {
+pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(), io::Error> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -107,7 +104,10 @@ pub async fn run(
     // Create initial AppState with config
     let mut initial_state = AppState::default();
     initial_state.system.config = config.clone();
-    initial_state.system.set_status_message("Keys: ←→ navigate | ↓ enter | ↑/ESC back | q quit | 1-6 jump to tab | / command palette".to_string());
+    initial_state.system.set_status_message(
+        "Keys: ←→ navigate | ↓ enter | ↑/ESC back | q quit | 1-6 jump to tab | / command palette"
+            .to_string(),
+    );
 
     // Create runtime with DataEffects
     let mut runtime = Runtime::new(initial_state, data_effects);
@@ -139,8 +139,14 @@ pub async fn run(
             // Dispatch action to update boxes_per_row if it changed
             let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
             if boxes_per_row != current_boxes_per_row {
-                tracing::debug!("DRAW: boxes_per_row changed: {} -> {}", current_boxes_per_row, boxes_per_row);
-                runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(boxes_per_row)));
+                tracing::debug!(
+                    "DRAW: boxes_per_row changed: {} -> {}",
+                    current_boxes_per_row,
+                    boxes_per_row
+                );
+                runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(
+                    boxes_per_row,
+                )));
             }
 
             // Update viewport_height for standings scrolling
@@ -151,8 +157,14 @@ pub async fn run(
             // Dispatch action to update viewport_height if it changed
             let current_viewport_height = runtime.state().ui.standings.viewport_height;
             if viewport_height != current_viewport_height {
-                tracing::debug!("DRAW: viewport_height changed: {} -> {}", current_viewport_height, viewport_height);
-                runtime.dispatch(Action::StandingsAction(StandingsAction::UpdateViewportHeight(viewport_height)));
+                tracing::debug!(
+                    "DRAW: viewport_height changed: {} -> {}",
+                    current_viewport_height,
+                    viewport_height
+                );
+                runtime.dispatch(Action::StandingsAction(
+                    StandingsAction::UpdateViewportHeight(viewport_height),
+                ));
             }
 
             // Build virtual tree from current state
@@ -176,7 +188,8 @@ pub async fn run(
             let counter = get_next_screenshot_counter();
             let filename = format!("nhl-screenshot-{:03}.txt", counter);
             let area = ratatui::layout::Rect::new(0, 0, buffer.area().width, buffer.area().height);
-            if let Err(e) = crate::dev::screenshot::save_buffer_screenshot(&buffer, area, &filename) {
+            if let Err(e) = crate::dev::screenshot::save_buffer_screenshot(&buffer, area, &filename)
+            {
                 tracing::error!("Failed to save screenshot: {}", e);
                 runtime.dispatch(Action::SetStatusMessage {
                     message: format!("Failed to save screenshot: {}", e),
@@ -194,7 +207,10 @@ pub async fn run(
         // If actions were processed, continue loop immediately to check for more
         // This ensures UI updates immediately when async data arrives
         if actions_processed > 0 {
-            tracing::debug!("Processed {} actions, continuing loop immediately for re-render", actions_processed);
+            tracing::debug!(
+                "Processed {} actions, continuing loop immediately for re-render",
+                actions_processed
+            );
             continue;
         }
 
@@ -204,7 +220,8 @@ pub async fn run(
                 #[cfg(feature = "development")]
                 {
                     use crossterm::event::{KeyCode, KeyModifiers};
-                    if key.code == KeyCode::Char('S') && key.modifiers.contains(KeyModifiers::SHIFT) {
+                    if key.code == KeyCode::Char('S') && key.modifiers.contains(KeyModifiers::SHIFT)
+                    {
                         tracing::info!("Screenshot requested via Shift-S");
                         screenshot_requested = true;
                         continue;
@@ -298,7 +315,9 @@ mod tests {
         assert!(!is_quit_action(&Action::RefreshData));
         assert!(!is_quit_action(&Action::NavigateTab(Tab::Scores)));
         assert!(!is_quit_action(&Action::ToggleCommandPalette));
-        assert!(!is_quit_action(&Action::ScoresAction(ScoresAction::DateLeft)));
+        assert!(!is_quit_action(&Action::ScoresAction(
+            ScoresAction::DateLeft
+        )));
     }
 
     #[test]
@@ -312,8 +331,8 @@ mod tests {
     #[cfg(feature = "development")]
     #[ignore = "changes working directory - run with --test-threads=1"]
     fn test_get_next_screenshot_counter_with_existing_files() {
-        use std::fs;
         use std::env;
+        use std::fs;
 
         // Create a temporary directory for testing
         let temp_dir = env::temp_dir().join(format!("nhl_screenshot_test_{}", std::process::id()));
@@ -346,11 +365,12 @@ mod tests {
     #[cfg(feature = "development")]
     #[ignore = "changes working directory - run with --test-threads=1"]
     fn test_get_next_screenshot_counter_ignores_old_format() {
-        use std::fs;
         use std::env;
+        use std::fs;
 
         // Create a temporary directory for testing
-        let temp_dir = env::temp_dir().join(format!("nhl_screenshot_test_2_{}", std::process::id()));
+        let temp_dir =
+            env::temp_dir().join(format!("nhl_screenshot_test_2_{}", std::process::id()));
         let _ = fs::remove_dir_all(&temp_dir); // Remove if exists from previous run
         fs::create_dir(&temp_dir).unwrap();
         let original_dir = env::current_dir().unwrap();

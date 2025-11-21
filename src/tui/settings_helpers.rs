@@ -2,7 +2,6 @@
 ///
 /// This module provides common functionality used by the reducer, key handler,
 /// and components for managing settings.
-
 use super::types::SettingsCategory;
 use crate::config::Config;
 
@@ -42,7 +41,9 @@ pub fn get_setting_display_name(key: &str) -> String {
 pub fn get_setting_values(key: &str) -> Vec<&'static str> {
     match key {
         "log_level" => vec!["trace", "debug", "info", "warn", "error"],
-        "theme" => vec!["none", "orange", "green", "blue", "purple", "white", "red", "yellow", "cyan"],
+        "theme" => vec![
+            "none", "orange", "green", "blue", "purple", "white", "red", "yellow", "cyan",
+        ],
         _ => vec![], // Empty for non-list settings
     }
 }
@@ -55,7 +56,10 @@ pub fn get_setting_display_values(key: &str) -> Vec<String> {
             .map(String::from)
             .collect(),
         "theme" => {
-            use crate::config::{THEME_ORANGE, THEME_GREEN, THEME_BLUE, THEME_PURPLE, THEME_WHITE, THEME_RED, THEME_YELLOW, THEME_CYAN};
+            use crate::config::{
+                THEME_BLUE, THEME_CYAN, THEME_GREEN, THEME_ORANGE, THEME_PURPLE, THEME_RED,
+                THEME_WHITE, THEME_YELLOW,
+            };
             vec![
                 "none".to_string(),
                 THEME_ORANGE.name.to_string(),
@@ -76,7 +80,10 @@ pub fn get_setting_display_values(key: &str) -> Vec<String> {
 pub fn get_current_setting_value(config: &Config, key: &str) -> String {
     match key {
         "log_level" => config.log_level.clone(),
-        "theme" => config.display.theme_name.as_ref()
+        "theme" => config
+            .display
+            .theme_name
+            .as_ref()
             .map(|s| s.to_string())
             .unwrap_or_else(|| "none".to_string()),
         _ => String::new(),
@@ -88,9 +95,7 @@ pub fn find_initial_modal_index(config: &Config, key: &str) -> usize {
     let current_value = get_current_setting_value(config, key);
     let values = get_setting_values(key);
 
-    values.iter()
-        .position(|&v| v == current_value)
-        .unwrap_or(0)
+    values.iter().position(|&v| v == current_value).unwrap_or(0)
 }
 
 /// Get the setting keys and values for display in a category
@@ -101,15 +106,32 @@ pub fn get_category_settings(category: SettingsCategory, config: &Config) -> Vec
             ("Log File".to_string(), config.log_file.clone()),
         ],
         SettingsCategory::Display => vec![
-            ("Theme".to_string(), config.display.theme.as_ref().map(|t| t.name.to_string()).unwrap_or_else(|| "none".to_string())),
-            ("Use Unicode".to_string(), config.display.use_unicode.to_string()),
+            (
+                "Theme".to_string(),
+                config
+                    .display
+                    .theme
+                    .as_ref()
+                    .map(|t| t.name.to_string())
+                    .unwrap_or_else(|| "none".to_string()),
+            ),
+            (
+                "Use Unicode".to_string(),
+                config.display.use_unicode.to_string(),
+            ),
             ("Selection Color".to_string(), "...".to_string()), // Placeholder
             ("Division Header Color".to_string(), "...".to_string()),
             ("Error Color".to_string(), "...".to_string()),
         ],
         SettingsCategory::Data => vec![
-            ("Refresh Interval".to_string(), format!("{} seconds", config.refresh_interval)),
-            ("Western Teams First".to_string(), config.display_standings_western_first.to_string()),
+            (
+                "Refresh Interval".to_string(),
+                format!("{} seconds", config.refresh_interval),
+            ),
+            (
+                "Western Teams First".to_string(),
+                config.display_standings_western_first.to_string(),
+            ),
             ("Time Format".to_string(), config.time_format.clone()),
         ],
     }
@@ -138,10 +160,7 @@ mod tests {
             get_editable_setting_key(SettingsCategory::Logging, 1),
             Some("log_file".to_string())
         );
-        assert_eq!(
-            get_editable_setting_key(SettingsCategory::Logging, 2),
-            None
-        );
+        assert_eq!(get_editable_setting_key(SettingsCategory::Logging, 2), None);
         assert_eq!(
             get_editable_setting_key(SettingsCategory::Logging, 999),
             None
@@ -154,10 +173,7 @@ mod tests {
             get_editable_setting_key(SettingsCategory::Display, 0),
             Some("theme".to_string())
         );
-        assert_eq!(
-            get_editable_setting_key(SettingsCategory::Display, 1),
-            None
-        );
+        assert_eq!(get_editable_setting_key(SettingsCategory::Display, 1), None);
     }
 
     #[test]
@@ -166,18 +182,12 @@ mod tests {
             get_editable_setting_key(SettingsCategory::Data, 0),
             Some("refresh_interval".to_string())
         );
-        assert_eq!(
-            get_editable_setting_key(SettingsCategory::Data, 1),
-            None
-        );
+        assert_eq!(get_editable_setting_key(SettingsCategory::Data, 1), None);
         assert_eq!(
             get_editable_setting_key(SettingsCategory::Data, 2),
             Some("time_format".to_string())
         );
-        assert_eq!(
-            get_editable_setting_key(SettingsCategory::Data, 3),
-            None
-        );
+        assert_eq!(get_editable_setting_key(SettingsCategory::Data, 3), None);
     }
 
     #[test]
@@ -185,7 +195,10 @@ mod tests {
         assert_eq!(get_setting_display_name("log_level"), "Log Level");
         assert_eq!(get_setting_display_name("log_file"), "Log File");
         assert_eq!(get_setting_display_name("theme"), "Theme");
-        assert_eq!(get_setting_display_name("refresh_interval"), "Refresh Interval");
+        assert_eq!(
+            get_setting_display_name("refresh_interval"),
+            "Refresh Interval"
+        );
         assert_eq!(get_setting_display_name("time_format"), "Time Format");
         assert_eq!(get_setting_display_name("unknown_key"), "Unknown");
         assert_eq!(get_setting_display_name(""), "Unknown");
@@ -200,7 +213,10 @@ mod tests {
     #[test]
     fn test_get_setting_values_theme() {
         let values = get_setting_values("theme");
-        assert_eq!(values, vec!["none", "orange", "green", "blue", "purple", "white", "red", "yellow", "cyan"]);
+        assert_eq!(
+            values,
+            vec!["none", "orange", "green", "blue", "purple", "white", "red", "yellow", "cyan"]
+        );
     }
 
     #[test]

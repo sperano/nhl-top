@@ -43,7 +43,9 @@ mod tests {
 
     #[test]
     fn test_panel_label_boxscore() {
-        let panel = Panel::Boxscore { game_id: 2024020001 };
+        let panel = Panel::Boxscore {
+            game_id: 2024020001,
+        };
         assert_eq!(panel.label(), "Game 2024020001");
     }
 
@@ -157,7 +159,10 @@ mod tests {
         ];
 
         let current = current_panel(&stack).unwrap();
-        assert!(matches!(current, Panel::PlayerDetail { player_id: 8478402 }));
+        assert!(matches!(
+            current,
+            Panel::PlayerDetail { player_id: 8478402 }
+        ));
     }
 
     #[test]
