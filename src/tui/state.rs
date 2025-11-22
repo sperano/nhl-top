@@ -102,6 +102,9 @@ pub struct DemoUiState {
     pub scroll_offset: u16,
     /// Viewport height (updated during render)
     pub viewport_height: u16,
+    /// Y-positions of focusable elements (populated by component during render)
+    /// Used by reducer for accurate autoscrolling
+    pub focusable_positions: Vec<u16>,
 }
 
 #[derive(Debug, Clone)]

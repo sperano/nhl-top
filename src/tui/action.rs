@@ -139,6 +139,9 @@ pub enum DocumentAction {
     PageUp,
     /// Page down (scroll by viewport height)
     PageDown,
+    /// Sync focusable element positions from component (for accurate autoscrolling)
+    /// Parameters: (positions, viewport_height)
+    SyncFocusablePositions(Vec<u16>, u16),
 }
 
 impl Action {

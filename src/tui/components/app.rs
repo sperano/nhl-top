@@ -90,6 +90,7 @@ impl App {
                 content_focused: state.navigation.content_focused,
                 focus_index: state.ui.demo.focus_index,
                 scroll_offset: state.ui.demo.scroll_offset,
+                standings: state.data.standings.clone(),
             },
             &Default::default(),
         );

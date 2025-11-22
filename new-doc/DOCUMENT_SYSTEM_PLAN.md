@@ -1,6 +1,6 @@
 # Comprehensive Document System Implementation Plan
 
-## Implementation Status: ✅ CORE COMPLETE
+## Implementation Status: ✅ CORE COMPLETE + STANDINGS DEMO
 
 **Last Updated:** 2024-11-21
 
@@ -17,12 +17,23 @@
 - ✅ `DemoUiState` in AppState (focus_index, scroll_offset, viewport_height)
 - ✅ Document reducer (`reducers/document.rs`) with full Tab/Shift-Tab handling
 - ✅ Key bindings in `keys.rs` for Demo tab (Tab, Shift-Tab, Enter, arrows, Page keys)
+- ✅ **Standings display in Demo tab** - League standings rendered at natural height with focusable team links
+- ✅ **Dynamic focusable count** - Reducer calculates focusable elements based on loaded standings data
+
+### Standings in Demo Tab:
+The Demo tab now displays the full league standings as a demonstration of the document system:
+- Standings data is passed from AppState via `DemoTabProps.standings`
+- Each team is rendered as a focusable link (`link_with_id`)
+- Teams are sorted by points (highest first)
+- Display format: `Rank  Team                     GP   W   L  OT  PTS`
+- Focus navigation cycles through all standings rows + the 4 example links
+- Autoscrolling keeps focused team visible in viewport
 
 ### What's NOT Implemented:
 - ❌ `document/renderer.rs` - Document-specific rendering logic (rendering is inline in mod.rs)
 - ❌ `document/cache.rs` - Render caching for performance
 - ❌ `document/tests/` - Separate test directory (tests are inline in each module)
-- ❌ StandingsDocument implementation
+- ❌ Full StandingsDocument as separate component (partial impl in DemoDocument)
 - ❌ TableWidget `natural_height()` mode and `get_link_cells()`
 - ❌ Migration of standings tab to use DocumentView
 

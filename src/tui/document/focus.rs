@@ -257,6 +257,13 @@ impl FocusManager {
     pub fn elements(&self) -> &[FocusableElement] {
         &self.elements
     }
+
+    /// Get y-positions of all focusable elements
+    ///
+    /// Useful for storing positions in state for autoscrolling in reducers.
+    pub fn y_positions(&self) -> Vec<u16> {
+        self.elements.iter().map(|e| e.y).collect()
+    }
 }
 
 #[cfg(test)]
@@ -600,5 +607,23 @@ mod tests {
         assert_eq!(elements[0].id, "elem_0");
         assert_eq!(elements[1].id, "elem_1");
         assert_eq!(elements[2].id, "elem_2");
+    }
+
+    #[test]
+    fn test_y_positions() {
+        let mut fm = FocusManager::new();
+        for elem in create_test_elements(3) {
+            fm.add_element(elem);
+        }
+
+        // Test elements have y positions at 0, 2, 4 (i * 2)
+        let positions = fm.y_positions();
+        assert_eq!(positions, vec![0, 2, 4]);
+    }
+
+    #[test]
+    fn test_y_positions_empty() {
+        let fm = FocusManager::new();
+        assert!(fm.y_positions().is_empty());
     }
 }

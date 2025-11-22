@@ -5,15 +5,26 @@
 //! - Viewport-based scrolling
 //! - Tab/Shift-Tab focus navigation through focusable elements
 //! - Autoscrolling to keep focused elements visible
+//! - Embedded tables (league standings) rendered at natural height
 
 use std::sync::Arc;
 
+use nhl_api::Standing;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::config::DisplayConfig;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::document::{Document, DocumentBuilder, DocumentElement, DocumentView, LinkTarget};
+
+/// Build a DemoDocument and return the y-positions of its focusable elements
+///
+/// This allows external code (like reducers) to get accurate focusable positions
+/// when the document's underlying data changes (e.g., standings load).
+pub fn build_demo_focusable_positions(standings: Option<&Vec<Standing>>) -> Vec<u16> {
+    let doc = DemoDocument::new(standings.cloned());
+    doc.focusable_positions()
+}
 
 /// Props for the Demo tab
 #[derive(Clone)]
@@ -24,6 +35,8 @@ pub struct DemoTabProps {
     pub focus_index: Option<usize>,
     /// Current scroll offset from AppState
     pub scroll_offset: u16,
+    /// Standings data for demonstrating embedded tables
+    pub standings: Arc<Option<Vec<Standing>>>,
 }
 
 /// State for the Demo tab
@@ -100,6 +113,7 @@ impl Component for DemoTab {
             content_focused: props.content_focused,
             focus_index: props.focus_index,
             scroll_offset: props.scroll_offset,
+            standings: props.standings.clone(),
         }))
     }
 }
@@ -109,12 +123,14 @@ struct DemoTabWidget {
     content_focused: bool,
     focus_index: Option<usize>,
     scroll_offset: u16,
+    standings: Arc<Option<Vec<Standing>>>,
 }
 
 impl ElementWidget for DemoTabWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         // Create document view with state from AppState
-        let doc = Arc::new(DemoDocument);
+        let standings = (*self.standings).clone();
+        let doc = Arc::new(DemoDocument::new(standings));
         let mut view = DocumentView::new(doc, area.height);
 
         // Apply focus state from AppState
@@ -133,6 +149,7 @@ impl ElementWidget for DemoTabWidget {
             content_focused: self.content_focused,
             focus_index: self.focus_index,
             scroll_offset: self.scroll_offset,
+            standings: self.standings.clone(),
         })
     }
 
@@ -142,15 +159,80 @@ impl ElementWidget for DemoTabWidget {
 }
 
 /// Demo document showcasing all document element types
-struct DemoDocument;
+struct DemoDocument {
+    standings: Option<Vec<Standing>>,
+}
+
+impl DemoDocument {
+    fn new(standings: Option<Vec<Standing>>) -> Self {
+        Self { standings }
+    }
+
+    /// Build standings table lines as text elements
+    fn build_standings_section(&self, builder: DocumentBuilder) -> DocumentBuilder {
+        let builder = builder
+            .heading(2, "League Standings (Natural Height)")
+            .spacer(1)
+            .text("This demonstrates embedded data rendered at natural height:");
+
+        match &self.standings {
+            Some(standings) if !standings.is_empty() => {
+                // Sort by points (highest first)
+                let mut sorted = standings.clone();
+                sorted.sort_by(|a, b| b.points.cmp(&a.points));
+
+                // Header
+                let builder = builder
+                    .spacer(1)
+                    .text("Rank  Team                     GP   W   L  OT  PTS")
+                    .text("────  ───────────────────────  ──  ──  ──  ──  ───");
+
+                // Add each team as a text line with a link
+                let mut b = builder;
+                for (i, standing) in sorted.iter().enumerate() {
+                    let rank = i + 1;
+                    let team_name = &standing.team_common_name.default;
+                    let abbrev = &standing.team_abbrev.default;
+
+                    // Create a focusable link for each team
+                    let link_id = format!("standings_{}", abbrev);
+                    let display = format!(
+                        "{:>4}  {:<23}  {:>2}  {:>2}  {:>2}  {:>2}  {:>3}",
+                        rank,
+                        team_name,
+                        standing.games_played(),
+                        standing.wins,
+                        standing.losses,
+                        standing.ot_losses,
+                        standing.points
+                    );
+                    b = b.link_with_id(&link_id, &display, LinkTarget::Action(format!("team:{}", abbrev)));
+                }
+                b
+            }
+            _ => {
+                builder.text("(No standings data loaded - try refreshing)")
+            }
+        }
+    }
+}
 
 impl Document for DemoDocument {
     fn build(&self) -> Vec<DocumentElement> {
-        DocumentBuilder::new()
+        let builder = DocumentBuilder::new()
             .heading(1, "Document System Demo")
             .spacer(1)
             .text("This tab demonstrates the new document system for the NHL TUI.")
             .text("Press Tab/Shift-Tab to navigate between focusable elements.")
+            .spacer(1)
+            .separator()
+            .spacer(1);
+
+        // Add standings section first (showcases natural height rendering)
+        let builder = self.build_standings_section(builder);
+
+        // Then add the rest of the demo content
+        builder
             .spacer(1)
             .separator()
             .spacer(1)
@@ -171,37 +253,6 @@ impl Document for DemoDocument {
             .link_with_id("link_nyr", "New York Rangers", LinkTarget::Action("team:NYR".to_string()))
             .spacer(1)
             .link_with_id("link_mtl", "Montreal Canadiens", LinkTarget::Action("team:MTL".to_string()))
-            .spacer(1)
-            .separator()
-            .spacer(1)
-            .heading(2, "How Autoscrolling Works")
-            .text("1. When Tab moves focus to an element below the viewport,")
-            .text("   the viewport scrolls down to show it with padding.")
-            .spacer(1)
-            .text("2. When Shift-Tab moves focus to an element above the viewport,")
-            .text("   the viewport scrolls up to show it with padding.")
-            .spacer(1)
-            .text("3. When focus wraps from the last to first element (Tab),")
-            .text("   the viewport automatically scrolls to the top.")
-            .spacer(1)
-            .text("4. When focus wraps from the first to last element (Shift-Tab),")
-            .text("   the viewport automatically scrolls to the bottom.")
-            .spacer(1)
-            .separator()
-            .spacer(1)
-            .heading(2, "More Links for Testing")
-            .spacer(1)
-            .link_with_id("link_edm", "Edmonton Oilers", LinkTarget::Action("team:EDM".to_string()))
-            .spacer(1)
-            .link_with_id("link_vgk", "Vegas Golden Knights", LinkTarget::Action("team:VGK".to_string()))
-            .spacer(1)
-            .link_with_id("link_col", "Colorado Avalanche", LinkTarget::Action("team:COL".to_string()))
-            .spacer(1)
-            .link_with_id("link_dal", "Dallas Stars", LinkTarget::Action("team:DAL".to_string()))
-            .spacer(1)
-            .link_with_id("link_wpg", "Winnipeg Jets", LinkTarget::Action("team:WPG".to_string()))
-            .spacer(1)
-            .link_with_id("link_fla", "Florida Panthers", LinkTarget::Action("team:FLA".to_string()))
             .spacer(1)
             .separator()
             .spacer(1)
@@ -238,7 +289,7 @@ mod tests {
 
     #[test]
     fn test_demo_document_builds() {
-        let doc = DemoDocument;
+        let doc = DemoDocument::new(None);
         let elements = doc.build();
 
         // Should have multiple elements
@@ -247,11 +298,11 @@ mod tests {
 
     #[test]
     fn test_demo_document_height() {
-        let doc = DemoDocument;
+        let doc = DemoDocument::new(None);
         let height = doc.calculate_height();
 
         // Should have significant height (all the content)
-        assert!(height > 50);
+        assert!(height > 30);
     }
 
     #[test]
@@ -260,6 +311,7 @@ mod tests {
             content_focused: false,
             focus_index: None,
             scroll_offset: 0,
+            standings: Arc::new(None),
         };
         let state = DemoTabState::default();
         let demo_tab = DemoTab;
@@ -271,13 +323,13 @@ mod tests {
     }
 
     #[test]
-    fn test_demo_document_focusable_count() {
-        let doc = DemoDocument;
+    fn test_demo_document_focusable_count_no_standings() {
+        let doc = DemoDocument::new(None);
         let doc_arc = Arc::new(doc);
         let view = DocumentView::new(doc_arc, 20);
 
-        // Should have 10 focusable links
-        assert_eq!(view.focus_manager().len(), 10);
+        // Should have 4 focusable links (BOS, TOR, NYR, MTL)
+        assert_eq!(view.focus_manager().len(), 4);
     }
 
     #[test]
@@ -286,6 +338,7 @@ mod tests {
             content_focused: true,
             focus_index: None,
             scroll_offset: 0,
+            standings: Arc::new(None),
         };
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 60, 5));
@@ -305,7 +358,7 @@ mod tests {
 
     #[test]
     fn test_demo_tab_focus_navigation() {
-        let doc = Arc::new(DemoDocument);
+        let doc = Arc::new(DemoDocument::new(None));
         let mut view = DocumentView::new(doc, 10);
 
         // Initially no focus

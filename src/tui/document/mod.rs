@@ -43,6 +43,15 @@ pub trait Document: Send + Sync {
         self.build().iter().map(|elem| elem.height()).sum()
     }
 
+    /// Get y-positions of all focusable elements in this document
+    ///
+    /// This is useful for storing positions in state so reducers can
+    /// perform accurate autoscrolling without access to the document itself.
+    fn focusable_positions(&self) -> Vec<u16> {
+        let elements = self.build();
+        FocusManager::from_elements(&elements).y_positions()
+    }
+
     /// Render the document to a buffer at full height
     /// Returns the buffer and the actual height used
     fn render_full(&self, width: u16, config: &DisplayConfig) -> (Buffer, u16) {
