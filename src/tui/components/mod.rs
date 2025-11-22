@@ -3,6 +3,7 @@
 pub mod app;
 pub mod boxscore_panel;
 pub mod breadcrumb;
+pub mod demo_tab;
 pub mod goalie_stats_table;
 pub mod player_detail_panel;
 pub mod scores_tab;
@@ -18,6 +19,7 @@ pub mod team_detail_panel;
 pub use app::App;
 pub use boxscore_panel::{BoxscorePanel, BoxscorePanelProps};
 pub use breadcrumb::BreadcrumbWidget;
+pub use demo_tab::{DemoTab, DemoTabProps};
 pub use goalie_stats_table::GoalieStatsTableWidget;
 pub use player_detail_panel::{PlayerDetailPanel, PlayerDetailPanelProps};
 pub use scores_tab::{ScoresTab, ScoresTabProps};

@@ -10,7 +10,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::config::DisplayConfig;
 use crate::tui::{
-    component::{Component, Element, RenderableWidget},
+    component::{Component, Element, ElementWidget},
     state::SystemState,
 };
 
@@ -43,7 +43,7 @@ struct StatusBarWidget {
     is_error: bool,
 }
 
-impl RenderableWidget for StatusBarWidget {
+impl ElementWidget for StatusBarWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let mut lines = Vec::new();
 
@@ -138,7 +138,7 @@ impl RenderableWidget for StatusBarWidget {
         ratatui::widgets::Widget::render(status_bar, area, buf);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(StatusBarWidget {
             last_refresh: self.last_refresh,
             refresh_interval: self.refresh_interval,
@@ -311,7 +311,7 @@ mod tests {
             is_error: false,
         };
 
-        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        let _cloned: Box<dyn ElementWidget> = widget.clone_box();
         // If we get here, clone_box() worked
     }
 

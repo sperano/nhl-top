@@ -11,7 +11,7 @@ use nhl_api::{DailySchedule, GameDate, GameMatchup};
 use crate::commands::scores_format::{format_period_text, PeriodScores};
 use crate::config::DisplayConfig;
 use crate::layout_constants::SCORE_BOX_WIDTH;
-use crate::tui::component::{Component, Element, RenderableWidget};
+use crate::tui::component::{Component, Element, ElementWidget};
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
 //
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
@@ -200,7 +200,7 @@ impl GameListWidget {
     }
 }
 //
-impl RenderableWidget for GameListWidget {
+impl ElementWidget for GameListWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
         match self.schedule.as_ref().as_ref() {
             None => {
@@ -263,7 +263,7 @@ impl RenderableWidget for GameListWidget {
         }
     }
     //
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(GameListWidget {
             schedule: self.schedule.clone(),
             period_scores: self.period_scores.clone(),

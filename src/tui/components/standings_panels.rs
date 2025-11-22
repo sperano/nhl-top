@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use crate::config::{Config, DisplayConfig};
 use crate::tui::helpers::StandingsSorting;
 use crate::tui::{
-    component::{horizontal, vertical, Constraint, Element, RenderableWidget},
+    component::{horizontal, vertical, Constraint, Element, ElementWidget},
     Alignment, CellValue, ColumnDef,
 };
 
@@ -548,12 +548,12 @@ struct SpacerWidget {
     height: u16,
 }
 
-impl RenderableWidget for SpacerWidget {
+impl ElementWidget for SpacerWidget {
     fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
         // Intentionally empty - just takes up space
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(SpacerWidget {
             height: self.height,
         })

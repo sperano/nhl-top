@@ -10,7 +10,7 @@ use nhl_api::Boxscore;
 
 use super::{GoalieStatsTableWidget, SkaterStatsTableWidget};
 use crate::config::DisplayConfig;
-use crate::tui::component::{Component, Element, RenderableWidget};
+use crate::tui::component::{Component, Element, ElementWidget};
 
 /// Number of chrome lines per section (title + sep + blank + column headers + sep)
 const SECTION_CHROME_LINES: usize = 5;
@@ -66,7 +66,7 @@ struct BoxscorePanelWidget {
     scroll_offset: usize,
 }
 
-impl RenderableWidget for BoxscorePanelWidget {
+impl ElementWidget for BoxscorePanelWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let block = Block::default()
             .borders(Borders::ALL)
@@ -90,7 +90,7 @@ impl RenderableWidget for BoxscorePanelWidget {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(BoxscorePanelWidget {
             game_id: self.game_id,
             boxscore: self.boxscore.clone(),

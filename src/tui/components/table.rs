@@ -157,7 +157,7 @@
 /// - `get_cell_value(row, col)` - Get CellValue at position
 /// - `row_count()` / `column_count()` - Get table dimensions
 use crate::config::DisplayConfig;
-use crate::tui::component::RenderableWidget;
+use crate::tui::component::ElementWidget;
 use crate::tui::{Alignment, CellValue, ColumnDef, Component, Element};
 use ratatui::{
     buffer::Buffer,
@@ -451,7 +451,7 @@ impl TableWidget {
     }
 }
 
-impl RenderableWidget for TableWidget {
+impl ElementWidget for TableWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if area.height == 0 || area.width == 0 {
             return;
@@ -596,7 +596,7 @@ impl RenderableWidget for TableWidget {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         // TableWidget is now cloneable since we extract all cell data upfront
         Box::new(self.clone())
     }
@@ -638,7 +638,7 @@ mod tests {
 
     // Helper to render framework RenderableWidget for testing
     fn render_framework_widget(
-        widget: &impl crate::tui::component::RenderableWidget,
+        widget: &impl crate::tui::component::ElementWidget,
         width: u16,
         height: u16,
         config: &DisplayConfig,

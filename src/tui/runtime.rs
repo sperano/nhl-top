@@ -579,7 +579,7 @@ mod tests {
         runtime.dispatch(Action::NavigateTabRight);
         assert_eq!(
             runtime.state().navigation.current_tab,
-            crate::tui::Tab::Browser
+            crate::tui::Tab::Demo
         );
 
         // Go right to wrap around to Scores

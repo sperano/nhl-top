@@ -196,7 +196,7 @@ impl TabBarWidget {
     }
 }
 
-impl crate::tui::component::RenderableWidget for TabBarWidget {
+impl crate::tui::component::ElementWidget for TabBarWidget {
     fn render(
         &self,
         area: ratatui::layout::Rect,
@@ -237,7 +237,7 @@ impl crate::tui::component::RenderableWidget for TabBarWidget {
         Some(2) // Tab line + separator line
     }
 
-    fn clone_box(&self) -> Box<dyn crate::tui::component::RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn crate::tui::component::ElementWidget> {
         Box::new(TabBarWidget {
             labels: self.labels.clone(),
             focused: self.focused,
@@ -287,7 +287,7 @@ mod tests {
     }
 
     fn render_widget(
-        widget: &impl crate::tui::component::RenderableWidget,
+        widget: &impl crate::tui::component::ElementWidget,
         width: u16,
         height: u16,
     ) -> Buffer {
@@ -298,7 +298,7 @@ mod tests {
     }
 
     fn render_widget_with_config(
-        widget: &impl crate::tui::component::RenderableWidget,
+        widget: &impl crate::tui::component::ElementWidget,
         width: u16,
         height: u16,
         config: &DisplayConfig,
@@ -681,7 +681,7 @@ mod tests {
         id: u32,
     }
 
-    impl crate::tui::component::RenderableWidget for TestWidget {
+    impl crate::tui::component::ElementWidget for TestWidget {
         fn render(
             &self,
             _area: ratatui::layout::Rect,
@@ -689,7 +689,7 @@ mod tests {
             _config: &DisplayConfig,
         ) {
         }
-        fn clone_box(&self) -> Box<dyn crate::tui::component::RenderableWidget> {
+        fn clone_box(&self) -> Box<dyn crate::tui::component::ElementWidget> {
             Box::new(TestWidget { id: self.id })
         }
     }

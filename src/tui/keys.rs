@@ -5,7 +5,9 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use tracing::{debug, trace};
 
-use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
+use crossterm::event::KeyModifiers;
+
+use super::action::{Action, DocumentAction, ScoresAction, SettingsAction, StandingsAction};
 use super::state::AppState;
 use super::types::{SettingsCategory, Tab};
 
@@ -94,7 +96,7 @@ fn handle_number_keys(key_code: KeyCode) -> Option<Action> {
         KeyCode::Char('3') => Some(Action::NavigateTab(Tab::Stats)),
         KeyCode::Char('4') => Some(Action::NavigateTab(Tab::Players)),
         KeyCode::Char('5') => Some(Action::NavigateTab(Tab::Settings)),
-        KeyCode::Char('6') => Some(Action::NavigateTab(Tab::Browser)),
+        KeyCode::Char('6') => Some(Action::NavigateTab(Tab::Demo)),
         _ => None,
     }
 }
@@ -229,6 +231,41 @@ fn handle_settings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Actio
     }
 }
 
+/// Handle Demo tab navigation (document system with Tab/Shift-Tab focus navigation)
+fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
+    match key.code {
+        // Tab key for focus navigation
+        KeyCode::Tab => {
+            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                debug!("KEY: Shift-Tab in Demo tab - focus previous");
+                Some(Action::DocumentAction(DocumentAction::FocusPrev))
+            } else {
+                debug!("KEY: Tab in Demo tab - focus next");
+                Some(Action::DocumentAction(DocumentAction::FocusNext))
+            }
+        }
+        KeyCode::BackTab => {
+            debug!("KEY: BackTab in Demo tab - focus previous");
+            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+        }
+        // Enter to activate focused element
+        KeyCode::Enter => {
+            debug!("KEY: Enter in Demo tab - activate focused");
+            Some(Action::DocumentAction(DocumentAction::ActivateFocused))
+        }
+        // Arrow keys for scrolling
+        KeyCode::Down => Some(Action::DocumentAction(DocumentAction::ScrollDown(1))),
+        KeyCode::Left => Some(Action::DocumentAction(DocumentAction::ScrollUp(1))),
+        KeyCode::Right => Some(Action::DocumentAction(DocumentAction::ScrollDown(1))),
+        // Page navigation
+        KeyCode::PageUp => Some(Action::DocumentAction(DocumentAction::PageUp)),
+        KeyCode::PageDown => Some(Action::DocumentAction(DocumentAction::PageDown)),
+        KeyCode::Home => Some(Action::DocumentAction(DocumentAction::ScrollToTop)),
+        KeyCode::End => Some(Action::DocumentAction(DocumentAction::ScrollToBottom)),
+        _ => None,
+    }
+}
+
 /// Convert a KeyEvent into an Action based on current application state
 ///
 /// This function implements all keyboard navigation:
@@ -313,6 +350,7 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
         Tab::Scores => handle_scores_tab_keys(key.code, state),
         Tab::Standings => handle_standings_tab_keys(key.code, state),
         Tab::Settings => handle_settings_tab_keys(key.code, state),
+        Tab::Demo => handle_demo_tab_keys(key, state),
         _ => None, // Other tabs: no special content navigation yet
     }
 }
@@ -693,7 +731,7 @@ mod tests {
     fn test_number_key_6_navigates_to_browser() {
         let state = AppState::default();
         let action = key_to_action(make_key(KeyCode::Char('6')), &state);
-        assert!(matches!(action, Some(Action::NavigateTab(Tab::Browser))));
+        assert!(matches!(action, Some(Action::NavigateTab(Tab::Demo))));
     }
 
     // Tab bar navigation tests

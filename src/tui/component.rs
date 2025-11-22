@@ -56,7 +56,7 @@ pub enum Element {
     Component(Box<dyn ComponentWrapper>),
 
     /// A widget that can be directly rendered to ratatui buffer
-    Widget(Box<dyn RenderableWidget>),
+    Widget(Box<dyn ElementWidget>),
 
     /// A container with layout and children
     Container {
@@ -102,8 +102,12 @@ pub enum Effect {
     Async(Pin<Box<dyn Future<Output = Action> + Send>>),
 }
 
-/// Trait for widgets that can be rendered directly
-pub trait RenderableWidget: Send + Sync {
+/// Trait for widgets that can be wrapped in the Element tree
+///
+/// This is distinct from `widgets::RenderableWidget` which is a simpler trait
+/// for standalone widgets. ElementWidget adds `Send + Sync` bounds and `clone_box()`
+/// for use with the component framework's `Element::Widget` variant.
+pub trait ElementWidget: Send + Sync {
     /// Render this widget into the provided buffer
     ///
     /// # Arguments
@@ -114,7 +118,7 @@ pub trait RenderableWidget: Send + Sync {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig);
 
     /// Clone this widget into a boxed trait object
-    fn clone_box(&self) -> Box<dyn RenderableWidget>;
+    fn clone_box(&self) -> Box<dyn ElementWidget>;
 
     /// Get the preferred height of this widget
     ///
@@ -133,7 +137,7 @@ pub trait RenderableWidget: Send + Sync {
     }
 }
 
-impl Clone for Box<dyn RenderableWidget> {
+impl Clone for Box<dyn ElementWidget> {
     fn clone(&self) -> Self {
         self.clone_box()
     }
@@ -204,12 +208,12 @@ mod tests {
     #[derive(Clone)]
     struct TestWidget;
 
-    impl RenderableWidget for TestWidget {
+    impl ElementWidget for TestWidget {
         fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
             // Minimal implementation
         }
 
-        fn clone_box(&self) -> Box<dyn RenderableWidget> {
+        fn clone_box(&self) -> Box<dyn ElementWidget> {
             Box::new(self.clone())
         }
 
@@ -272,8 +276,8 @@ mod tests {
     }
 
     #[test]
-    fn test_box_renderable_widget_clone() {
-        let widget: Box<dyn RenderableWidget> = Box::new(TestWidget);
+    fn test_box_element_widget_clone() {
+        let widget: Box<dyn ElementWidget> = Box::new(TestWidget);
         let _cloned = widget.clone();
         // If we get here, clone worked
     }

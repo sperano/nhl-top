@@ -11,7 +11,7 @@ pub enum Tab {
     Stats,
     Players,
     Settings,
-    Browser,
+    Demo,
 }
 
 /// Panel types for drill-down views

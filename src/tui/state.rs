@@ -90,6 +90,18 @@ pub struct UiState {
     pub scores: ScoresUiState,
     pub standings: StandingsUiState,
     pub settings: SettingsUiState,
+    pub demo: DemoUiState,
+}
+
+/// UI state for the Demo tab (document system showcase)
+#[derive(Debug, Clone, Default)]
+pub struct DemoUiState {
+    /// Current focus index within the document (None = no focus)
+    pub focus_index: Option<usize>,
+    /// Current scroll offset
+    pub scroll_offset: u16,
+    /// Viewport height (updated during render)
+    pub viewport_height: u16,
 }
 
 #[derive(Debug, Clone)]

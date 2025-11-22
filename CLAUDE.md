@@ -6,6 +6,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 NHL CLI tool written in Rust that displays NHL stats, standings, and live scores. The application supports both command-line mode for quick queries and an interactive TUI (Terminal User Interface) mode built with ratatui.
 
+## Specialized Agent Commands
+
+This project includes specialized slash commands that act as domain experts for different aspects of the codebase. Use these commands when you need specialized help:
+
+### Available Agent Commands
+
+- **`/api-integrate`** - API Integration Specialist
+  - Use when: Adding new NHL API endpoints to the TUI
+  - Expertise: DataEffects, state management, async fetching, caching
+  - Example: "I need to integrate the player career stats endpoint"
+
+- **`/fixture-build`** - Fixture Builder Specialist
+  - Use when: Creating test fixtures or mock data
+  - Expertise: NHL data structures, realistic test data, fixture patterns
+  - Example: "Create fixtures for testing overtime game scenarios"
+
+- **`/navigation-debug`** - Navigation Debugger Specialist
+  - Use when: Debugging keyboard navigation or focus issues
+  - Expertise: Key event handling, focus hierarchy, panel stack
+  - Example: "Why isn't the ESC key exiting content focus?"
+
+- **`/test-write`** - Test Writer Specialist
+  - Use when: Writing comprehensive unit tests
+  - Expertise: assert_buffer, reducer testing, 90%+ coverage patterns
+  - Example: "Write tests for the new standings layout reducer"
+
+- **`/tui-architect`** - TUI Architecture Specialist
+  - Use when: Making architectural decisions or adding major features
+  - Expertise: React-like architecture, state design, component patterns
+  - Example: "Should player stats be a new tab or a panel?"
+
+### Using Agent Commands
+
+These commands provide specialized guidance following established patterns in the codebase. When invoked, they will:
+1. Analyze your request within their domain of expertise
+2. Provide step-by-step implementation guidance
+3. Generate code following project conventions
+4. Suggest best practices specific to this codebase
+
+Example usage:
+```
+User: "I need to add a new API endpoint for team rosters"
+Assistant: Let me use the API integration specialist to help with this.
+[Uses /api-integrate command]
+```
+
 ## Build and Run Commands
 
 ```bash
@@ -580,22 +626,37 @@ pub trait Component: Send {
 - Tab content, panels, complex layouts
 - Examples: `App`, `TabbedPanel`, `ScoresTab`, `StandingsTab`, `BoxscorePanel`
 
-#### Widgets (`src/tui/widgets/`)
-Widgets implement `RenderableWidget` for leaf-level rendering:
+#### ElementWidget (`src/tui/component.rs`)
+Widgets that participate in the Element tree implement `ElementWidget`:
 ```rust
-pub trait RenderableWidget: Send + Sync {
+pub trait ElementWidget: Send + Sync {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig);
-    fn clone_box(&self) -> Box<dyn RenderableWidget>;
+    fn clone_box(&self) -> Box<dyn ElementWidget>;
     fn preferred_height(&self) -> Option<u16> { None }
     fn preferred_width(&self) -> Option<u16> { None }
 }
 ```
 
-**Use Widgets for:**
+**Use ElementWidget for:**
+- Widgets wrapped in `Element::Widget(Box::new(...))`
+- Widgets that need to be cloneable and thread-safe
+- All component widgets (BoxscorePanelWidget, StatusBarWidget, etc.)
+
+#### Standalone Widgets (`src/tui/widgets/`)
+Simple widgets implement `RenderableWidget` (no `Send + Sync`, no `clone_box`):
+```rust
+pub trait RenderableWidget {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig);
+    fn preferred_height(&self) -> Option<u16> { None }
+    fn preferred_width(&self) -> Option<u16> { None }
+}
+```
+
+**Use RenderableWidget for:**
 - Self-contained, reusable rendering primitives
 - Direct buffer rendering with no framework overhead
-- Leaf nodes in the element tree
-- Examples: `GameBox`, `ScoreTable`, `SettingsListWidget`, `ListModalWidget`
+- Widgets not used in the Element tree
+- Examples: `GameBox`, `ScoreTable`
 
 ### Testing Infrastructure
 
@@ -635,3 +696,5 @@ pub trait RenderableWidget: Send + Sync {
 ### Architecture Notes
 - The React-like framework is the current architecture (not "experimental")
 - What was previously called "legacy" navigation patterns may still be referenced in some places
+- put all the new markdown file you create for housekeeping in the new-doc directory
+- TODO: there has been confusion about the two RenderableWidget traits. Rename them

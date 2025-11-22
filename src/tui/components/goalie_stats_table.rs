@@ -30,7 +30,7 @@ use ratatui::{buffer::Buffer, layout::Rect};
 
 use super::table::TableWidget;
 use crate::config::DisplayConfig;
-use crate::tui::{component::RenderableWidget, Alignment, CellValue, ColumnDef};
+use crate::tui::{component::ElementWidget, Alignment, CellValue, ColumnDef};
 
 /// Creates column definitions for game-level goalie statistics
 ///
@@ -146,12 +146,12 @@ impl GoalieStatsTableWidget {
     }
 }
 
-impl RenderableWidget for GoalieStatsTableWidget {
+impl ElementWidget for GoalieStatsTableWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         self.inner.render(area, buf, config);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(Self {
             inner: self.inner.clone(),
         })
@@ -451,7 +451,7 @@ mod tests {
         )];
         let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
-        let _cloned: Box<dyn RenderableWidget> = table.clone_box();
+        let _cloned: Box<dyn ElementWidget> = table.clone_box();
         // If we get here, clone_box() worked
     }
 

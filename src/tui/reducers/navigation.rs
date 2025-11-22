@@ -34,12 +34,12 @@ fn navigate_to_tab(state: AppState, tab: Tab) -> (AppState, Effect) {
 fn navigate_tab_left(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.navigation.current_tab = match new_state.navigation.current_tab {
-        Tab::Scores => Tab::Browser,
+        Tab::Scores => Tab::Demo,
         Tab::Standings => Tab::Scores,
         Tab::Stats => Tab::Standings,
         Tab::Players => Tab::Stats,
         Tab::Settings => Tab::Players,
-        Tab::Browser => Tab::Settings,
+        Tab::Demo => Tab::Settings,
     };
     new_state.navigation.panel_stack.clear();
     new_state.navigation.content_focused = false; // Return focus to tab bar
@@ -53,8 +53,8 @@ fn navigate_tab_right(state: AppState) -> (AppState, Effect) {
         Tab::Standings => Tab::Stats,
         Tab::Stats => Tab::Players,
         Tab::Players => Tab::Settings,
-        Tab::Settings => Tab::Browser,
-        Tab::Browser => Tab::Scores,
+        Tab::Settings => Tab::Demo,
+        Tab::Demo => Tab::Scores,
     };
     new_state.navigation.panel_stack.clear();
     new_state.navigation.content_focused = false; // Return focus to tab bar
@@ -101,7 +101,7 @@ mod tests {
         state.navigation.current_tab = Tab::Scores;
 
         let (state, _) = navigate_tab_left(state);
-        assert_eq!(state.navigation.current_tab, Tab::Browser);
+        assert_eq!(state.navigation.current_tab, Tab::Demo);
 
         let (state, _) = navigate_tab_left(state);
         assert_eq!(state.navigation.current_tab, Tab::Settings);
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn test_tab_right_navigation_cycles() {
         let mut state = AppState::default();
-        state.navigation.current_tab = Tab::Browser;
+        state.navigation.current_tab = Tab::Demo;
 
         let (state, _) = navigate_tab_right(state);
         assert_eq!(state.navigation.current_tab, Tab::Scores);

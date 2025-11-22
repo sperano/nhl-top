@@ -12,7 +12,7 @@ use crate::config::DisplayConfig;
 use crate::team_abbrev::common_name_to_abbrev;
 use crate::tui::helpers::SeasonSorting;
 use crate::tui::{
-    component::{Component, Element, RenderableWidget},
+    component::{Component, Element, ElementWidget},
     Alignment, CellValue, ColumnDef,
 };
 
@@ -55,7 +55,7 @@ struct PlayerDetailPanelWidget {
     selected_index: Option<usize>,
 }
 
-impl RenderableWidget for PlayerDetailPanelWidget {
+impl ElementWidget for PlayerDetailPanelWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if self.loading {
             let text = format!("Loading player {} details...", self.player_id);
@@ -322,7 +322,7 @@ impl RenderableWidget for PlayerDetailPanelWidget {
         ratatui::widgets::Widget::render(block, area, buf);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(self.clone())
     }
 }

@@ -50,6 +50,7 @@ pub enum Action {
     ScoresAction(ScoresAction),
     StandingsAction(StandingsAction),
     SettingsAction(SettingsAction),
+    DocumentAction(DocumentAction),
 
     // System actions
     Quit,
@@ -115,6 +116,29 @@ pub enum SettingsAction {
     ModalCancel,        // Cancel modal without selecting
     CommitEdit(String), // Setting key to commit edit
     UpdateConfig(Box<crate::config::Config>),
+}
+
+/// Document-related actions for viewport scrolling and focus navigation
+#[derive(Debug, Clone)]
+pub enum DocumentAction {
+    /// Navigate to next focusable element (Tab key)
+    FocusNext,
+    /// Navigate to previous focusable element (Shift-Tab key)
+    FocusPrev,
+    /// Activate the currently focused element (Enter key)
+    ActivateFocused,
+    /// Scroll viewport up by N lines
+    ScrollUp(u16),
+    /// Scroll viewport down by N lines
+    ScrollDown(u16),
+    /// Scroll to top of document
+    ScrollToTop,
+    /// Scroll to bottom of document
+    ScrollToBottom,
+    /// Page up (scroll by viewport height)
+    PageUp,
+    /// Page down (scroll by viewport height)
+    PageDown,
 }
 
 impl Action {

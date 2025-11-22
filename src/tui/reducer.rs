@@ -9,7 +9,8 @@ use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
 use crate::tui::reducers::{
-    reduce_data_loading, reduce_navigation, reduce_panels, reduce_scores, reduce_standings,
+    reduce_data_loading, reduce_document, reduce_navigation, reduce_panels, reduce_scores,
+    reduce_standings,
 };
 
 /// Create an effect to save config to disk asynchronously
@@ -55,6 +56,11 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
 
     // Data loading actions
     if let Some(result) = reduce_data_loading(&state, &action) {
+        return result;
+    }
+
+    // Document actions (for Demo tab)
+    if let Some(result) = reduce_document(&state, &action) {
         return result;
     }
 

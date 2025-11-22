@@ -30,7 +30,7 @@ use ratatui::{buffer::Buffer, layout::Rect};
 
 use super::table::TableWidget;
 use crate::config::DisplayConfig;
-use crate::tui::{component::RenderableWidget, Alignment, CellValue, ColumnDef};
+use crate::tui::{component::ElementWidget, Alignment, CellValue, ColumnDef};
 
 /// Creates column definitions for game-level skater statistics
 ///
@@ -151,12 +151,12 @@ impl SkaterStatsTableWidget {
     }
 }
 
-impl RenderableWidget for SkaterStatsTableWidget {
+impl ElementWidget for SkaterStatsTableWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         self.inner.render(area, buf, config);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(Self {
             inner: self.inner.clone(),
         })

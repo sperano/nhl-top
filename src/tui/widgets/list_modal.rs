@@ -1,5 +1,5 @@
 use crate::config::DisplayConfig;
-use crate::tui::component::RenderableWidget;
+use crate::tui::component::ElementWidget;
 /// ListModalWidget - renders a centered popup modal for list selection
 ///
 /// Features:
@@ -40,7 +40,7 @@ impl ListModalWidget {
     }
 }
 
-impl RenderableWidget for ListModalWidget {
+impl ElementWidget for ListModalWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         render_list_modal(
             &self.options,
@@ -53,7 +53,7 @@ impl RenderableWidget for ListModalWidget {
         );
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(self.clone())
     }
 }
@@ -367,7 +367,7 @@ mod tests {
         let options = vec!["Option".to_string()];
         let widget = ListModalWidget::new(options, 0, 10, 5);
 
-        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        let _cloned: Box<dyn ElementWidget> = widget.clone_box();
         // If we get here, clone_box() worked
     }
 

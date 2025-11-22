@@ -12,7 +12,7 @@ use crate::config::Config;
 use crate::config::DisplayConfig;
 use crate::tui::helpers::StandingsSorting;
 use crate::tui::{
-    component::{horizontal, vertical, Component, Constraint, Element, RenderableWidget},
+    component::{horizontal, vertical, Component, Constraint, Element, ElementWidget},
     state::PanelState,
     Alignment, CellValue, ColumnDef,
 };
@@ -760,7 +760,7 @@ impl WindowedStandingsTable {
     }
 }
 
-impl RenderableWidget for WindowedStandingsTable {
+impl ElementWidget for WindowedStandingsTable {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if self.all_teams.is_empty() {
             return;
@@ -791,7 +791,7 @@ impl RenderableWidget for WindowedStandingsTable {
         table.render(area, buf, config);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(self.clone())
     }
 }
@@ -801,14 +801,14 @@ struct LoadingWidget {
     message: String,
 }
 
-impl RenderableWidget for LoadingWidget {
+impl ElementWidget for LoadingWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
         let widget =
             Paragraph::new(self.message.as_str()).block(Block::default().borders(Borders::NONE));
         ratatui::widgets::Widget::render(widget, area, buf);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(LoadingWidget {
             message: self.message.clone(),
         })
@@ -820,14 +820,14 @@ struct PanelWidget {
     message: String,
 }
 
-impl RenderableWidget for PanelWidget {
+impl ElementWidget for PanelWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
         let widget = Paragraph::new(self.message.as_str())
             .block(Block::default().borders(Borders::ALL).title("Panel View"));
         ratatui::widgets::Widget::render(widget, area, buf);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(PanelWidget {
             message: self.message.clone(),
         })
@@ -839,12 +839,12 @@ struct SpacerWidget {
     height: u16,
 }
 
-impl RenderableWidget for SpacerWidget {
+impl ElementWidget for SpacerWidget {
     fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
         // Intentionally empty - just takes up space
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(SpacerWidget {
             height: self.height,
         })

@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::config::DisplayConfig;
-use crate::tui::{component::RenderableWidget, state::PanelState, Panel, Tab};
+use crate::tui::{component::ElementWidget, state::PanelState, Panel, Tab};
 
 /// Breadcrumb widget that renders a navigation path
 #[derive(Clone)]
@@ -38,7 +38,7 @@ impl BreadcrumbWidget {
             Tab::Stats => "Stats",
             Tab::Players => "Players",
             Tab::Settings => "Settings",
-            Tab::Browser => "Browser",
+            Tab::Demo => "Demo",
         };
 
         spans.push(Span::styled(
@@ -63,7 +63,7 @@ impl BreadcrumbWidget {
     }
 }
 
-impl RenderableWidget for BreadcrumbWidget {
+impl ElementWidget for BreadcrumbWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
         if area.height == 0 || area.width == 0 {
             return;
@@ -76,7 +76,7 @@ impl RenderableWidget for BreadcrumbWidget {
         buf.set_line(area.x, area.y, &line, area.width);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(self.clone())
     }
 
@@ -210,13 +210,13 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_browser_tab() {
-        let widget = BreadcrumbWidget::new(Tab::Browser, Vec::new());
+        let widget = BreadcrumbWidget::new(Tab::Demo, Vec::new());
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Browser"]);
+        assert_buffer(&buf, &["Demo"]);
     }
 
     #[test]
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn test_breadcrumb_clone_box() {
         let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
-        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        let _cloned: Box<dyn ElementWidget> = widget.clone_box();
         // If we get here, clone_box() worked
     }
 

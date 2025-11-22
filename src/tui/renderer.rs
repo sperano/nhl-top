@@ -316,13 +316,13 @@ mod tests {
         text: String,
     }
 
-    impl super::super::component::RenderableWidget for TestWidget {
+    impl super::super::component::ElementWidget for TestWidget {
         fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
             let text = Text::from(self.text.clone());
             Paragraph::new(text).render(area, buf);
         }
 
-        fn clone_box(&self) -> Box<dyn super::super::component::RenderableWidget> {
+        fn clone_box(&self) -> Box<dyn super::super::component::ElementWidget> {
             Box::new(self.clone())
         }
     }
@@ -351,7 +351,7 @@ mod tests {
 
         let widget = Box::new(TestWidget {
             text: "Hello".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
         let element = Element::Widget(widget);
 
         renderer.render(element, buffer.area, &mut buffer, &config);
@@ -369,11 +369,11 @@ mod tests {
 
         let top_widget = Box::new(TestWidget {
             text: "TOP".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let bottom_widget = Box::new(TestWidget {
             text: "BOTTOM".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let element = Element::Container {
             layout: ContainerLayout::Vertical(vec![Constraint::Length(3), Constraint::Length(3)]),
@@ -398,11 +398,11 @@ mod tests {
 
         let left_widget = Box::new(TestWidget {
             text: "LEFT".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let right_widget = Box::new(TestWidget {
             text: "RIGHT".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let element = Element::Container {
             layout: ContainerLayout::Horizontal(vec![
@@ -434,11 +434,11 @@ mod tests {
         // The second child should overwrite the first
         let widget1 = Box::new(TestWidget {
             text: "First".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let widget2 = Box::new(TestWidget {
             text: "Second".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let element = Element::Fragment(vec![Element::Widget(widget1), Element::Widget(widget2)]);
 
@@ -535,7 +535,7 @@ mod tests {
         let element1 = Element::None;
         let widget = Box::new(TestWidget {
             text: "Changed".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
         let element2 = Element::Widget(widget);
 
         // First render
@@ -561,10 +561,10 @@ mod tests {
     fn test_tree_equality_widgets_always_different() {
         let widget1 = Box::new(TestWidget {
             text: "Test1".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
         let widget2 = Box::new(TestWidget {
             text: "Test2".to_string(),
-        }) as Box<dyn super::super::component::RenderableWidget>;
+        }) as Box<dyn super::super::component::ElementWidget>;
 
         let elem1 = Element::Widget(widget1);
         let elem2 = Element::Widget(widget2);

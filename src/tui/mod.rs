@@ -5,6 +5,7 @@ pub mod widgets;
 // Core modules
 pub mod action;
 pub mod component;
+pub mod document;
 pub mod effects;
 pub mod helpers;
 pub mod keys;
@@ -23,8 +24,8 @@ pub mod testing;
 #[cfg(test)]
 mod integration_tests;
 
-pub use action::{Action, ScoresAction, StandingsAction};
-pub use component::{Component, Effect, Element};
+pub use action::{Action, DocumentAction, ScoresAction, StandingsAction};
+pub use component::{Component, Effect, Element, ElementWidget};
 pub use effects::DataEffects;
 pub use keys::key_to_action;
 pub use reducer::reduce;

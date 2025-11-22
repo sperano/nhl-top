@@ -11,7 +11,7 @@ use super::table::TableWidget;
 use crate::config::DisplayConfig;
 use crate::tui::helpers::{ClubGoalieStatsSorting, ClubSkaterStatsSorting};
 use crate::tui::{
-    component::{Component, Element, RenderableWidget},
+    component::{Component, Element, ElementWidget},
     Alignment, CellValue, ColumnDef,
 };
 
@@ -56,7 +56,7 @@ struct TeamDetailPanelWidget {
     selected_index: Option<usize>,
 }
 
-impl RenderableWidget for TeamDetailPanelWidget {
+impl ElementWidget for TeamDetailPanelWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if self.loading {
             let text = format!("Loading {} team details...", self.team_abbrev);
@@ -288,7 +288,7 @@ impl RenderableWidget for TeamDetailPanelWidget {
         ratatui::widgets::Widget::render(block, area, buf);
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(TeamDetailPanelWidget {
             team_abbrev: self.team_abbrev.clone(),
             standing: self.standing.clone(),

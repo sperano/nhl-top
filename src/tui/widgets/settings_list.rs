@@ -1,5 +1,5 @@
 use crate::config::{Config, DisplayConfig};
-use crate::tui::component::RenderableWidget;
+use crate::tui::component::ElementWidget;
 use crate::tui::SettingsCategory;
 /// SettingsListWidget - displays a read-only list of settings with their current values
 ///
@@ -97,7 +97,7 @@ impl SettingsListWidget {
     }
 }
 
-impl RenderableWidget for SettingsListWidget {
+impl ElementWidget for SettingsListWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let settings = self.get_settings();
         let x = area.x + self.margin;
@@ -165,7 +165,7 @@ impl RenderableWidget for SettingsListWidget {
         }
     }
 
-    fn clone_box(&self) -> Box<dyn RenderableWidget> {
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(self.clone())
     }
 
@@ -451,7 +451,7 @@ mod tests {
             String::new(),
         );
 
-        let _cloned: Box<dyn RenderableWidget> = widget.clone_box();
+        let _cloned: Box<dyn ElementWidget> = widget.clone_box();
         // If we get here, clone_box() worked
     }
 }

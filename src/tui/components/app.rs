@@ -3,13 +3,14 @@ use crate::tui::state::{AppState, LoadingKey};
 //
 use super::{
     boxscore_panel::{BoxscorePanel, BoxscorePanelProps, TeamView},
+    demo_tab::DemoTabProps,
     player_detail_panel::PlayerDetailPanelProps,
     scores_tab::ScoresTabProps,
     settings_tab::SettingsTabProps,
     standings_tab::StandingsTabProps,
     team_detail_panel::TeamDetailPanelProps,
-    BreadcrumbWidget, PlayerDetailPanel, ScoresTab, SettingsTab, StandingsTab, StatusBar, TabItem,
-    TabbedPanel, TabbedPanelProps, TeamDetailPanel,
+    BreadcrumbWidget, DemoTab, PlayerDetailPanel, ScoresTab, SettingsTab, StandingsTab, StatusBar,
+    TabItem, TabbedPanel, TabbedPanelProps, TeamDetailPanel,
 };
 //
 /// Root App component
@@ -49,7 +50,7 @@ impl App {
             Tab::Stats => "stats",
             Tab::Players => "players",
             Tab::Settings => "settings",
-            Tab::Browser => "browser",
+            Tab::Demo => "demo",
         };
         //
         // Determine content for active tab - if panel is open, show panel instead
@@ -83,6 +84,16 @@ impl App {
                 )
             };
         //
+        // Build Demo tab content
+        let demo_content = DemoTab.view(
+            &DemoTabProps {
+                content_focused: state.navigation.content_focused,
+                focus_index: state.ui.demo.focus_index,
+                scroll_offset: state.ui.demo.scroll_offset,
+            },
+            &Default::default(),
+        );
+
         // Build tabs with their content
         let tabs = vec![
             TabItem::new("scores", "Scores", scores_content),
@@ -90,7 +101,7 @@ impl App {
             TabItem::new("stats", "Stats", Element::None), // TODO
             TabItem::new("players", "Players", Element::None), // TODO
             TabItem::new("settings", "Settings", settings_content),
-            TabItem::new("browser", "Browser", Element::None), // TODO
+            TabItem::new("demo", "Demo", demo_content),
         ];
         //
         TabbedPanel.view(
