@@ -130,6 +130,14 @@ impl DocumentBuilder {
         self
     }
 
+    /// Add a horizontal row of elements (side by side)
+    ///
+    /// Elements are laid out horizontally with equal width distribution.
+    pub fn row(mut self, children: Vec<DocumentElement>) -> Self {
+        self.elements.push(DocumentElement::row(children));
+        self
+    }
+
     /// Create a nested group of elements using a nested builder
     ///
     /// # Example

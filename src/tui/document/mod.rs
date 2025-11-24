@@ -112,6 +112,14 @@ pub trait Document: Send + Sync {
         FocusManager::from_elements(&elements).y_positions()
     }
 
+    /// Get row positions for all focusable elements in this document
+    ///
+    /// Returns (row_y, child_index, index_within_child) for elements in Rows, None for others.
+    fn focusable_row_positions(&self) -> Vec<Option<(u16, usize, usize)>> {
+        let elements = self.build(&FocusContext::default());
+        FocusManager::from_elements(&elements).row_positions()
+    }
+
     /// Render the document to a buffer at full height
     /// Returns the buffer and the actual height used
     fn render_full(&self, width: u16, config: &DisplayConfig, focus: &FocusContext) -> (Buffer, u16) {

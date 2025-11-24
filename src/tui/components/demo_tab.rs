@@ -16,11 +16,93 @@ use ratatui::layout::Rect;
 use crate::config::DisplayConfig;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
+use crate::tui::components::TableWidget;
 use crate::tui::document::{
     Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, FocusableId,
     LinkTarget,
 };
 use crate::tui::helpers::StandingsSorting;
+use crate::tui::{Alignment, CellValue, ColumnDef};
+
+/// Demo player data for the sample player table
+#[derive(Clone)]
+struct DemoPlayer {
+    name: String,
+    player_id: i64,
+    team: String,
+    games: u32,
+    goals: u32,
+    assists: u32,
+}
+
+impl DemoPlayer {
+    fn new(name: &str, player_id: i64, team: &str, games: u32, goals: u32, assists: u32) -> Self {
+        Self {
+            name: name.to_string(),
+            player_id,
+            team: team.to_string(),
+            games,
+            goals,
+            assists,
+        }
+    }
+
+    fn points(&self) -> u32 {
+        self.goals + self.assists
+    }
+}
+
+/// Create sample forward player data for demo (top scorers)
+fn create_demo_forwards() -> Vec<DemoPlayer> {
+    vec![
+        DemoPlayer::new("Nathan MacKinnon", 8477492, "COL", 82, 51, 89),
+        DemoPlayer::new("Nikita Kucherov", 8476453, "TBL", 81, 44, 100),
+        DemoPlayer::new("Connor McDavid", 8478402, "EDM", 76, 32, 100),
+        DemoPlayer::new("Leon Draisaitl", 8477934, "EDM", 81, 41, 65),
+        DemoPlayer::new("Auston Matthews", 8479318, "TOR", 69, 69, 38),
+    ]
+}
+
+/// Create sample defenseman player data for demo (top scoring D)
+fn create_demo_defensemen() -> Vec<DemoPlayer> {
+    vec![
+        DemoPlayer::new("Quinn Hughes", 8480800, "VAN", 82, 17, 75),
+        DemoPlayer::new("Cale Makar", 8480069, "COL", 77, 21, 69),
+        DemoPlayer::new("Roman Josi", 8474600, "NSH", 82, 23, 62),
+        DemoPlayer::new("Evan Bouchard", 8480803, "EDM", 81, 18, 64),
+        DemoPlayer::new("Adam Fox", 8479323, "NYR", 74, 17, 56),
+    ]
+}
+
+/// Create a player stats table widget from given players
+fn create_player_table(players: Vec<DemoPlayer>, focused_row: Option<usize>) -> TableWidget {
+    let columns: Vec<ColumnDef<DemoPlayer>> = vec![
+        ColumnDef::new("Player", 18, Alignment::Left, |p: &DemoPlayer| {
+            CellValue::PlayerLink {
+                display: p.name.clone(),
+                player_id: p.player_id,
+            }
+        }),
+        // Team as Text (not TeamLink) so only Player column is focusable per row
+        ColumnDef::new("Team", 5, Alignment::Center, |p: &DemoPlayer| {
+            CellValue::Text(p.team.clone())
+        }),
+        ColumnDef::new("GP", 3, Alignment::Right, |p: &DemoPlayer| {
+            CellValue::Text(p.games.to_string())
+        }),
+        ColumnDef::new("G", 3, Alignment::Right, |p: &DemoPlayer| {
+            CellValue::Text(p.goals.to_string())
+        }),
+        ColumnDef::new("A", 3, Alignment::Right, |p: &DemoPlayer| {
+            CellValue::Text(p.assists.to_string())
+        }),
+        ColumnDef::new("PTS", 4, Alignment::Right, |p: &DemoPlayer| {
+            CellValue::Text(p.points().to_string())
+        }),
+    ];
+
+    TableWidget::from_data(&columns, players).with_focused_row(focused_row)
+}
 
 /// Build a DemoDocument and return the y-positions of its focusable elements
 ///
@@ -29,6 +111,16 @@ use crate::tui::helpers::StandingsSorting;
 pub fn build_demo_focusable_positions(standings: Option<&Vec<Standing>>) -> Vec<u16> {
     let doc = DemoDocument::new(standings.cloned());
     doc.focusable_positions()
+}
+
+/// Build a DemoDocument and return the row positions of its focusable elements
+///
+/// Returns (row_y, child_index, index_within_child) for elements in Rows, None for others.
+pub fn build_demo_focusable_row_positions(
+    standings: Option<&Vec<Standing>>,
+) -> Vec<Option<(u16, usize, usize)>> {
+    let doc = DemoDocument::new(standings.cloned());
+    doc.focusable_row_positions()
 }
 
 /// Build a DemoDocument and return the IDs of its focusable elements
@@ -221,6 +313,35 @@ impl DemoDocument {
             _ => builder.text("(No standings data loaded - try refreshing)"),
         }
     }
+
+    /// Build the player stats table section with two tables side by side
+    fn build_player_section(
+        &self,
+        builder: DocumentBuilder,
+        focus: &FocusContext,
+    ) -> DocumentBuilder {
+        const FORWARDS_TABLE: &str = "forwards";
+        const DEFENSEMEN_TABLE: &str = "defensemen";
+
+        let forwards_table = create_player_table(
+            create_demo_forwards(),
+            focus.focused_table_row(FORWARDS_TABLE),
+        );
+        let defensemen_table = create_player_table(
+            create_demo_defensemen(),
+            focus.focused_table_row(DEFENSEMEN_TABLE),
+        );
+
+        builder
+            .heading(2, "Top Scorers (2023-24)")
+            .spacer(1)
+            .text("These tables demonstrate side-by-side layout with focusable player links:")
+            .spacer(1)
+            .row(vec![
+                DocumentElement::table(FORWARDS_TABLE, forwards_table),
+                DocumentElement::table(DEFENSEMEN_TABLE, defensemen_table),
+            ])
+    }
 }
 
 impl Document for DemoDocument {
@@ -238,7 +359,7 @@ impl Document for DemoDocument {
         let builder = self.build_standings_section(builder, focus);
 
         // Then add the rest of the demo content
-        builder
+        let builder = builder
             .spacer(1)
             .separator()
             .spacer(1)
@@ -273,7 +394,12 @@ impl Document for DemoDocument {
             .spacer(1)
             .text("Each document implements the Document trait to define its")
             .text("content structure. DocumentView manages the viewport and")
-            .text("focus state for rendering and interaction.")
+            .text("focus state for rendering and interaction.");
+
+        // Add player stats table at the bottom
+        let builder = self.build_player_section(builder, focus);
+
+        builder
             .spacer(1)
             .text("End of demo document.")
             .build()
@@ -334,8 +460,10 @@ mod tests {
         let doc_arc = Arc::new(doc);
         let view = DocumentView::new(doc_arc, 20);
 
-        // Should have 4 focusable links (BOS, TOR, NYR, MTL)
-        assert_eq!(view.focus_manager().len(), 4);
+        // Should have 14 focusable elements:
+        // - 4 example links (BOS, TOR, NYR, MTL)
+        // - 10 player table cells (5 forwards + 5 defensemen, 1 link column each)
+        assert_eq!(view.focus_manager().len(), 14);
     }
 
     #[test]

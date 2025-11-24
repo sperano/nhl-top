@@ -83,6 +83,17 @@ pub enum DocumentElement {
         /// Focusable elements extracted from link cells
         focusable: Vec<FocusableElement>,
     },
+
+    /// Horizontal row of elements (side by side)
+    ///
+    /// Elements are laid out horizontally with equal width distribution.
+    /// Height is determined by the tallest child element.
+    Row {
+        /// Child elements to render side by side
+        children: Vec<DocumentElement>,
+        /// Gap between elements in characters
+        gap: u16,
+    },
 }
 
 impl std::fmt::Debug for DocumentElement {
@@ -128,6 +139,11 @@ impl std::fmt::Debug for DocumentElement {
                 .field("columns", &widget.column_count())
                 .field("focusable_count", &focusable.len())
                 .finish(),
+            Self::Row { children, gap } => f
+                .debug_struct("Row")
+                .field("children", &children.len())
+                .field("gap", gap)
+                .finish(),
         }
     }
 }
@@ -154,6 +170,10 @@ impl DocumentElement {
             Self::Group { children, .. } => children.iter().map(|c| c.height()).sum(),
             Self::Custom { height, .. } => *height,
             Self::Table { widget, .. } => widget.preferred_height().unwrap_or(0),
+            Self::Row { children, .. } => {
+                // Height is the maximum height of all children (side by side)
+                children.iter().map(|c| c.height()).max().unwrap_or(0)
+            }
         }
     }
 
@@ -177,6 +197,7 @@ impl DocumentElement {
                     rect: Rect::new(0, y_offset, display.chars().count() as u16, 1),
                     link_target: Some(target.clone()),
                     tab_order: 0,
+                    row_position: None,
                 });
             }
             Self::Group { children, .. } => {
@@ -196,12 +217,23 @@ impl DocumentElement {
                 }
             }
             Self::Table { focusable, .. } => {
-                // Add focusable elements with adjusted y positions
                 for elem in focusable {
                     let mut adjusted = elem.clone();
                     adjusted.y += y_offset;
                     adjusted.rect.y += y_offset;
                     out.push(adjusted);
+                }
+            }
+            Self::Row { children, .. } => {
+                // Collect left to right - all elements from first child, then second, etc.
+                // Set row_position so left/right navigation can jump between children
+                for (child_idx, child) in children.iter().enumerate() {
+                    let start_idx = out.len();
+                    child.collect_focusable(out, y_offset);
+                    // Tag each element with its row position
+                    for (idx_within_child, elem) in out[start_idx..].iter_mut().enumerate() {
+                        elem.row_position = Some((y_offset, child_idx, idx_within_child));
+                    }
                 }
             }
             _ => {}
@@ -228,6 +260,11 @@ impl DocumentElement {
             Self::Custom { focusable, .. } | Self::Table { focusable, .. } => {
                 for elem in focusable {
                     out.push(elem.id.clone());
+                }
+            }
+            Self::Row { children, .. } => {
+                for child in children {
+                    child.collect_focusable_ids(out, _y_offset);
                 }
             }
             _ => {}
@@ -262,6 +299,9 @@ impl DocumentElement {
             }
             Self::Table { widget, .. } => {
                 widget.render(area, buf, config);
+            }
+            Self::Row { children, gap } => {
+                render_row(children, *gap, area, buf, config);
             }
         }
     }
@@ -386,7 +426,8 @@ impl DocumentElement {
                             height: 1,
                             rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
                             link_target,
-                            tab_order: (row_idx as i32 * TAB_ORDER_ROW_WEIGHT + col_idx as i32),
+                            tab_order: 0,
+                            row_position: None,
                         });
                     }
                 }
@@ -394,6 +435,42 @@ impl DocumentElement {
         }
 
         Self::Table { widget, focusable }
+    }
+
+    /// Create a horizontal row of elements (side by side)
+    ///
+    /// Elements are laid out horizontally with equal width distribution.
+    pub fn row(children: Vec<DocumentElement>) -> Self {
+        Self::Row { children, gap: 2 }
+    }
+
+    /// Create a horizontal row with custom gap
+    pub fn row_with_gap(children: Vec<DocumentElement>, gap: u16) -> Self {
+        Self::Row { children, gap }
+    }
+}
+
+fn render_row(
+    children: &[DocumentElement],
+    gap: u16,
+    area: Rect,
+    buf: &mut Buffer,
+    config: &DisplayConfig,
+) {
+    if children.is_empty() || area.width == 0 {
+        return;
+    }
+
+    let num_children = children.len() as u16;
+    let total_gap = gap * (num_children.saturating_sub(1));
+    let available_width = area.width.saturating_sub(total_gap);
+    let child_width = available_width / num_children;
+
+    let mut x_offset = area.x;
+    for child in children {
+        let child_area = Rect::new(x_offset, area.y, child_width, area.height);
+        child.render(child_area, buf, config);
+        x_offset += child_width + gap;
     }
 }
 

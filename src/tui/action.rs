@@ -119,10 +119,14 @@ pub enum SettingsAction {
 /// Document-related actions for viewport scrolling and focus navigation
 #[derive(Debug, Clone)]
 pub enum DocumentAction {
-    /// Navigate to next focusable element (Tab key)
+    /// Navigate to next focusable element (Tab/Down key)
     FocusNext,
-    /// Navigate to previous focusable element (Shift-Tab key)
+    /// Navigate to previous focusable element (Shift-Tab/Up key)
     FocusPrev,
+    /// Navigate to corresponding element in left sibling within a Row (Left key)
+    FocusLeft,
+    /// Navigate to corresponding element in right sibling within a Row (Right key)
+    FocusRight,
     /// Activate the currently focused element (Enter key)
     ActivateFocused,
     /// Scroll viewport up by N lines

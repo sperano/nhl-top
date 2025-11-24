@@ -108,6 +108,8 @@ pub struct DemoUiState {
     /// IDs of focusable elements (populated by component during render)
     /// Used for meaningful display when activating elements
     pub focusable_ids: Vec<FocusableId>,
+    /// Row positions for left/right navigation: (row_y, child_index, index_within_child)
+    pub focusable_row_positions: Vec<Option<(u16, usize, usize)>>,
 }
 
 #[derive(Debug, Clone)]

@@ -87,6 +87,9 @@ pub struct FocusableElement {
     pub link_target: Option<LinkTarget>,
     /// Tab order (lower numbers get focus first)
     pub tab_order: i32,
+    /// Row membership for left/right navigation: (row_y, child_index, index_within_child)
+    /// row_y uniquely identifies the Row by its y position
+    pub row_position: Option<(u16, usize, usize)>,
 }
 
 impl FocusableElement {
@@ -97,7 +100,6 @@ impl FocusableElement {
         height: u16,
         rect: Rect,
         link_target: Option<LinkTarget>,
-        tab_order: i32,
     ) -> Self {
         Self {
             id,
@@ -105,7 +107,8 @@ impl FocusableElement {
             height,
             rect,
             link_target,
-            tab_order,
+            tab_order: 0,
+            row_position: None,
         }
     }
 
@@ -118,6 +121,7 @@ impl FocusableElement {
             rect: Rect::new(0, y, width, 1),
             link_target: Some(target),
             tab_order: 0,
+            row_position: None,
         }
     }
 
@@ -135,7 +139,8 @@ impl FocusableElement {
             height: rect.height,
             rect,
             link_target: target,
-            tab_order: (row * 100 + col) as i32,
+            tab_order: 0,
+            row_position: None,
         }
     }
 }
@@ -166,7 +171,7 @@ impl FocusManager {
 
     /// Build a focus manager from a list of focusable elements
     ///
-    /// Elements are sorted by y position (document order).
+    /// Elements are collected in document order (top to bottom, left to right for rows).
     pub fn from_elements(elements: &[super::elements::DocumentElement]) -> Self {
         let mut focusable = Vec::new();
         let mut y_offset = 0u16;
@@ -175,9 +180,6 @@ impl FocusManager {
             element.collect_focusable(&mut focusable, y_offset);
             y_offset += element.height();
         }
-
-        // Sort by y position (document order) for natural reading flow
-        focusable.sort_by_key(|e| e.y);
 
         Self {
             elements: focusable,
@@ -220,6 +222,54 @@ impl FocusManager {
         let changed = new_focus.is_some();
         self.current_focus = new_focus;
         changed
+    }
+
+    /// Navigate to corresponding element in the left sibling within a Row
+    ///
+    /// Returns true if focus changed. Only works if current element is in a Row.
+    pub fn focus_left(&mut self) -> bool {
+        let Some(current_idx) = self.current_focus else {
+            return false;
+        };
+        let Some((row_y, child_idx, idx_within)) = self.elements[current_idx].row_position else {
+            return false;
+        };
+        if child_idx == 0 {
+            return false; // Already at leftmost child
+        }
+        // Find element in left sibling at same index_within_child
+        let target_child_idx = child_idx - 1;
+        if let Some(new_idx) = self.find_row_element(row_y, target_child_idx, idx_within) {
+            self.current_focus = Some(new_idx);
+            return true;
+        }
+        false
+    }
+
+    /// Navigate to corresponding element in the right sibling within a Row
+    ///
+    /// Returns true if focus changed. Only works if current element is in a Row.
+    pub fn focus_right(&mut self) -> bool {
+        let Some(current_idx) = self.current_focus else {
+            return false;
+        };
+        let Some((row_y, child_idx, idx_within)) = self.elements[current_idx].row_position else {
+            return false;
+        };
+        // Find element in right sibling at same index_within_child
+        let target_child_idx = child_idx + 1;
+        if let Some(new_idx) = self.find_row_element(row_y, target_child_idx, idx_within) {
+            self.current_focus = Some(new_idx);
+            return true;
+        }
+        false
+    }
+
+    /// Find an element by its row position
+    fn find_row_element(&self, row_y: u16, child_idx: usize, idx_within: usize) -> Option<usize> {
+        self.elements.iter().position(|e| {
+            e.row_position == Some((row_y, child_idx, idx_within))
+        })
     }
 
     /// Get the currently focused element index
@@ -316,6 +366,11 @@ impl FocusManager {
     pub fn y_positions(&self) -> Vec<u16> {
         self.elements.iter().map(|e| e.y).collect()
     }
+
+    /// Get row positions for all elements
+    pub fn row_positions(&self) -> Vec<Option<(u16, usize, usize)>> {
+        self.elements.iter().map(|e| e.row_position).collect()
+    }
 }
 
 #[cfg(test)]
@@ -332,6 +387,7 @@ mod tests {
                 rect: Rect::new(0, i as u16 * 2, 10, 1),
                 link_target: Some(LinkTarget::Action(format!("action_{}", i))),
                 tab_order: i as i32,
+                row_position: None,
             })
             .collect()
     }
@@ -460,6 +516,7 @@ mod tests {
             rect: Rect::new(3, 5, 15, 2),
             link_target: None,
             tab_order: 0,
+            row_position: None,
         });
 
         fm.focus_next();
@@ -478,6 +535,7 @@ mod tests {
             rect: Rect::new(0, 0, 10, 1),
             link_target: Some(target.clone()),
             tab_order: 0,
+            row_position: None,
         });
 
         assert_eq!(fm.activate_current(), None); // No focus yet
@@ -497,6 +555,7 @@ mod tests {
             rect: Rect::new(0, 0, 10, 1),
             link_target: Some(target.clone()),
             tab_order: 0,
+            row_position: None,
         });
 
         assert_eq!(fm.get_current_link(), None);
@@ -612,7 +671,6 @@ mod tests {
         assert_eq!(elem.height, 1);
         assert_eq!(elem.rect, rect);
         assert_eq!(elem.link_target, Some(target));
-        assert_eq!(elem.tab_order, 302); // row * 100 + col
     }
 
     #[test]
@@ -639,6 +697,7 @@ mod tests {
             rect: Rect::new(0, 5, 10, 3),
             link_target: None,
             tab_order: 0,
+            row_position: None,
         });
 
         assert_eq!(fm.get_focused_height(), None);

@@ -253,6 +253,15 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
             debug!("KEY: Enter in Demo tab - activate focused");
             Some(Action::DocumentAction(DocumentAction::ActivateFocused))
         }
+        // Left/Right arrows for row navigation (jump between side-by-side elements)
+        KeyCode::Left => {
+            debug!("KEY: Left in Demo tab - focus left in row");
+            Some(Action::DocumentAction(DocumentAction::FocusLeft))
+        }
+        KeyCode::Right => {
+            debug!("KEY: Right in Demo tab - focus right in row");
+            Some(Action::DocumentAction(DocumentAction::FocusRight))
+        }
         // Arrow keys: Up/Down for focus navigation (handled earlier in key_to_action)
         // Shift+Arrow keys for scrolling
         KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {

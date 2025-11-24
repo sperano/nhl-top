@@ -8,8 +8,10 @@ use crate::tui::action::{Action, DocumentAction};
 use crate::tui::component::Effect;
 use crate::tui::state::AppState;
 
-/// Base number of focusable elements in the demo document (example links section)
-const BASE_FOCUSABLE_COUNT: usize = 4; // BOS, TOR, NYR, MTL links
+/// Base number of focusable elements in the demo document
+/// - 4 example links (BOS, TOR, NYR, MTL)
+/// - 10 player table cells (5 forwards + 5 defensemen, 1 link column each)
+const BASE_FOCUSABLE_COUNT: usize = 14;
 
 /// Default viewport height when actual height not yet known
 const DEFAULT_VIEWPORT_HEIGHT: u16 = 20;
@@ -123,6 +125,24 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
             Some((state, Effect::None))
         }
 
+        DocumentAction::FocusLeft => {
+            debug!("Document: focus_left");
+            if let Some(new_idx) = find_left_element(&state) {
+                state.ui.demo.focus_index = Some(new_idx);
+                autoscroll_to_focus(&mut state);
+            }
+            Some((state, Effect::None))
+        }
+
+        DocumentAction::FocusRight => {
+            debug!("Document: focus_right");
+            if let Some(new_idx) = find_right_element(&state) {
+                state.ui.demo.focus_index = Some(new_idx);
+                autoscroll_to_focus(&mut state);
+            }
+            Some((state, Effect::None))
+        }
+
         DocumentAction::ActivateFocused => {
             debug!("Document: activate_focused");
             if let Some(idx) = state.ui.demo.focus_index {
@@ -189,6 +209,58 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
             Some((state, Effect::None))
         }
     }
+}
+
+/// Find the element to the left in the same Row (wraps around)
+/// Returns the index of the element in the adjacent left child with the same index_within_child
+fn find_left_element(state: &AppState) -> Option<usize> {
+    let demo = &state.ui.demo;
+    let current_idx = demo.focus_index?;
+    let (row_y, child_idx, idx_within) = demo.focusable_row_positions.get(current_idx).copied()??;
+
+    // Find max child index in this row for wrapping
+    let max_child_idx = demo
+        .focusable_row_positions
+        .iter()
+        .filter_map(|pos| pos.filter(|(y, _, _)| *y == row_y).map(|(_, c, _)| c))
+        .max()?;
+
+    let target_child_idx = if child_idx == 0 {
+        max_child_idx // Wrap to rightmost
+    } else {
+        child_idx - 1
+    };
+
+    // Find element in the same row, target child, same index within child
+    demo.focusable_row_positions
+        .iter()
+        .position(|pos| *pos == Some((row_y, target_child_idx, idx_within)))
+}
+
+/// Find the element to the right in the same Row (wraps around)
+/// Returns the index of the element in the adjacent right child with the same index_within_child
+fn find_right_element(state: &AppState) -> Option<usize> {
+    let demo = &state.ui.demo;
+    let current_idx = demo.focus_index?;
+    let (row_y, child_idx, idx_within) = demo.focusable_row_positions.get(current_idx).copied()??;
+
+    // Find max child index in this row for wrapping
+    let max_child_idx = demo
+        .focusable_row_positions
+        .iter()
+        .filter_map(|pos| pos.filter(|(y, _, _)| *y == row_y).map(|(_, c, _)| c))
+        .max()?;
+
+    let target_child_idx = if child_idx >= max_child_idx {
+        0 // Wrap to leftmost
+    } else {
+        child_idx + 1
+    };
+
+    // Find element in the same row, target child, same index within child
+    demo.focusable_row_positions
+        .iter()
+        .position(|pos| *pos == Some((row_y, target_child_idx, idx_within)))
 }
 
 /// Autoscroll to keep the focused element visible using actual positions from FocusManager
@@ -420,5 +492,100 @@ mod tests {
 
         assert_eq!(new_state.ui.demo.focusable_positions, positions);
         assert_eq!(new_state.ui.demo.viewport_height, viewport_height);
+    }
+
+    #[test]
+    fn test_focus_left_moves_to_adjacent_child() {
+        // Setup: Element at index 3 is in row at y=10, child 1, index_within 0
+        // Element at index 0 is in row at y=10, child 0, index_within 0
+        let mut state = AppState::default();
+        state.ui.demo.focus_index = Some(3);
+        state.ui.demo.focusable_row_positions = vec![
+            Some((10, 0, 0)), // index 0: row y=10, child 0, idx_within 0
+            Some((10, 0, 1)), // index 1: row y=10, child 0, idx_within 1
+            Some((10, 0, 2)), // index 2: row y=10, child 0, idx_within 2
+            Some((10, 1, 0)), // index 3: row y=10, child 1, idx_within 0 (CURRENT)
+            Some((10, 1, 1)), // index 4: row y=10, child 1, idx_within 1
+            Some((10, 1, 2)), // index 5: row y=10, child 1, idx_within 2
+        ];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusLeft).unwrap();
+
+        // Should move to index 0 (same row, child 0, same idx_within 0)
+        assert_eq!(new_state.ui.demo.focus_index, Some(0));
+    }
+
+    #[test]
+    fn test_focus_right_moves_to_adjacent_child() {
+        // Setup: Element at index 1 is in row at y=10, child 0, index_within 1
+        // Element at index 4 is in row at y=10, child 1, index_within 1
+        let mut state = AppState::default();
+        state.ui.demo.focus_index = Some(1);
+        state.ui.demo.focusable_row_positions = vec![
+            Some((10, 0, 0)), // index 0
+            Some((10, 0, 1)), // index 1 (CURRENT)
+            Some((10, 0, 2)), // index 2
+            Some((10, 1, 0)), // index 3
+            Some((10, 1, 1)), // index 4
+            Some((10, 1, 2)), // index 5
+        ];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusRight).unwrap();
+
+        // Should move to index 4 (same row, child 1, same idx_within 1)
+        assert_eq!(new_state.ui.demo.focus_index, Some(4));
+    }
+
+    #[test]
+    fn test_focus_left_at_leftmost_child_wraps_to_rightmost() {
+        // Element is at child 0, should wrap to child 1
+        let mut state = AppState::default();
+        state.ui.demo.focus_index = Some(1);
+        state.ui.demo.focusable_row_positions = vec![
+            Some((10, 0, 0)),
+            Some((10, 0, 1)), // CURRENT - at child 0
+            Some((10, 1, 0)),
+            Some((10, 1, 1)), // Target - same idx_within (1) but child 1
+        ];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusLeft).unwrap();
+
+        // Should wrap to index 3 (child 1, idx_within 1)
+        assert_eq!(new_state.ui.demo.focus_index, Some(3));
+    }
+
+    #[test]
+    fn test_focus_right_at_rightmost_child_wraps_to_leftmost() {
+        // Element is at child 1 (rightmost), should wrap to child 0
+        let mut state = AppState::default();
+        state.ui.demo.focus_index = Some(3);
+        state.ui.demo.focusable_row_positions = vec![
+            Some((10, 0, 0)),
+            Some((10, 0, 1)), // Target - same idx_within (1) but child 0
+            Some((10, 1, 0)),
+            Some((10, 1, 1)), // CURRENT - at rightmost child
+        ];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusRight).unwrap();
+
+        // Should wrap to index 1 (child 0, idx_within 1)
+        assert_eq!(new_state.ui.demo.focus_index, Some(1));
+    }
+
+    #[test]
+    fn test_focus_left_not_in_row_does_nothing() {
+        // Element is not in a row (row_position is None)
+        let mut state = AppState::default();
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.focusable_row_positions = vec![
+            None, // Not in a row
+            None,
+            Some((10, 0, 0)),
+        ];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusLeft).unwrap();
+
+        // Should stay at index 0 (no change)
+        assert_eq!(new_state.ui.demo.focus_index, Some(0));
     }
 }
