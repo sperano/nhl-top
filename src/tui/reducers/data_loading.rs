@@ -5,6 +5,7 @@ use tracing::debug;
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
 use crate::tui::components::demo_tab::DemoDocument;
+use crate::tui::components::LeagueStandingsDocument;
 use crate::tui::document::Document;
 use crate::tui::reducers::standings_layout::build_standings_layout;
 use crate::tui::state::{AppState, LoadingKey};
@@ -65,10 +66,19 @@ fn handle_standings_loaded(
             );
 
             // Rebuild demo document focusable data when standings change
-            let demo_doc = DemoDocument::new(Some(standings));
+            let demo_doc = DemoDocument::new(Some(standings.clone()));
             new_state.ui.demo.focusable_positions = demo_doc.focusable_positions();
             new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
             new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
+
+            // Rebuild league standings document focusable data
+            let league_doc = LeagueStandingsDocument::new(
+                Arc::new(standings),
+                new_state.system.config.clone(),
+            );
+            new_state.ui.standings.focusable_positions = league_doc.focusable_positions();
+            new_state.ui.standings.focusable_ids = league_doc.focusable_ids();
+            new_state.ui.standings.focusable_row_positions = league_doc.focusable_row_positions();
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
@@ -83,6 +93,11 @@ fn handle_standings_loaded(
             new_state.ui.demo.focusable_positions = demo_doc.focusable_positions();
             new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
             new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
+
+            // Clear league standings focusable data on error
+            new_state.ui.standings.focusable_positions = Vec::new();
+            new_state.ui.standings.focusable_ids = Vec::new();
+            new_state.ui.standings.focusable_row_positions = Vec::new();
         }
     }
 

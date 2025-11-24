@@ -9,6 +9,7 @@ pub mod player_detail_panel;
 pub mod scores_tab;
 pub mod settings_tab;
 pub mod skater_stats_table;
+pub mod standings_documents;
 pub mod standings_panels;
 pub mod standings_tab;
 pub mod standings_table;
@@ -26,6 +27,7 @@ pub use player_detail_panel::{PlayerDetailPanel, PlayerDetailPanelProps};
 pub use scores_tab::{ScoresTab, ScoresTabProps};
 pub use settings_tab::SettingsTab;
 pub use skater_stats_table::SkaterStatsTableWidget;
+pub use standings_documents::{LeagueStandingsDocument, StandingsDocumentWidget};
 pub use standings_panels::{
     ConferenceStandingsPanel, DivisionStandingsPanel, LeagueStandingsPanel, StandingsPanelProps,
     WildcardStandingsPanel,

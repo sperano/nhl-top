@@ -32,6 +32,10 @@ pub struct StandingsTabProps {
     pub panel_stack: Vec<PanelState>,
     pub focused: bool,
     pub config: Config,
+
+    // Document system state (for League view)
+    pub focus_index: Option<usize>,
+    pub scroll_offset: u16,
 }
 
 /// StandingsTab component - renders standings with view selector
@@ -166,6 +170,19 @@ impl StandingsTab {
         props: &StandingsTabProps,
         standings: &[Standing],
     ) -> Element {
+        // For League view, use the document system
+        if props.view == GroupBy::League {
+            use super::StandingsDocumentWidget;
+
+            return Element::Widget(Box::new(StandingsDocumentWidget {
+                standings: Arc::new(standings.to_vec()),
+                config: props.config.clone(),
+                focus_index: props.focus_index,
+                scroll_offset: props.scroll_offset,
+            }));
+        }
+
+        // For other single-column views (if any), use the old rendering
         // Convert old selection state to new focused_row
         let focused_row = if props.browse_mode {
             Some(props.selected_row)
@@ -756,6 +773,8 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
+            focus_index: None,
+            scroll_offset: 0,
         };
 
         let element = standings_tab.view(&props, &());
@@ -782,6 +801,8 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
+            focus_index: None,
+            scroll_offset: 0,
         };
 
         // This should not panic - verifies TableWidget can be created
@@ -824,6 +845,8 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
+            focus_index: None,
+            scroll_offset: 0,
         };
 
         let element = standings_tab.view(&props, &());
@@ -888,6 +911,8 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
+            focus_index: None,
+            scroll_offset: 0,
         };
 
         let element = standings_tab.view(&props, &());
@@ -952,6 +977,8 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
+            focus_index: None,
+            scroll_offset: 0,
         };
 
         let element = standings_tab.view(&props, &());
@@ -1015,6 +1042,8 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
+            focus_index: None,
+            scroll_offset: 0,
         };
 
         let element = standings_tab.view(&props, &());

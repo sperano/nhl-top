@@ -80,6 +80,13 @@ fn handle_cycle_view_right(state: AppState) -> (AppState, Effect) {
 fn handle_enter_browse_mode(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.ui.standings.browse_mode = true;
+
+    // For League view, initialize focus to first team and reset scroll
+    if new_state.ui.standings.view == crate::commands::standings::GroupBy::League {
+        new_state.ui.standings.focus_index = Some(0);
+        new_state.ui.standings.scroll_offset = 0;
+    }
+
     (new_state, Effect::None)
 }
 

@@ -142,6 +142,20 @@ pub struct StandingsUiState {
     /// Cached layout: layout[column][row] = team_abbrev
     /// Rebuilt when standings data changes or view changes
     pub layout: Vec<Vec<String>>,
+
+    // Document system state (for League view)
+    /// Current focus index within the document (None = no focus)
+    pub focus_index: Option<usize>,
+    /// Current scroll offset
+    pub scroll_offset: u16,
+    /// Viewport height (updated during render)
+    pub viewport_height: u16,
+    /// Y-positions of focusable elements (populated when standings data loads)
+    pub focusable_positions: Vec<u16>,
+    /// IDs of focusable elements (populated when standings data loads)
+    pub focusable_ids: Vec<FocusableId>,
+    /// Row positions for left/right navigation within Row elements
+    pub focusable_row_positions: Vec<Option<RowPosition>>,
 }
 
 impl Default for StandingsUiState {
@@ -152,6 +166,12 @@ impl Default for StandingsUiState {
             selected_column: 0,
             selected_row: 0,
             layout: Vec::new(),
+            focus_index: None,
+            scroll_offset: 0,
+            viewport_height: 0,
+            focusable_positions: Vec::new(),
+            focusable_ids: Vec::new(),
+            focusable_row_positions: Vec::new(),
         }
     }
 }
