@@ -23,61 +23,59 @@ use crate::config::DisplayConfig;
 
 pub use builder::DocumentBuilder;
 pub use elements::DocumentElement;
-pub use focus::{FocusManager, FocusableElement};
+pub use focus::{FocusManager, FocusableElement, FocusableId};
 pub use link::{DocumentLink, DocumentType, LinkParams, LinkTarget};
 pub use viewport::Viewport;
 
 /// Focus context passed when building a document
 #[derive(Clone, Debug, Default)]
 pub struct FocusContext {
-    /// ID of the currently focused element (if any)
-    pub focused_id: Option<String>,
-    /// Index of the focused row within a table (if focus is on a table)
-    pub focused_table_row: Option<usize>,
+    /// The currently focused element (if any)
+    pub focused_id: Option<FocusableId>,
 }
 
 impl FocusContext {
-    /// Create a new focus context from an element ID
-    ///
-    /// If the ID is a table cell ID (format: "table_{row}_{col}"), extracts
-    /// the row number for table focus highlighting.
-    pub fn from_id(id: &str) -> Self {
-        let focused_id = Some(id.to_string());
-
-        // Parse table cell IDs: "table_{row}_{col}"
-        let focused_table_row = if id.starts_with("table_") {
-            id.strip_prefix("table_")
-                .and_then(|rest| rest.split('_').next())
-                .and_then(|row_str| row_str.parse::<usize>().ok())
-        } else {
-            None
-        };
-
+    /// Create a new focus context from a FocusableId
+    pub fn from_id(id: &FocusableId) -> Self {
         Self {
-            focused_id,
-            focused_table_row,
+            focused_id: Some(id.clone()),
         }
     }
 
-    /// Create a new focus context with a focused element ID (without parsing)
-    pub fn with_id(id: impl Into<String>) -> Self {
+    /// Create a new focus context with a focused link ID
+    pub fn with_link(id: impl Into<String>) -> Self {
         Self {
-            focused_id: Some(id.into()),
-            focused_table_row: None,
+            focused_id: Some(FocusableId::link(id)),
         }
     }
 
-    /// Create a new focus context with a focused table row
-    pub fn with_table_row(row: usize) -> Self {
+    /// Create a new focus context with a focused table cell
+    pub fn with_table_cell(table_name: impl Into<String>, row: usize, col: usize) -> Self {
         Self {
-            focused_id: None,
-            focused_table_row: Some(row),
+            focused_id: Some(FocusableId::table_cell(table_name, row, col)),
+        }
+    }
+
+    /// Get the focused table row (if focus is on a table cell)
+    pub fn focused_table_row(&self, table_name: &str) -> Option<usize> {
+        match &self.focused_id {
+            Some(FocusableId::TableCell {
+                table_name: name,
+                row,
+                ..
+            }) if name == table_name => Some(*row),
+            _ => None,
         }
     }
 
     /// Check if the given ID is focused
-    pub fn is_focused(&self, id: &str) -> bool {
-        self.focused_id.as_ref().map(|s| s == id).unwrap_or(false)
+    pub fn is_focused(&self, id: &FocusableId) -> bool {
+        self.focused_id.as_ref() == Some(id)
+    }
+
+    /// Check if a link with the given ID is focused
+    pub fn is_link_focused(&self, id: &str) -> bool {
+        matches!(&self.focused_id, Some(FocusableId::Link(link_id)) if link_id == id)
     }
 }
 
@@ -286,7 +284,7 @@ impl DocumentView {
     }
 
     /// Focus a specific element by ID with autoscrolling
-    pub fn focus_element_by_id(&mut self, id: &str) -> bool {
+    pub fn focus_element_by_id(&mut self, id: &FocusableId) -> bool {
         if self.focus_manager.focus_by_id(id) {
             self.autoscroll_to_focused();
             true
@@ -558,10 +556,10 @@ mod tests {
         let doc = Arc::new(TestDocument::new(5, 5));
         let mut view = DocumentView::new(doc, 10);
 
-        assert!(view.focus_element_by_id("link_2"));
+        assert!(view.focus_element_by_id(&FocusableId::link("link_2")));
         assert_eq!(view.focus_manager().current_index(), Some(2));
 
-        assert!(!view.focus_element_by_id("nonexistent"));
+        assert!(!view.focus_element_by_id(&FocusableId::link("nonexistent")));
     }
 
     #[test]

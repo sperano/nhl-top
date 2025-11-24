@@ -8,6 +8,7 @@ use crate::commands::scores_format::PeriodScores;
 use crate::commands::standings::GroupBy;
 use crate::config::Config;
 
+use super::document::FocusableId;
 use super::types::{Panel, SettingsCategory, Tab};
 
 /// Root application state - single source of truth
@@ -106,7 +107,7 @@ pub struct DemoUiState {
     pub focusable_positions: Vec<u16>,
     /// IDs of focusable elements (populated by component during render)
     /// Used for meaningful display when activating elements
-    pub focusable_ids: Vec<String>,
+    pub focusable_ids: Vec<FocusableId>,
 }
 
 #[derive(Debug, Clone)]

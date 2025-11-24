@@ -17,7 +17,8 @@ use crate::config::DisplayConfig;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
 use crate::tui::document::{
-    Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, LinkTarget,
+    Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, FocusableId,
+    LinkTarget,
 };
 use crate::tui::helpers::StandingsSorting;
 
@@ -34,7 +35,7 @@ pub fn build_demo_focusable_positions(standings: Option<&Vec<Standing>>) -> Vec<
 ///
 /// This allows external code (like reducers) to get meaningful info about
 /// focused elements for display purposes.
-pub fn build_demo_focusable_ids(standings: Option<&Vec<Standing>>) -> Vec<String> {
+pub fn build_demo_focusable_ids(standings: Option<&Vec<Standing>>) -> Vec<FocusableId> {
     let doc = DemoDocument::new(standings.cloned());
     let elements = doc.build(&FocusContext::default());
 
@@ -200,6 +201,8 @@ impl DemoDocument {
             .spacer(1)
             .text("This demonstrates the shared standings table embedded in a document:");
 
+        const TABLE_NAME: &str = "standings";
+
         match &self.standings {
             Some(standings) if !standings.is_empty() => {
                 // Sort by points (highest first) using the shared sorting trait
@@ -210,10 +213,10 @@ impl DemoDocument {
                 let table = create_standings_table_with_selection(
                     sorted,
                     None,
-                    focus.focused_table_row,
+                    focus.focused_table_row(TABLE_NAME),
                 );
 
-                builder.spacer(1).table(table)
+                builder.spacer(1).table(TABLE_NAME, table)
             }
             _ => builder.text("(No standings data loaded - try refreshing)"),
         }

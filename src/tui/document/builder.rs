@@ -82,7 +82,7 @@ impl DocumentBuilder {
         focus: &super::FocusContext,
     ) -> Self {
         let id = id.into();
-        let is_focused = focus.is_focused(&id);
+        let is_focused = focus.is_link_focused(&id);
         if is_focused {
             self.elements
                 .push(DocumentElement::focused_link(id, display, target));
@@ -115,8 +115,12 @@ impl DocumentBuilder {
     ///
     /// Tables render at their natural height and extract focusable elements
     /// from link cells (PlayerLink, TeamLink).
-    pub fn table(mut self, widget: TableWidget) -> Self {
-        self.elements.push(DocumentElement::table(widget));
+    ///
+    /// # Arguments
+    /// - `name`: Unique name for this table (used to identify focusable cells)
+    /// - `widget`: The table widget to embed
+    pub fn table(mut self, name: impl Into<String>, widget: TableWidget) -> Self {
+        self.elements.push(DocumentElement::table(name, widget));
         self
     }
 
@@ -508,7 +512,7 @@ mod tests {
 
         let elements = DocumentBuilder::new()
             .heading(1, "Table Demo")
-            .table(table)
+            .table("test_table", table)
             .build();
 
         assert_eq!(elements.len(), 2);
@@ -538,7 +542,7 @@ mod tests {
         let table = TableWidget::from_data(&columns, data);
 
         let elements = DocumentBuilder::new()
-            .table(table)
+            .table("teams", table)
             .build();
 
         assert_eq!(elements.len(), 1);

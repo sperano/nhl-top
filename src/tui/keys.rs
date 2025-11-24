@@ -253,10 +253,14 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
             debug!("KEY: Enter in Demo tab - activate focused");
             Some(Action::DocumentAction(DocumentAction::ActivateFocused))
         }
-        // Arrow keys for scrolling
-        KeyCode::Down => Some(Action::DocumentAction(DocumentAction::ScrollDown(1))),
-        KeyCode::Left => Some(Action::DocumentAction(DocumentAction::ScrollUp(1))),
-        KeyCode::Right => Some(Action::DocumentAction(DocumentAction::ScrollDown(1))),
+        // Arrow keys: Up/Down for focus navigation (handled earlier in key_to_action)
+        // Shift+Arrow keys for scrolling
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))
+        }
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            Some(Action::DocumentAction(DocumentAction::ScrollUp(1)))
+        }
         // Page navigation
         KeyCode::PageUp => Some(Action::DocumentAction(DocumentAction::PageUp)),
         KeyCode::PageDown => Some(Action::DocumentAction(DocumentAction::PageDown)),
@@ -338,15 +342,27 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                 // Navigate settings
                 return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp));
             }
-        } else if current_tab == Tab::Demo {
+        } else if current_tab == Tab::Demo && !key.modifiers.contains(KeyModifiers::SHIFT) {
             // Demo tab - Up focuses previous element (wraps around, doesn't exit)
+            // Shift+Up scrolls, handled in handle_demo_tab_keys
             debug!("KEY: Up pressed in Demo tab - focus previous");
             return Some(Action::DocumentAction(DocumentAction::FocusPrev));
+        } else if current_tab == Tab::Demo {
+            // Shift+Up in Demo tab - fall through to tab-specific handler for scrolling
         } else {
             // Not in nested mode - Up returns to tab bar
             debug!("KEY: Up pressed in content - returning to tab bar");
             return Some(Action::ExitContentFocus);
         }
+    }
+
+    // 6b. Handle Down key for Demo tab (focus next) - but not Shift+Down (which scrolls)
+    if key.code == KeyCode::Down
+        && current_tab == Tab::Demo
+        && !key.modifiers.contains(KeyModifiers::SHIFT)
+    {
+        debug!("KEY: Down pressed in Demo tab - focus next");
+        return Some(Action::DocumentAction(DocumentAction::FocusNext));
     }
 
     // 7. Delegate to tab-specific handlers
@@ -1316,12 +1332,25 @@ mod tests {
     }
 
     #[test]
-    fn test_demo_tab_down_scrolls() {
+    fn test_demo_tab_down_focuses_next() {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Demo;
         state.navigation.content_focused = true;
 
         let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::DocumentAction(DocumentAction::FocusNext))
+        ));
+    }
+
+    #[test]
+    fn test_demo_tab_shift_down_scrolls() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.navigation.content_focused = true;
+
+        let action = key_to_action(KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT), &state);
         assert!(matches!(
             action,
             Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))

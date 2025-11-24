@@ -65,6 +65,14 @@ fn enter_content_focus(state: AppState) -> (AppState, Effect) {
     debug!("FOCUS: Entering content focus (Down key from tab bar)");
     let mut new_state = state;
     new_state.navigation.content_focused = true;
+
+    // Set tab-specific status message
+    if new_state.navigation.current_tab == Tab::Demo {
+        new_state
+            .system
+            .set_status_message("↑↓: move selection  Shift+↑↓: scroll  Esc: go back".to_string());
+    }
+
     (new_state, Effect::None)
 }
 

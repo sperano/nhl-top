@@ -272,10 +272,20 @@ impl TableWidget {
         }
     }
 
-    /// Get the style for a cell based on whether its row is focused
-    fn get_cell_style(&self, is_row_focused: bool, config: &DisplayConfig) -> Style {
-        if is_row_focused {
-            // Focused: use REVERSED + BOLD modifier
+    /// Get the style for a cell based on whether it's the focused link cell
+    ///
+    /// Only link cells in focused rows get the selection style.
+    /// Other cells use normal styling.
+    fn get_cell_style(
+        &self,
+        is_row_focused: bool,
+        cell_value: &CellValue,
+        config: &DisplayConfig,
+    ) -> Style {
+        let is_focused_link = is_row_focused && cell_value.is_link();
+
+        if is_focused_link {
+            // Focused link cell: use REVERSED + BOLD modifier
             if let Some(theme) = &config.theme {
                 Style::default()
                     .fg(theme.fg2)
@@ -284,7 +294,7 @@ impl TableWidget {
                 Style::default().add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
             }
         } else {
-            // Not focused: use fg2 from theme (or default if no theme)
+            // Not focused or not a link: use fg2 from theme (or default if no theme)
             if let Some(theme) = &config.theme {
                 Style::default().fg(theme.fg2)
             } else {
@@ -425,7 +435,7 @@ impl TableWidget {
                 let cell_text = cell_value.display_text();
                 let formatted = self.format_cell(cell_text, width, align);
 
-                let style = self.get_cell_style(is_row_focused, config);
+                let style = self.get_cell_style(is_row_focused, cell_value, config);
 
                 buf.set_string(x, y, &formatted, style);
                 x += width as u16 + 2;

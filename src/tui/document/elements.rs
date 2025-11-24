@@ -5,13 +5,13 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 
 use crate::config::DisplayConfig;
 use crate::tui::component::ElementWidget;
 use crate::tui::components::TableWidget;
 
-use super::focus::FocusableElement;
+use super::focus::{FocusableElement, FocusableId};
 use super::link::LinkTarget;
 
 /// Elements that can be part of a document
@@ -161,7 +161,7 @@ impl DocumentElement {
                 ..
             } => {
                 out.push(FocusableElement {
-                    id: id.clone(),
+                    id: FocusableId::link(id),
                     y: y_offset,
                     height: 1,
                     rect: Rect::new(0, y_offset, display.chars().count() as u16, 1),
@@ -203,10 +203,10 @@ impl DocumentElement {
     /// # Arguments
     /// - `out`: Vector to append IDs to
     /// - `_y_offset`: Current y offset (unused but kept for consistency)
-    pub fn collect_focusable_ids(&self, out: &mut Vec<String>, _y_offset: u16) {
+    pub fn collect_focusable_ids(&self, out: &mut Vec<FocusableId>, _y_offset: u16) {
         match self {
             Self::Link { id, .. } => {
-                out.push(id.clone());
+                out.push(FocusableId::link(id));
             }
             Self::Group { children, .. } => {
                 let mut child_offset = _y_offset;
@@ -228,7 +228,7 @@ impl DocumentElement {
     pub fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         match self {
             Self::Text { content, style } => {
-                render_text(content, *style, area, buf);
+                render_text(content, *style, area, buf, config);
             }
             Self::Heading { level, content } => {
                 render_heading(*level, content, area, buf, config);
@@ -334,9 +334,14 @@ impl DocumentElement {
     ///
     /// Extracts focusable elements from link cells in the table.
     /// The table renders at its natural height within the document.
-    pub fn table(widget: TableWidget) -> Self {
+    ///
+    /// # Arguments
+    /// - `name`: Unique name for this table (used to identify focusable cells)
+    /// - `widget`: The table widget to embed
+    pub fn table(name: impl Into<String>, widget: TableWidget) -> Self {
         use crate::tui::CellValue;
 
+        let table_name = name.into();
         let mut focusable = Vec::new();
 
         // Calculate the y-offset where data rows start:
@@ -364,7 +369,7 @@ impl DocumentElement {
                         };
 
                         focusable.push(FocusableElement {
-                            id: format!("table_{}_{}", row_idx, col_idx),
+                            id: FocusableId::table_cell(&table_name, row_idx, col_idx),
                             y,
                             height: 1,
                             rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
@@ -380,7 +385,20 @@ impl DocumentElement {
     }
 }
 
-fn render_text(content: &str, style: Option<Style>, area: Rect, buf: &mut Buffer) {
+fn render_text(
+    content: &str,
+    style: Option<Style>,
+    area: Rect,
+    buf: &mut Buffer,
+    config: &DisplayConfig,
+) {
+    // Use fg2 from theme as default text color
+    let default_style = config
+        .theme
+        .as_ref()
+        .map(|t| Style::default().fg(t.fg2))
+        .unwrap_or_default();
+
     for (i, line) in content.lines().enumerate() {
         if i as u16 >= area.height {
             break;
@@ -393,21 +411,24 @@ fn render_text(content: &str, style: Option<Style>, area: Rect, buf: &mut Buffer
             let cell = buf.cell_mut((area.x + x as u16, y));
             if let Some(cell) = cell {
                 cell.set_char(ch);
-                if let Some(s) = style {
-                    cell.set_style(s);
-                }
+                cell.set_style(style.unwrap_or(default_style));
             }
         }
     }
 }
 
-fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
+fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+    // Use fg2 from theme for heading color
+    let base_style = config
+        .theme
+        .as_ref()
+        .map(|t| Style::default().fg(t.fg2))
+        .unwrap_or_default();
+
     let style = match level {
-        1 => Style::default()
-            .add_modifier(Modifier::BOLD)
-            .add_modifier(Modifier::UNDERLINED),
-        2 => Style::default().add_modifier(Modifier::BOLD),
-        _ => Style::default().add_modifier(Modifier::UNDERLINED),
+        1 => base_style.add_modifier(Modifier::BOLD),
+        2 => base_style.add_modifier(Modifier::BOLD),
+        _ => base_style.add_modifier(Modifier::UNDERLINED),
     };
 
     // Render heading text
@@ -422,12 +443,19 @@ fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, _confi
         }
     }
 
-    // Render underline for level 1
+    // Render underline for level 1 with fg3 color
     if level == 1 && area.height > 1 {
+        let underline_style = config
+            .theme
+            .as_ref()
+            .map(|t| Style::default().fg(t.fg3))
+            .unwrap_or_default();
+
         for x in 0..area.width.min(content.chars().count() as u16) {
             let cell = buf.cell_mut((area.x + x, area.y + 1));
             if let Some(cell) = cell {
                 cell.set_char('═');
+                cell.set_style(underline_style);
             }
         }
     }
@@ -436,42 +464,43 @@ fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, _confi
 fn render_link(display: &str, focused: bool, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
     use crate::config::SELECTION_STYLE_MODIFIER;
 
-    let style = if focused {
-        // Focused: use selection style (BOLD + REVERSED)
-        Style::default().add_modifier(SELECTION_STYLE_MODIFIER)
+    // Use fg2 from theme as base color
+    let base_style = config
+        .theme
+        .as_ref()
+        .map(|t| Style::default().fg(t.fg2))
+        .unwrap_or_default();
+
+    let (prefix, link_style) = if focused {
+        let prefix = format!("{} ", config.box_chars.selector);
+        let style = base_style.add_modifier(SELECTION_STYLE_MODIFIER);
+        (prefix, style)
     } else {
-        // Unfocused: blue underlined
-        Style::default()
-            .fg(Color::Blue)
-            .add_modifier(Modifier::UNDERLINED)
+        (String::new(), base_style)
     };
 
-    // Add selector for focused links
-    let prefix = if focused {
-        format!("{} ", config.box_chars.selector)
-    } else {
-        "  ".to_string()
-    };
+    let prefix_len = prefix.chars().count() as u16;
 
-    for (x, ch) in prefix.chars().chain(display.chars()).enumerate() {
-        if x as u16 >= area.width {
-            break;
-        }
-        let cell = buf.cell_mut((area.x + x as u16, area.y));
-        if let Some(cell) = cell {
-            cell.set_char(ch);
-            cell.set_style(style);
-        }
-    }
+    buf.set_string(area.x, area.y, &prefix, base_style);
+    buf.set_string(area.x + prefix_len, area.y, display, link_style);
 }
 
 fn render_separator(area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
     let sep_str = &config.box_chars.horizontal;
     let sep_char = sep_str.chars().next().unwrap_or('-');
+
+    // Use fg3 from theme for separator lines
+    let style = config
+        .theme
+        .as_ref()
+        .map(|t| Style::default().fg(t.fg3))
+        .unwrap_or_default();
+
     for x in 0..area.width {
         let cell = buf.cell_mut((area.x + x, area.y));
         if let Some(cell) = cell {
             cell.set_char(sep_char);
+            cell.set_style(style);
         }
     }
 }
@@ -517,6 +546,7 @@ fn render_group(
 mod tests {
     use super::*;
     use crate::tui::document::link::DocumentLink;
+    use ratatui::style::Color;
 
     #[test]
     fn test_text_element_height() {
@@ -586,7 +616,7 @@ mod tests {
         elem.collect_focusable(&mut focusable, 10);
 
         assert_eq!(focusable.len(), 1);
-        assert_eq!(focusable[0].id, "my_link");
+        assert_eq!(focusable[0].id, FocusableId::link("my_link"));
         assert_eq!(focusable[0].y, 10);
         assert_eq!(focusable[0].rect.width, 10); // "Click here" = 10 chars
     }
@@ -604,9 +634,9 @@ mod tests {
         elem.collect_focusable(&mut focusable, 0);
 
         assert_eq!(focusable.len(), 2);
-        assert_eq!(focusable[0].id, "link1");
+        assert_eq!(focusable[0].id, FocusableId::link("link1"));
         assert_eq!(focusable[0].y, 1); // After "Not focusable"
-        assert_eq!(focusable[1].id, "link2");
+        assert_eq!(focusable[1].id, FocusableId::link("link2"));
         assert_eq!(focusable[1].y, 4); // 1 (text) + 1 (link) + 2 (spacer)
     }
 
@@ -623,9 +653,9 @@ mod tests {
         elem.collect_focusable(&mut focusable, 5);
 
         assert_eq!(focusable.len(), 2);
-        assert_eq!(focusable[0].id, "inner1");
+        assert_eq!(focusable[0].id, FocusableId::link("inner1"));
         assert_eq!(focusable[0].y, 5);
-        assert_eq!(focusable[1].id, "outer1");
+        assert_eq!(focusable[1].id, FocusableId::link("outer1"));
         assert_eq!(focusable[1].y, 6);
     }
 
@@ -671,14 +701,11 @@ mod tests {
 
         elem.render(Rect::new(0, 0, 20, 5), &mut buf, &config);
 
-        // Links now have a 2-char prefix ("  " for unfocused, "▶ " for focused)
-        // Check that prefix space was rendered
-        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), " ");
-        // Check that "Click" starts at position 2
-        assert_eq!(buf.cell((2, 0)).unwrap().symbol(), "C");
-        // Check style (blue, underlined)
-        let style = buf.cell((2, 0)).unwrap().style();
-        assert_eq!(style.fg, Some(Color::Blue));
+        // Unfocused links have no prefix, text starts at position 0
+        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "C");
+        assert_eq!(buf.cell((1, 0)).unwrap().symbol(), "l");
+        // Style uses fg2 from theme (or default if no theme)
+        // No specific color assertion since we use theme.fg2
     }
 
     #[test]
@@ -803,7 +830,7 @@ mod tests {
         ];
         let data = vec!["Alice", "Bob", "Charlie"];
         let table = TableWidget::from_data(&columns, data);
-        let elem = DocumentElement::table(table);
+        let elem = DocumentElement::table("test_table", table);
 
         // TableWidget height = col headers (1) + separator (1) + 3 data rows = 5
         assert_eq!(elem.height(), 5);
@@ -825,7 +852,7 @@ mod tests {
         ];
         let data = vec![("Bruins", "BOS"), ("Maple Leafs", "TOR")];
         let table = TableWidget::from_data(&columns, data);
-        let elem = DocumentElement::table(table);
+        let elem = DocumentElement::table("teams", table);
 
         // Collect focusable elements
         let mut focusable = Vec::new();
@@ -833,8 +860,8 @@ mod tests {
 
         // Should have 2 focusable elements (one per row)
         assert_eq!(focusable.len(), 2);
-        assert_eq!(focusable[0].id, "table_0_0");
-        assert_eq!(focusable[1].id, "table_1_0");
+        assert_eq!(focusable[0].id, FocusableId::table_cell("teams", 0, 0));
+        assert_eq!(focusable[1].id, FocusableId::table_cell("teams", 1, 0));
 
         // Check link targets
         match &focusable[0].link_target {
@@ -863,7 +890,7 @@ mod tests {
         ];
         let data = vec!["Player1", "Player2"];
         let table = TableWidget::from_data(&columns, data);
-        let elem = DocumentElement::table(table);
+        let elem = DocumentElement::table("players", table);
 
         // Collect focusable at y_offset of 10
         let mut focusable = Vec::new();
@@ -888,7 +915,7 @@ mod tests {
         ];
         let data = vec![1, 2, 3];
         let table = TableWidget::from_data(&columns, data);
-        let elem = DocumentElement::table(table);
+        let elem = DocumentElement::table("values", table);
 
         // Collect focusable elements
         let mut focusable = Vec::new();
@@ -909,7 +936,7 @@ mod tests {
         ];
         let data = vec!["a", "b", "c"];
         let table = TableWidget::from_data(&columns, data);
-        let elem = DocumentElement::table(table);
+        let elem = DocumentElement::table("test_table", table);
 
         let debug_str = format!("{:?}", elem);
         assert!(debug_str.contains("Table"));
@@ -931,7 +958,7 @@ mod tests {
         ];
         let data = vec!["Alice", "Bob"];
         let table = TableWidget::from_data(&columns, data);
-        let elem = DocumentElement::table(table);
+        let elem = DocumentElement::table("test_table", table);
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 15, 5));
         let config = DisplayConfig::default();

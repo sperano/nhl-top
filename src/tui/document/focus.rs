@@ -7,11 +7,75 @@ use ratatui::layout::Rect;
 
 use super::link::LinkTarget;
 
+/// Type-safe identifier for focusable elements
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FocusableId {
+    /// A table cell identified by table name, row, and column
+    TableCell {
+        table_name: String,
+        row: usize,
+        col: usize,
+    },
+    /// A standalone link with a string identifier
+    Link(String),
+}
+
+impl FocusableId {
+    /// Create a table cell ID
+    pub fn table_cell(table_name: impl Into<String>, row: usize, col: usize) -> Self {
+        Self::TableCell {
+            table_name: table_name.into(),
+            row,
+            col,
+        }
+    }
+
+    /// Create a link ID
+    pub fn link(id: impl Into<String>) -> Self {
+        Self::Link(id.into())
+    }
+
+    /// Get the table row if this is a table cell
+    pub fn table_row(&self) -> Option<usize> {
+        match self {
+            Self::TableCell { row, .. } => Some(*row),
+            Self::Link(_) => None,
+        }
+    }
+
+    /// Get the table name if this is a table cell
+    pub fn table_name(&self) -> Option<&str> {
+        match self {
+            Self::TableCell { table_name, .. } => Some(table_name),
+            Self::Link(_) => None,
+        }
+    }
+
+    /// Format for user-friendly display
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::TableCell { row, .. } => format!("Table row {}", row + 1),
+            Self::Link(id) => format_link_id(id),
+        }
+    }
+}
+
+/// Format a link ID for user-friendly display
+fn format_link_id(id: &str) -> String {
+    match id {
+        "bos" => "Boston Bruins".to_string(),
+        "tor" => "Toronto Maple Leafs".to_string(),
+        "nyr" => "New York Rangers".to_string(),
+        "mtl" => "Montreal Canadiens".to_string(),
+        _ => id.to_string(),
+    }
+}
+
 /// A focusable element within a document
 #[derive(Debug, Clone)]
 pub struct FocusableElement {
     /// Unique ID for this focusable element
-    pub id: String,
+    pub id: FocusableId,
     /// Y position in the document (for scrolling)
     pub y: u16,
     /// Height of the element
@@ -27,7 +91,7 @@ pub struct FocusableElement {
 impl FocusableElement {
     /// Create a new focusable element
     pub fn new(
-        id: impl Into<String>,
+        id: FocusableId,
         y: u16,
         height: u16,
         rect: Rect,
@@ -35,7 +99,7 @@ impl FocusableElement {
         tab_order: i32,
     ) -> Self {
         Self {
-            id: id.into(),
+            id,
             y,
             height,
             rect,
@@ -47,7 +111,7 @@ impl FocusableElement {
     /// Create a focusable link element
     pub fn link(id: impl Into<String>, y: u16, width: u16, target: LinkTarget) -> Self {
         Self {
-            id: id.into(),
+            id: FocusableId::link(id),
             y,
             height: 1,
             rect: Rect::new(0, y, width, 1),
@@ -58,13 +122,14 @@ impl FocusableElement {
 
     /// Create a focusable table cell element
     pub fn table_cell(
+        table_name: impl Into<String>,
         row: usize,
         col: usize,
         rect: Rect,
         target: Option<LinkTarget>,
     ) -> Self {
         Self {
-            id: format!("table_{}_{}", row, col),
+            id: FocusableId::table_cell(table_name, row, col),
             y: rect.y,
             height: rect.height,
             rect,
@@ -178,8 +243,8 @@ impl FocusManager {
     }
 
     /// Get the currently focused element's ID
-    pub fn get_current_id(&self) -> Option<&str> {
-        self.current_focus.map(|idx| self.elements[idx].id.as_str())
+    pub fn get_current_id(&self) -> Option<&FocusableId> {
+        self.current_focus.map(|idx| &self.elements[idx].id)
     }
 
     /// Get the currently focused element's position (y coordinate)
@@ -219,8 +284,8 @@ impl FocusManager {
     /// Focus a specific element by ID
     ///
     /// Returns true if element was found and focused.
-    pub fn focus_by_id(&mut self, id: &str) -> bool {
-        self.current_focus = self.elements.iter().position(|e| e.id == id);
+    pub fn focus_by_id(&mut self, id: &FocusableId) -> bool {
+        self.current_focus = self.elements.iter().position(|e| &e.id == id);
         self.current_focus.is_some()
     }
 
@@ -279,7 +344,7 @@ mod tests {
     fn create_test_elements(count: usize) -> Vec<FocusableElement> {
         (0..count)
             .map(|i| FocusableElement {
-                id: format!("elem_{}", i),
+                id: FocusableId::link(format!("elem_{}", i)),
                 y: i as u16 * 2,
                 height: 1,
                 rect: Rect::new(0, i as u16 * 2, 10, 1),
@@ -407,7 +472,7 @@ mod tests {
     fn test_get_focused_rect() {
         let mut fm = FocusManager::new();
         fm.add_element(FocusableElement {
-            id: "test".to_string(),
+            id: FocusableId::link("test"),
             y: 5,
             height: 2,
             rect: Rect::new(3, 5, 15, 2),
@@ -425,7 +490,7 @@ mod tests {
         let mut fm = FocusManager::new();
         let target = LinkTarget::Document(DocumentLink::team("BOS"));
         fm.add_element(FocusableElement {
-            id: "team_link".to_string(),
+            id: FocusableId::link("team_link"),
             y: 0,
             height: 1,
             rect: Rect::new(0, 0, 10, 1),
@@ -444,7 +509,7 @@ mod tests {
         let mut fm = FocusManager::new();
         let target = LinkTarget::Action("test".to_string());
         fm.add_element(FocusableElement {
-            id: "action_link".to_string(),
+            id: FocusableId::link("action_link"),
             y: 0,
             height: 1,
             rect: Rect::new(0, 0, 10, 1),
@@ -479,10 +544,10 @@ mod tests {
             fm.add_element(elem);
         }
 
-        assert!(fm.focus_by_id("elem_1"));
+        assert!(fm.focus_by_id(&FocusableId::link("elem_1")));
         assert_eq!(fm.current_index(), Some(1));
 
-        assert!(!fm.focus_by_id("nonexistent"));
+        assert!(!fm.focus_by_id(&FocusableId::link("nonexistent")));
         assert_eq!(fm.current_index(), None);
     }
 
@@ -546,7 +611,7 @@ mod tests {
         let target = LinkTarget::Action("test".to_string());
         let elem = FocusableElement::link("my_link", 10, 20, target.clone());
 
-        assert_eq!(elem.id, "my_link");
+        assert_eq!(elem.id, FocusableId::link("my_link"));
         assert_eq!(elem.y, 10);
         assert_eq!(elem.height, 1);
         assert_eq!(elem.rect, Rect::new(0, 10, 20, 1));
@@ -558,9 +623,9 @@ mod tests {
     fn test_focusable_element_table_cell() {
         let target = LinkTarget::Document(DocumentLink::player(12345));
         let rect = Rect::new(5, 10, 15, 1);
-        let elem = FocusableElement::table_cell(3, 2, rect, Some(target.clone()));
+        let elem = FocusableElement::table_cell("standings", 3, 2, rect, Some(target.clone()));
 
-        assert_eq!(elem.id, "table_3_2");
+        assert_eq!(elem.id, FocusableId::table_cell("standings", 3, 2));
         assert_eq!(elem.y, 10);
         assert_eq!(elem.height, 1);
         assert_eq!(elem.rect, rect);
@@ -579,14 +644,14 @@ mod tests {
 
         fm.focus_next();
         let current = fm.current_element().unwrap();
-        assert_eq!(current.id, "elem_0");
+        assert_eq!(current.id, FocusableId::link("elem_0"));
     }
 
     #[test]
     fn test_get_focused_height() {
         let mut fm = FocusManager::new();
         fm.add_element(FocusableElement {
-            id: "test".to_string(),
+            id: FocusableId::link("test"),
             y: 5,
             height: 3,
             rect: Rect::new(0, 5, 10, 3),
@@ -609,9 +674,9 @@ mod tests {
 
         let elements = fm.elements();
         assert_eq!(elements.len(), 3);
-        assert_eq!(elements[0].id, "elem_0");
-        assert_eq!(elements[1].id, "elem_1");
-        assert_eq!(elements[2].id, "elem_2");
+        assert_eq!(elements[0].id, FocusableId::link("elem_0"));
+        assert_eq!(elements[1].id, FocusableId::link("elem_1"));
+        assert_eq!(elements[2].id, FocusableId::link("elem_2"));
     }
 
     #[test]
