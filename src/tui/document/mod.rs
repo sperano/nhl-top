@@ -14,6 +14,7 @@ pub mod elements;
 pub mod focus;
 pub mod link;
 pub mod viewport;
+pub mod widget;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -26,9 +27,10 @@ pub use elements::DocumentElement;
 pub use focus::{FocusManager, FocusableElement, FocusableId};
 pub use link::{DocumentLink, DocumentType, LinkParams, LinkTarget};
 pub use viewport::Viewport;
+pub use widget::DocumentElementWidget;
 
 /// Focus context passed when building a document
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct FocusContext {
     /// The currently focused element (if any)
     pub focused_id: Option<FocusableId>,
@@ -208,13 +210,15 @@ impl DocumentView {
 
     /// Page up (scroll by viewport height - overlap)
     pub fn page_up(&mut self) {
-        let page_size = self.viewport.height().saturating_sub(2);
+        const PAGE_OVERLAP_LINES: u16 = 2;
+        let page_size = self.viewport.height().saturating_sub(PAGE_OVERLAP_LINES);
         self.viewport.scroll_up(page_size);
     }
 
     /// Page down (scroll by viewport height - overlap)
     pub fn page_down(&mut self) {
-        let page_size = self.viewport.height().saturating_sub(2);
+        const PAGE_OVERLAP_LINES: u16 = 2;
+        let page_size = self.viewport.height().saturating_sub(PAGE_OVERLAP_LINES);
         self.viewport.scroll_down(page_size);
     }
 
@@ -343,14 +347,15 @@ impl DocumentView {
         // Copy visible portion from full buffer to output buffer
         if let Some(full_buffer) = &self.full_buffer {
             let visible_range = self.viewport.visible_range();
+            let visible_start = visible_range.start;
 
-            for y in visible_range.clone() {
+            for y in visible_range {
                 if y >= self.cached_height {
                     break;
                 }
 
                 let src_y = y;
-                let dst_y = area.y + (y - visible_range.start);
+                let dst_y = area.y + (y - visible_start);
 
                 if dst_y >= area.y + area.height {
                     break;
@@ -389,6 +394,8 @@ impl DocumentView {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::DisplayConfig;
+    use crate::tui::testing::assert_buffer;
 
     /// Simple test document for testing
     struct TestDocument {
@@ -627,5 +634,200 @@ mod tests {
 
         assert!(!view.focus_next());
         assert_eq!(view.focus_manager().len(), 0);
+    }
+
+    // === assert_buffer rendering tests ===
+
+    /// Test document that renders predictable content
+    struct RenderTestDocument {
+        title: String,
+        lines: Vec<String>,
+    }
+
+    impl RenderTestDocument {
+        fn new(title: &str, lines: Vec<&str>) -> Self {
+            Self {
+                title: title.to_string(),
+                lines: lines.into_iter().map(|s| s.to_string()).collect(),
+            }
+        }
+    }
+
+    impl Document for RenderTestDocument {
+        fn build(&self, _focus: &FocusContext) -> Vec<DocumentElement> {
+            let mut elements = Vec::new();
+            elements.push(DocumentElement::heading(1, &self.title));
+            for line in &self.lines {
+                elements.push(DocumentElement::text(line));
+            }
+            elements
+        }
+
+        fn title(&self) -> String {
+            self.title.clone()
+        }
+
+        fn id(&self) -> String {
+            "render_test".to_string()
+        }
+    }
+
+    #[test]
+    fn test_document_view_render_basic() {
+        let doc = Arc::new(RenderTestDocument::new("Test", vec!["Line 1", "Line 2"]));
+        let mut view = DocumentView::new(doc, 10);
+        let config = DisplayConfig::default();
+
+        let area = Rect::new(0, 0, 10, 4);
+        let mut buf = Buffer::empty(area);
+
+        view.render(area, &mut buf, &config);
+
+        // Underline only extends to title width ("Test" = 4 chars)
+        assert_buffer(
+            &buf,
+            &[
+                "Test",
+                "════",
+                "Line 1",
+                "Line 2",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_document_view_render_with_viewport_offset() {
+        let doc = Arc::new(RenderTestDocument::new(
+            "Title",
+            vec!["Line 1", "Line 2", "Line 3", "Line 4", "Line 5"],
+        ));
+        let mut view = DocumentView::new(doc, 3);
+        let config = DisplayConfig::default();
+
+        // Scroll down to skip the heading
+        view.scroll_down(2);
+
+        let area = Rect::new(0, 0, 10, 3);
+        let mut buf = Buffer::empty(area);
+
+        view.render(area, &mut buf, &config);
+
+        // Should show lines starting from offset 2 (after title + underline)
+        assert_buffer(
+            &buf,
+            &[
+                "Line 1",
+                "Line 2",
+                "Line 3",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_document_view_render_scrolled_to_bottom() {
+        let doc = Arc::new(RenderTestDocument::new(
+            "Title",
+            vec!["Line 1", "Line 2", "Line 3"],
+        ));
+        let mut view = DocumentView::new(doc, 2);
+        let config = DisplayConfig::default();
+
+        view.scroll_to_bottom();
+
+        let area = Rect::new(0, 0, 10, 2);
+        let mut buf = Buffer::empty(area);
+
+        view.render(area, &mut buf, &config);
+
+        // Total height is 5 (title + underline + 3 lines), viewport is 2
+        // Scrolled to bottom shows last 2 lines
+        assert_buffer(
+            &buf,
+            &[
+                "Line 2",
+                "Line 3",
+            ],
+        );
+    }
+
+    /// Test document with a link for focus rendering
+    struct LinkTestDocument;
+
+    impl Document for LinkTestDocument {
+        fn build(&self, focus: &FocusContext) -> Vec<DocumentElement> {
+            let is_focused = focus.is_link_focused("test_link");
+            vec![
+                DocumentElement::text("Before"),
+                if is_focused {
+                    DocumentElement::focused_link(
+                        "test_link",
+                        "Click Me",
+                        LinkTarget::Action("test".to_string()),
+                    )
+                } else {
+                    DocumentElement::link(
+                        "test_link",
+                        "Click Me",
+                        LinkTarget::Action("test".to_string()),
+                    )
+                },
+                DocumentElement::text("After"),
+            ]
+        }
+
+        fn title(&self) -> String {
+            "Link Test".to_string()
+        }
+
+        fn id(&self) -> String {
+            "link_test".to_string()
+        }
+    }
+
+    #[test]
+    fn test_document_view_render_unfocused_link() {
+        let doc = Arc::new(LinkTestDocument);
+        let mut view = DocumentView::new(doc, 10);
+        let config = DisplayConfig::default();
+
+        let area = Rect::new(0, 0, 15, 3);
+        let mut buf = Buffer::empty(area);
+
+        view.render(area, &mut buf, &config);
+
+        // Unfocused link has no prefix
+        assert_buffer(
+            &buf,
+            &[
+                "Before",
+                "Click Me",
+                "After",
+            ],
+        );
+    }
+
+    #[test]
+    fn test_document_view_render_focused_link() {
+        let doc = Arc::new(LinkTestDocument);
+        let mut view = DocumentView::new(doc, 10);
+        let config = DisplayConfig::default();
+
+        // Focus the link
+        view.focus_next();
+
+        let area = Rect::new(0, 0, 15, 3);
+        let mut buf = Buffer::empty(area);
+
+        view.render(area, &mut buf, &config);
+
+        // Focused link has "▶ " prefix
+        assert_buffer(
+            &buf,
+            &[
+                "Before",
+                "▶ Click Me",
+                "After",
+            ],
+        );
     }
 }

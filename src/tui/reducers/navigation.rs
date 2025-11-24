@@ -66,11 +66,16 @@ fn enter_content_focus(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.navigation.content_focused = true;
 
-    // Set tab-specific status message
+    // Set tab-specific status message and initialize focus for Demo tab
     if new_state.navigation.current_tab == Tab::Demo {
         new_state
             .system
             .set_status_message("↑↓: move selection  Shift+↑↓: scroll  Esc: go back".to_string());
+
+        // Initialize focus to first element if not already focused
+        if new_state.ui.demo.focus_index.is_none() {
+            new_state.ui.demo.focus_index = Some(0);
+        }
     }
 
     (new_state, Effect::None)
@@ -146,5 +151,29 @@ mod tests {
         assert!(!new_state.ui.standings.browse_mode);
         assert!(!new_state.ui.settings.settings_mode);
         assert!(!new_state.navigation.content_focused);
+    }
+
+    #[test]
+    fn test_enter_content_focus_demo_tab_initializes_focus() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = None;
+
+        let (new_state, _) = enter_content_focus(state);
+
+        assert!(new_state.navigation.content_focused);
+        assert_eq!(new_state.ui.demo.focus_index, Some(0));
+    }
+
+    #[test]
+    fn test_enter_content_focus_demo_tab_preserves_existing_focus() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(5);
+
+        let (new_state, _) = enter_content_focus(state);
+
+        assert!(new_state.navigation.content_focused);
+        assert_eq!(new_state.ui.demo.focus_index, Some(5));
     }
 }

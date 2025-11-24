@@ -1,6 +1,6 @@
 use crate::config::DisplayConfig;
 use crate::layout_constants::SCORE_BOX_WIDTH;
-use crate::tui::widgets::{RenderableWidget, ScoreTable};
+use crate::tui::widgets::{SimpleWidget, ScoreTable};
 /// GameBox widget - displays a single game's score in a compact box
 ///
 /// This is a composition widget that combines a header line with a ScoreTable.
@@ -115,7 +115,7 @@ impl GameBox {
     }
 }
 
-impl RenderableWidget for GameBox {
+impl SimpleWidget for GameBox {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if area.height < GAME_BOX_HEIGHT as u16 || area.width < SCORE_BOX_WIDTH {
             return; // Not enough space

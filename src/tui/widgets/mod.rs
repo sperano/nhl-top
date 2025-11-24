@@ -3,6 +3,18 @@
 /// This module provides a trait-based architecture for composable, testable widgets.
 /// Inspired by OO UI frameworks, widgets are small, focused components that can be
 /// composed together to build complex interfaces.
+///
+/// ## Widget Traits
+///
+/// There are two widget traits in this codebase:
+///
+/// - **`SimpleWidget`** (this module): For standalone widgets that render directly
+///   to a buffer. These don't need Send + Sync or clone_box(). Used for small,
+///   reusable rendering components like `GameBox`, `ScoreTable`.
+///
+/// - **`ElementWidget`** (`crate::tui::component`): For widgets that participate
+///   in the Element tree. Requires Send + Sync + clone_box(). Used for component
+///   widgets like `BoxscorePanelWidget`, `StatusBarWidget`.
 
 #[cfg(test)]
 pub mod testing;
@@ -24,7 +36,13 @@ pub use settings_list::SettingsListWidget;
 use crate::config::DisplayConfig;
 use ratatui::{buffer::Buffer, layout::Rect};
 
-/// Core trait for renderable widgets
+/// Core trait for simple, standalone renderable widgets
+///
+/// This trait is for widgets that render directly to a buffer but don't need
+/// to participate in the Element tree (no Send + Sync or clone_box required).
+///
+/// For widgets that need to be embedded in the Element tree, use `ElementWidget`
+/// from `crate::tui::component` instead.
 ///
 /// Widgets render themselves directly to a ratatui Buffer, avoiding string-based
 /// intermediate representations. This enables:
@@ -37,7 +55,7 @@ use ratatui::{buffer::Buffer, layout::Rect};
 ///
 /// This trait is object-safe, meaning you can use trait objects to store
 /// different widget types in collections.
-pub trait RenderableWidget {
+pub trait SimpleWidget {
     /// Render this widget into the provided buffer
     ///
     /// # Arguments
@@ -51,8 +69,6 @@ pub trait RenderableWidget {
     ///
     /// Returns None if the widget can adapt to any height.
     /// Returns Some(height) if the widget has a fixed or preferred height.
-    ///
-    /// This is useful for layout calculations but is not enforced.
     fn preferred_height(&self) -> Option<u16> {
         None
     }
@@ -61,8 +77,6 @@ pub trait RenderableWidget {
     ///
     /// Returns None if the widget can adapt to any width.
     /// Returns Some(width) if the widget has a fixed or preferred width.
-    ///
-    /// This is useful for layout calculations but is not enforced.
     fn preferred_width(&self) -> Option<u16> {
         None
     }
@@ -75,7 +89,7 @@ mod tests {
     #[derive(Debug)]
     struct TestWidget;
 
-    impl RenderableWidget for TestWidget {
+    impl SimpleWidget for TestWidget {
         fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
             // Minimal implementation for testing
         }

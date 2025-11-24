@@ -231,6 +231,35 @@ impl DisplayConfig {
             .and_then(|name| THEMES.get(name.as_str()))
             .map(|theme| (*theme).clone());
     }
+
+    /// Get the default text style using fg2 from theme
+    ///
+    /// This is the primary text color for normal content.
+    pub fn text_style(&self) -> ratatui::style::Style {
+        self.theme
+            .as_ref()
+            .map(|t| ratatui::style::Style::default().fg(t.fg2))
+            .unwrap_or_default()
+    }
+
+    /// Get the secondary/muted text style using fg3 from theme
+    ///
+    /// This is for separators, borders, and less prominent text.
+    pub fn muted_style(&self) -> ratatui::style::Style {
+        self.theme
+            .as_ref()
+            .map(|t| ratatui::style::Style::default().fg(t.fg3))
+            .unwrap_or_default()
+    }
+
+    /// Get a heading style with bold modifier
+    pub fn heading_style(&self, level: u8) -> ratatui::style::Style {
+        let base = self.text_style();
+        match level {
+            1 | 2 => base.add_modifier(Modifier::BOLD),
+            _ => base.add_modifier(Modifier::UNDERLINED),
+        }
+    }
 }
 
 /// Darken a color by a given factor (0.0 = black, 1.0 = original)

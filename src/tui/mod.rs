@@ -7,6 +7,7 @@ pub mod action;
 pub mod component;
 pub mod document;
 pub mod effects;
+pub mod focus_helpers;
 pub mod helpers;
 pub mod keys;
 pub mod navigation;

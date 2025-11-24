@@ -1,6 +1,6 @@
 use crate::config::DisplayConfig;
 use crate::layout_constants::{PERIOD_COL_WIDTH, SCORE_BOX_WIDTH, TEAM_ABBREV_COL_WIDTH};
-use crate::tui::widgets::RenderableWidget;
+use crate::tui::widgets::SimpleWidget;
 /// ScoreTable widget - displays period-by-period score breakdown
 ///
 /// This widget renders a table showing scores for each period of a hockey game,
@@ -105,7 +105,7 @@ impl ScoreTable {
     }
 }
 
-impl RenderableWidget for ScoreTable {
+impl SimpleWidget for ScoreTable {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if area.height < 6 || area.width < SCORE_BOX_WIDTH {
             return; // Not enough space

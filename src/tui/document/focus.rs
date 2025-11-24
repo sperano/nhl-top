@@ -6,6 +6,7 @@
 use ratatui::layout::Rect;
 
 use super::link::LinkTarget;
+use crate::tui::focus_helpers;
 
 /// Type-safe identifier for focusable elements
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -204,15 +205,10 @@ impl FocusManager {
     /// Returns true if focus changed, false if no elements to focus.
     /// Wraps from last to first element.
     pub fn focus_next(&mut self) -> bool {
-        if self.elements.is_empty() {
-            return false;
-        }
-
-        self.current_focus = match self.current_focus {
-            None => Some(0),
-            Some(idx) => Some((idx + 1) % self.elements.len()),
-        };
-        true
+        let new_focus = focus_helpers::focus_next(self.current_focus, self.elements.len());
+        let changed = new_focus.is_some();
+        self.current_focus = new_focus;
+        changed
     }
 
     /// Navigate to previous focusable element (Shift-Tab)
@@ -220,16 +216,10 @@ impl FocusManager {
     /// Returns true if focus changed, false if no elements to focus.
     /// Wraps from first to last element.
     pub fn focus_prev(&mut self) -> bool {
-        if self.elements.is_empty() {
-            return false;
-        }
-
-        self.current_focus = match self.current_focus {
-            None => Some(self.elements.len() - 1),
-            Some(0) => Some(self.elements.len() - 1),
-            Some(idx) => Some(idx - 1),
-        };
-        true
+        let new_focus = focus_helpers::focus_prev(self.current_focus, self.elements.len());
+        let changed = new_focus.is_some();
+        self.current_focus = new_focus;
+        changed
     }
 
     /// Get the currently focused element index
@@ -305,22 +295,14 @@ impl FocusManager {
     ///
     /// Call this after focus_next() to detect wrap-around.
     pub fn did_wrap_forward(&self, prev_focus: Option<usize>) -> bool {
-        match (prev_focus, self.current_focus) {
-            (Some(prev), Some(curr)) => curr < prev,
-            (None, Some(0)) => false, // First focus, not a wrap
-            _ => false,
-        }
+        focus_helpers::did_wrap_forward(prev_focus, self.current_focus, self.elements.len())
     }
 
     /// Check if focus wrapped from first to last (for autoscrolling)
     ///
     /// Call this after focus_prev() to detect wrap-around.
     pub fn did_wrap_backward(&self, prev_focus: Option<usize>) -> bool {
-        match (prev_focus, self.current_focus) {
-            (Some(prev), Some(curr)) => curr > prev,
-            (None, Some(_)) => false, // First focus, not a wrap
-            _ => false,
-        }
+        focus_helpers::did_wrap_backward(prev_focus, self.current_focus, self.elements.len())
     }
 
     /// Get all focusable elements

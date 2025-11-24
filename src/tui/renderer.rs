@@ -304,13 +304,14 @@ impl Default for Renderer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tui::testing::assert_buffer;
     use ratatui::{
         buffer::Buffer,
         text::Text,
         widgets::{Paragraph, Widget},
     };
 
-    /// Test widget that renders "TEST" in the center
+    /// Test widget that renders text
     #[derive(Clone)]
     struct TestWidget {
         text: String,
@@ -330,17 +331,13 @@ mod tests {
     #[test]
     fn test_render_none() {
         let mut renderer = Renderer::new();
-        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 10));
+        let mut buffer = Buffer::empty(Rect::new(0, 0, 10, 3));
         let config = DisplayConfig::default();
 
         renderer.render(Element::None, buffer.area, &mut buffer, &config);
 
-        // Buffer should remain empty
-        for y in 0..10 {
-            for x in 0..10 {
-                assert_eq!(buffer[(x, y)].symbol(), " ");
-            }
-        }
+        // Buffer should remain empty (all spaces)
+        assert_buffer(&buffer, &["", "", ""]);
     }
 
     #[test]
@@ -356,9 +353,7 @@ mod tests {
 
         renderer.render(element, buffer.area, &mut buffer, &config);
 
-        // Should render "Hello" in the first row
-        let line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
-        assert!(line.contains("Hello"));
+        assert_buffer(&buffer, &["Hello", "", ""]);
     }
 
     #[test]
@@ -382,12 +377,10 @@ mod tests {
 
         renderer.render(element, buffer.area, &mut buffer, &config);
 
-        // Top should be in first 3 rows, bottom in last 3 rows
-        let top_line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
-        assert!(top_line.contains("TOP"));
-
-        let bottom_line = (0..10).map(|x| buffer[(x, 3)].symbol()).collect::<String>();
-        assert!(bottom_line.contains("BOTTOM"));
+        assert_buffer(
+            &buffer,
+            &["TOP", "", "", "BOTTOM", "", ""],
+        );
     }
 
     #[test]
@@ -414,14 +407,10 @@ mod tests {
 
         renderer.render(element, buffer.area, &mut buffer, &config);
 
-        // Left should be in first 10 columns, right in last 10 columns
-        let left_part = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
-        assert!(left_part.contains("LEFT"));
-
-        let right_part = (10..20)
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect::<String>();
-        assert!(right_part.contains("RIGHT"));
+        assert_buffer(
+            &buffer,
+            &["LEFT      RIGHT", "", ""],
+        );
     }
 
     #[test]
@@ -444,9 +433,7 @@ mod tests {
 
         renderer.render(element, buffer.area, &mut buffer, &config);
 
-        // Should render "Second" (overwrites "First")
-        let line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
-        assert!(line.contains("Second"));
+        assert_buffer(&buffer, &["Second", "", ""]);
     }
 
     #[test]
@@ -548,8 +535,7 @@ mod tests {
         renderer.render(element2, buffer.area, &mut buffer, &config);
 
         // Verify the buffer changed
-        let line = (0..10).map(|x| buffer[(x, 0)].symbol()).collect::<String>();
-        assert!(line.contains("Changed"));
+        assert_buffer(&buffer, &["Changed", "", ""]);
     }
 
     #[test]

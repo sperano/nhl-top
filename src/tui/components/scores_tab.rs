@@ -253,7 +253,7 @@ impl ElementWidget for GameListWidget {
                             let (game_box, _) = &game_boxes[game_idx];
                             // Use default display config for rendering
                             let config = DisplayConfig::default();
-                            crate::tui::widgets::RenderableWidget::render(
+                            crate::tui::widgets::SimpleWidget::render(
                                 game_box, box_area, buf, &config,
                             );
                         }

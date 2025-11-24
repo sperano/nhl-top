@@ -6,6 +6,19 @@
 use ratatui::layout::Rect;
 use std::ops::Range;
 
+/// Maximum padding as a divisor of viewport height (25% = 4)
+const MAX_PADDING_DIVISOR: u16 = 4;
+
+/// Smart padding thresholds and values
+const SMALL_VIEWPORT_THRESHOLD: u16 = 10;
+const MEDIUM_VIEWPORT_THRESHOLD: u16 = 20;
+const LARGE_VIEWPORT_THRESHOLD: u16 = 40;
+
+const SMALL_VIEWPORT_PADDING: u16 = 1;
+const MEDIUM_VIEWPORT_PADDING: u16 = 2;
+const LARGE_VIEWPORT_PADDING: u16 = 3;
+const VERY_LARGE_VIEWPORT_PADDING: u16 = 5;
+
 /// Viewport that manages scrolling through document content
 #[derive(Debug, Clone)]
 pub struct Viewport {
@@ -75,7 +88,7 @@ impl Viewport {
         let viewport_bottom = self.offset + self.height;
 
         // Calculate ideal padding - max 25% of viewport
-        let max_padding = self.height / 4;
+        let max_padding = self.height / MAX_PADDING_DIVISOR;
         let actual_padding = padding.min(max_padding);
 
         // If element is above viewport, scroll up to show it with padding at top
@@ -179,10 +192,10 @@ impl Viewport {
     /// - Very large viewports: 5 lines
     pub fn smart_padding(&self) -> u16 {
         match self.height {
-            h if h <= 10 => 1,
-            h if h <= 20 => 2,
-            h if h <= 40 => 3,
-            _ => 5,
+            h if h <= SMALL_VIEWPORT_THRESHOLD => SMALL_VIEWPORT_PADDING,
+            h if h <= MEDIUM_VIEWPORT_THRESHOLD => MEDIUM_VIEWPORT_PADDING,
+            h if h <= LARGE_VIEWPORT_THRESHOLD => LARGE_VIEWPORT_PADDING,
+            _ => VERY_LARGE_VIEWPORT_PADDING,
         }
     }
 }

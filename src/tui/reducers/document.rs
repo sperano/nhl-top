@@ -11,6 +11,15 @@ use crate::tui::state::AppState;
 /// Base number of focusable elements in the demo document (example links section)
 const BASE_FOCUSABLE_COUNT: usize = 4; // BOS, TOR, NYR, MTL links
 
+/// Default viewport height when actual height not yet known
+const DEFAULT_VIEWPORT_HEIGHT: u16 = 20;
+
+/// Padding lines above/below focused element for autoscroll
+const AUTOSCROLL_PADDING: u16 = 2;
+
+/// Minimum page size for page up/down operations
+const MIN_PAGE_SIZE: u16 = 10;
+
 
 /// Calculate the total focusable count based on standings data
 fn get_focusable_count(state: &AppState) -> usize {
@@ -89,15 +98,14 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
                 None => {
                     // No focus yet, focus last element
                     demo.focus_index = Some(focusable_count - 1);
-                    // Scroll to bottom to show last element
-                    // This is a rough estimate - proper implementation would use actual content height
-                    demo.scroll_offset = 100; // Will be clamped by rendering
+                    // Scroll to bottom to show last element - will be clamped by rendering
+                    demo.scroll_offset = u16::MAX;
                     true // Treat as wrapped - don't autoscroll
                 }
                 Some(0) => {
-                    // At first element, wrap to last
+                    // At first element, wrap to last - will be clamped by rendering
                     demo.focus_index = Some(focusable_count - 1);
-                    demo.scroll_offset = 100; // Will be clamped
+                    demo.scroll_offset = u16::MAX;
                     true // Wrapped - don't autoscroll
                 }
                 Some(idx) => {
@@ -158,14 +166,14 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
 
         DocumentAction::PageUp => {
             debug!("Document: page_up");
-            let page_size = state.ui.demo.viewport_height.max(10);
+            let page_size = state.ui.demo.viewport_height.max(MIN_PAGE_SIZE);
             state.ui.demo.scroll_offset = state.ui.demo.scroll_offset.saturating_sub(page_size);
             Some((state, Effect::None))
         }
 
         DocumentAction::PageDown => {
             debug!("Document: page_down");
-            let page_size = state.ui.demo.viewport_height.max(10);
+            let page_size = state.ui.demo.viewport_height.max(MIN_PAGE_SIZE);
             state.ui.demo.scroll_offset = state.ui.demo.scroll_offset.saturating_add(page_size);
             Some((state, Effect::None))
         }
@@ -194,18 +202,18 @@ fn autoscroll_to_focus(state: &mut AppState) {
     };
 
     // Use actual viewport height, with reasonable fallback
-    let viewport_height = demo.viewport_height.max(20);
-    let padding: u16 = 2;
+    let viewport_height = demo.viewport_height.max(DEFAULT_VIEWPORT_HEIGHT);
 
     let scroll_offset = demo.scroll_offset;
 
     // If element is above viewport (with padding), scroll up
-    if element_y < scroll_offset.saturating_add(padding) {
-        state.ui.demo.scroll_offset = element_y.saturating_sub(padding);
+    if element_y < scroll_offset.saturating_add(AUTOSCROLL_PADDING) {
+        state.ui.demo.scroll_offset = element_y.saturating_sub(AUTOSCROLL_PADDING);
     }
     // If element is below viewport (with padding), scroll down
-    else if element_y >= scroll_offset + viewport_height.saturating_sub(padding) {
-        state.ui.demo.scroll_offset = element_y.saturating_sub(viewport_height - padding - 1);
+    else if element_y >= scroll_offset + viewport_height.saturating_sub(AUTOSCROLL_PADDING) {
+        state.ui.demo.scroll_offset =
+            element_y.saturating_sub(viewport_height - AUTOSCROLL_PADDING - 1);
     }
     // Otherwise, element is visible - no scroll needed
 }

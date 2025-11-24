@@ -157,7 +157,7 @@ The TUI uses a React/Redux-inspired architecture with unidirectional data flow:
 ```
 src/tui/
 ├── mod.rs              # Main entry point, TUI run loop
-├── component.rs        # Core Component trait, Element types, RenderableWidget
+├── component.rs        # Core Component trait, Element types, SimpleWidget
 ├── action.rs           # Action enum (Redux-like actions)
 ├── state.rs            # AppState - single source of truth
 ├── reducer.rs          # Main reducer + settings reducer
@@ -197,7 +197,7 @@ src/tui/
 │   ├── skater_stats_table.rs # Skater stats table
 │   └── goalie_stats_table.rs # Goalie stats table
 └── widgets/            # Low-level renderable widgets
-    ├── mod.rs          # RenderableWidget trait
+    ├── mod.rs          # SimpleWidget trait
     ├── game_box.rs     # GameBox widget (score display)
     ├── score_table.rs  # ScoreTable widget
     ├── settings_list.rs # SettingsListWidget
@@ -594,7 +594,7 @@ The TUI uses a virtual DOM-like rendering approach:
 1. **Component Tree**: `App.view()` builds an `Element` tree from current `AppState`
 2. **Renderer**: `renderer.rs` takes the `Element` tree and renders to ratatui `Buffer`
 3. **Layout**: `vertical()` and `horizontal()` helpers handle layout composition
-4. **Widgets**: Leaf nodes implement `RenderableWidget` for direct buffer rendering
+4. **Widgets**: Leaf nodes implement `SimpleWidget` for direct buffer rendering
 
 **Key rendering components:**
 - `components::App` - Root component, composes TabbedPanel + StatusBar
@@ -643,16 +643,16 @@ pub trait ElementWidget: Send + Sync {
 - All component widgets (BoxscorePanelWidget, StatusBarWidget, etc.)
 
 #### Standalone Widgets (`src/tui/widgets/`)
-Simple widgets implement `RenderableWidget` (no `Send + Sync`, no `clone_box`):
+Simple widgets implement `SimpleWidget` (no `Send + Sync`, no `clone_box`):
 ```rust
-pub trait RenderableWidget {
+pub trait SimpleWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig);
     fn preferred_height(&self) -> Option<u16> { None }
     fn preferred_width(&self) -> Option<u16> { None }
 }
 ```
 
-**Use RenderableWidget for:**
+**Use SimpleWidget for:**
 - Self-contained, reusable rendering primitives
 - Direct buffer rendering with no framework overhead
 - Widgets not used in the Element tree
@@ -697,4 +697,4 @@ pub trait RenderableWidget {
 - The React-like framework is the current architecture (not "experimental")
 - What was previously called "legacy" navigation patterns may still be referenced in some places
 - put all the new markdown file you create for housekeeping in the new-doc directory
-- TODO: there has been confusion about the two RenderableWidget traits. Rename them
+- TODO: there has been confusion about the two SimpleWidget traits. Rename them

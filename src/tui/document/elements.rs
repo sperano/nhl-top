@@ -14,6 +14,16 @@ use crate::tui::components::TableWidget;
 use super::focus::{FocusableElement, FocusableId};
 use super::link::LinkTarget;
 
+/// Height of table header section (header text + underline + blank line)
+pub(crate) const TABLE_HEADER_HEIGHT: u16 = 3;
+
+/// Height of column headers section (column names + separator)
+pub(crate) const TABLE_COLUMN_HEADER_HEIGHT: u16 = 2;
+
+/// Multiplier for row index in tab order calculation
+/// Ensures all cells in row N come before cells in row N+1
+pub(crate) const TAB_ORDER_ROW_WEIGHT: i32 = 100;
+
 /// Elements that can be part of a document
 #[derive(Clone)]
 pub enum DocumentElement {
@@ -345,12 +355,14 @@ impl DocumentElement {
         let mut focusable = Vec::new();
 
         // Calculate the y-offset where data rows start:
-        // - Optional header (3 lines: header + underline + blank)
-        // - Column headers (1 line)
-        // - Separator (1 line)
-        let header_offset: u16 = if widget.has_header() { 3 } else { 0 };
-        let col_header_offset: u16 = 2; // column headers + separator
-        let data_start_y = header_offset + col_header_offset;
+        // - Optional header (TABLE_HEADER_HEIGHT lines: header + underline + blank)
+        // - Column headers + separator (TABLE_COLUMN_HEADER_HEIGHT lines)
+        let header_offset: u16 = if widget.has_header() {
+            TABLE_HEADER_HEIGHT
+        } else {
+            0
+        };
+        let data_start_y = header_offset + TABLE_COLUMN_HEADER_HEIGHT;
 
         // Extract focusable elements from link cells
         for row_idx in 0..widget.row_count() {
@@ -374,7 +386,7 @@ impl DocumentElement {
                             height: 1,
                             rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
                             link_target,
-                            tab_order: (row_idx * 100 + col_idx) as i32,
+                            tab_order: (row_idx as i32 * TAB_ORDER_ROW_WEIGHT + col_idx as i32),
                         });
                     }
                 }
@@ -392,12 +404,7 @@ fn render_text(
     buf: &mut Buffer,
     config: &DisplayConfig,
 ) {
-    // Use fg2 from theme as default text color
-    let default_style = config
-        .theme
-        .as_ref()
-        .map(|t| Style::default().fg(t.fg2))
-        .unwrap_or_default();
+    let default_style = config.text_style();
 
     for (i, line) in content.lines().enumerate() {
         if i as u16 >= area.height {
@@ -418,18 +425,7 @@ fn render_text(
 }
 
 fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-    // Use fg2 from theme for heading color
-    let base_style = config
-        .theme
-        .as_ref()
-        .map(|t| Style::default().fg(t.fg2))
-        .unwrap_or_default();
-
-    let style = match level {
-        1 => base_style.add_modifier(Modifier::BOLD),
-        2 => base_style.add_modifier(Modifier::BOLD),
-        _ => base_style.add_modifier(Modifier::UNDERLINED),
-    };
+    let style = config.heading_style(level);
 
     // Render heading text
     for (x, ch) in content.chars().enumerate() {
@@ -443,13 +439,9 @@ fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, config
         }
     }
 
-    // Render underline for level 1 with fg3 color
+    // Render underline for level 1 with muted color
     if level == 1 && area.height > 1 {
-        let underline_style = config
-            .theme
-            .as_ref()
-            .map(|t| Style::default().fg(t.fg3))
-            .unwrap_or_default();
+        let underline_style = config.muted_style();
 
         for x in 0..area.width.min(content.chars().count() as u16) {
             let cell = buf.cell_mut((area.x + x, area.y + 1));
@@ -464,12 +456,7 @@ fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, config
 fn render_link(display: &str, focused: bool, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
     use crate::config::SELECTION_STYLE_MODIFIER;
 
-    // Use fg2 from theme as base color
-    let base_style = config
-        .theme
-        .as_ref()
-        .map(|t| Style::default().fg(t.fg2))
-        .unwrap_or_default();
+    let base_style = config.text_style();
 
     let (prefix, link_style) = if focused {
         let prefix = format!("{} ", config.box_chars.selector);
@@ -488,13 +475,7 @@ fn render_link(display: &str, focused: bool, area: Rect, buf: &mut Buffer, confi
 fn render_separator(area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
     let sep_str = &config.box_chars.horizontal;
     let sep_char = sep_str.chars().next().unwrap_or('-');
-
-    // Use fg3 from theme for separator lines
-    let style = config
-        .theme
-        .as_ref()
-        .map(|t| Style::default().fg(t.fg3))
-        .unwrap_or_default();
+    let style = config.muted_style();
 
     for x in 0..area.width {
         let cell = buf.cell_mut((area.x + x, area.y));

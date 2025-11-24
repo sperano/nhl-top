@@ -347,7 +347,7 @@ mod tests {
 
         widget.render(area, &mut buf, &config);
 
-        // Widget should have rendered via RenderableWidget trait
+        // Widget should have rendered via SimpleWidget trait
         // Check that something was rendered in the buffer
         let has_content = (0..buf.area.height).any(|y| {
             (0..buf.area.width).any(|x| {
