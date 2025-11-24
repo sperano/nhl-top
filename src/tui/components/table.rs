@@ -165,62 +165,14 @@ use ratatui::{
     style::{Modifier, Style},
 };
 
-/// Props for the Table component
-///
-/// Note: This struct cannot be Clone because ColumnDef contains boxed closures.
-/// Tables should be created fresh on each render.
-pub struct TableProps<T> {
-    /// Column definitions
-    pub columns: Vec<ColumnDef<T>>,
-
-    /// Row data
-    pub rows: Vec<T>,
-
-    /// Currently selected row (None if no selection)
-    pub selected_row: Option<usize>,
-
-    /// Currently selected column (None if no selection)
-    pub selected_col: Option<usize>,
-
-    /// Whether the table has focus (affects selection color)
-    pub focused: bool,
-
-    /// Optional table header
-    pub header: Option<String>,
-
-    /// Left margin in characters
-    pub margin: u16,
-}
-
 /// Table component
 ///
 /// Renders a table with mixed cell types (Text and Links).
-/// Selection state is controlled by parent component via props.
+/// Focus/selection state is provided externally at render time.
 pub struct Table;
 
-impl Table {
-    /// Helper to create table props
-    pub fn props<T>(
-        columns: Vec<ColumnDef<T>>,
-        rows: Vec<T>,
-        selected_row: Option<usize>,
-        selected_col: Option<usize>,
-        focused: bool,
-    ) -> TableProps<T> {
-        TableProps {
-            columns,
-            rows,
-            selected_row,
-            selected_col,
-            focused,
-            header: None,
-            margin: 0,
-        }
-    }
-}
-
 impl Component for Table {
-    type Props = (); // We can't use TableProps<T> here due to generic lifetime issues
+    type Props = ();
     type State = ();
     type Message = ();
 
@@ -236,7 +188,7 @@ const SELECTOR_WIDTH: usize = 2;
 /// The actual table widget that implements rendering
 ///
 /// This widget is created directly by parent components that want to render a table.
-/// It implements RenderableWidget to draw to the terminal buffer.
+/// Focus is provided at construction time via `with_focused_row()`.
 ///
 /// Cell data is extracted upfront when creating the widget, making it cloneable.
 #[derive(Clone)]
@@ -245,23 +197,13 @@ pub struct TableWidget {
     column_widths: Vec<usize>,
     column_aligns: Vec<Alignment>,
     cell_data: Vec<Vec<CellValue>>,
-    selected_row: Option<usize>,
-    selected_col: Option<usize>,
-    focused: bool,
     header: Option<String>,
     margin: u16,
+    /// Which row is focused (externally managed)
+    focused_row: Option<usize>,
 }
 
 impl TableWidget {
-    /// Create a new table widget from props
-    pub fn new<T: Send + Sync>(props: TableProps<T>) -> Self {
-        Self::from_data(&props.columns, props.rows)
-            .with_selection_opt(props.selected_row, props.selected_col)
-            .with_focused(props.focused)
-            .with_header_opt(props.header)
-            .with_margin(props.margin)
-    }
-
     /// Create a table widget with builder pattern
     /// Extracts all cell data upfront from the rows using column definitions
     pub fn from_data<T: Send + Sync>(columns: &[ColumnDef<T>], rows: Vec<T>) -> Self {
@@ -281,32 +223,10 @@ impl TableWidget {
             column_widths,
             column_aligns,
             cell_data,
-            selected_row: None,
-            selected_col: None,
-            focused: false,
             header: None,
             margin: 0,
+            focused_row: None,
         }
-    }
-
-    /// Set the selection
-    pub fn with_selection(mut self, row: usize, col: usize) -> Self {
-        self.selected_row = Some(row);
-        self.selected_col = Some(col);
-        self
-    }
-
-    /// Set the selection with Option values
-    pub fn with_selection_opt(mut self, row: Option<usize>, col: Option<usize>) -> Self {
-        self.selected_row = row;
-        self.selected_col = col;
-        self
-    }
-
-    /// Set whether the table is focused
-    pub fn with_focused(mut self, focused: bool) -> Self {
-        self.focused = focused;
-        self
     }
 
     /// Set the table header
@@ -315,15 +235,15 @@ impl TableWidget {
         self
     }
 
-    /// Set the table header with Option value
-    fn with_header_opt(mut self, header: Option<String>) -> Self {
-        self.header = header;
-        self
-    }
-
     /// Set the left margin
     pub fn with_margin(mut self, margin: u16) -> Self {
         self.margin = margin;
+        self
+    }
+
+    /// Set which row is focused (externally managed)
+    pub fn with_focused_row(mut self, row: Option<usize>) -> Self {
+        self.focused_row = row;
         self
     }
 
@@ -352,12 +272,10 @@ impl TableWidget {
         }
     }
 
-    /// Get the style for a cell based on selection and focus state
-    fn get_cell_style(&self, row: usize, col: usize, config: &DisplayConfig) -> Style {
-        let is_selected = self.selected_row == Some(row) && self.selected_col == Some(col);
-
-        if is_selected && self.focused {
-            // Focused selection: use REVERSED + BOLD modifier
+    /// Get the style for a cell based on whether its row is focused
+    fn get_cell_style(&self, is_row_focused: bool, config: &DisplayConfig) -> Style {
+        if is_row_focused {
+            // Focused: use REVERSED + BOLD modifier
             if let Some(theme) = &config.theme {
                 Style::default()
                     .fg(theme.fg2)
@@ -366,12 +284,154 @@ impl TableWidget {
                 Style::default().add_modifier(crate::config::SELECTION_STYLE_MODIFIER)
             }
         } else {
-            // Unfocused or not selected: use fg2 from theme (or default if no theme)
+            // Not focused: use fg2 from theme (or default if no theme)
             if let Some(theme) = &config.theme {
                 Style::default().fg(theme.fg2)
             } else {
                 Style::default()
             }
+        }
+    }
+
+    /// Internal render implementation
+    fn render_internal(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+
+        let margin = self.margin as usize;
+        let mut y = area.y;
+
+        // Render header if present
+        if let Some(ref header_text) = self.header {
+            if y < area.bottom() {
+                let header_line = format!(
+                    "{}{}{}",
+                    " ".repeat(margin),
+                    " ".repeat(SELECTOR_WIDTH),
+                    header_text
+                );
+
+                let header_style = if let Some(theme) = &config.theme {
+                    Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().add_modifier(Modifier::BOLD)
+                };
+
+                buf.set_string(area.x, y, &header_line, header_style);
+                y += 1;
+            }
+
+            // Underline
+            if y < area.bottom() {
+                let underline = format!(
+                    "{}{}{}",
+                    " ".repeat(margin),
+                    " ".repeat(SELECTOR_WIDTH),
+                    "═".repeat(header_text.chars().count())
+                );
+
+                let underline_style = if let Some(theme) = &config.theme {
+                    Style::default().fg(theme.fg1)
+                } else {
+                    Style::default()
+                };
+
+                buf.set_string(area.x, y, &underline, underline_style);
+                y += 1;
+            }
+
+            // Blank line after header
+            if y < area.bottom() {
+                y += 1;
+            }
+        }
+
+        // Render column headers
+        if y < area.bottom() {
+            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
+
+            let col_header_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().add_modifier(Modifier::BOLD)
+            };
+
+            for (col_idx, header) in self.column_headers.iter().enumerate() {
+                let width = self.column_widths[col_idx];
+                let formatted = self.format_cell(header, width, Alignment::Left);
+                buf.set_string(x, y, &formatted, col_header_style);
+                x += width as u16 + 2;
+            }
+            y += 1;
+        }
+
+        // Render separator line under headers
+        if y < area.bottom() {
+            let total_width: usize = self.column_widths.iter().sum::<usize>()
+                + (self.column_widths.len().saturating_sub(1) * 2);
+
+            let separator = config.box_chars.horizontal.repeat(total_width);
+            let separator_line = format!(
+                "{}{}{}",
+                " ".repeat(margin),
+                " ".repeat(SELECTOR_WIDTH),
+                separator
+            );
+
+            let separator_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg3)
+            } else {
+                Style::default()
+            };
+
+            buf.set_string(area.x, y, &separator_line, separator_style);
+            y += 1;
+        }
+
+        // Render rows
+        for (row_idx, row_cells) in self.cell_data.iter().enumerate() {
+            if y >= area.bottom() {
+                break;
+            }
+
+            let is_row_focused = self.focused_row == Some(row_idx);
+
+            // Render selector indicator
+            let selector = if is_row_focused {
+                format!("{} ", config.box_chars.selector)
+            } else {
+                " ".repeat(SELECTOR_WIDTH)
+            };
+
+            // Render margin first
+            if margin > 0 {
+                buf.set_string(area.x, y, &" ".repeat(margin), Style::default());
+            }
+
+            // Render selector
+            let selector_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg2)
+            } else {
+                Style::default()
+            };
+            buf.set_string(area.x + margin as u16, y, &selector, selector_style);
+
+            // Render cells
+            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
+            for (col_idx, cell_value) in row_cells.iter().enumerate() {
+                let width = self.column_widths[col_idx];
+                let align = self.column_aligns[col_idx];
+                let cell_text = cell_value.display_text();
+                let formatted = self.format_cell(cell_text, width, align);
+
+                let style = self.get_cell_style(is_row_focused, config);
+
+                buf.set_string(x, y, &formatted, style);
+                x += width as u16 + 2;
+            }
+
+            y += 1;
         }
     }
 
@@ -449,170 +509,26 @@ impl TableWidget {
     pub fn column_count(&self) -> usize {
         self.column_headers.len()
     }
+
+    /// Check if the table has a header
+    pub fn has_header(&self) -> bool {
+        self.header.is_some()
+    }
 }
 
 impl ElementWidget for TableWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        if area.height == 0 || area.width == 0 {
-            return;
-        }
-
-        let margin = self.margin as usize;
-        let mut y = area.y;
-
-        // Render header if present (margin first, then selector space)
-        if let Some(ref header_text) = self.header {
-            if y < area.bottom() {
-                let header_line = format!(
-                    "{}{}{}",
-                    " ".repeat(margin),
-                    " ".repeat(SELECTOR_WIDTH),
-                    header_text
-                );
-
-                // Apply fg1 style from theme (or default if no theme)
-                let header_style = if let Some(theme) = &config.theme {
-                    Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().add_modifier(Modifier::BOLD)
-                };
-
-                buf.set_string(area.x, y, &header_line, header_style);
-                y += 1;
-            }
-
-            // Underline (margin first, then selector space)
-            if y < area.bottom() {
-                let underline = format!(
-                    "{}{}{}",
-                    " ".repeat(margin),
-                    " ".repeat(SELECTOR_WIDTH),
-                    "═".repeat(header_text.chars().count())
-                );
-
-                // Apply fg1 style from theme (or default if no theme)
-                let underline_style = if let Some(theme) = &config.theme {
-                    Style::default().fg(theme.fg1)
-                } else {
-                    Style::default()
-                };
-
-                buf.set_string(area.x, y, &underline, underline_style);
-                y += 1;
-            }
-
-            // Blank line after header
-            if y < area.bottom() {
-                y += 1;
-            }
-        }
-
-        // Render column headers (margin first, then selector space)
-        if y < area.bottom() {
-            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
-
-            // Apply fg1 style from theme (or default if no theme)
-            let col_header_style = if let Some(theme) = &config.theme {
-                Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().add_modifier(Modifier::BOLD)
-            };
-
-            for (col_idx, header) in self.column_headers.iter().enumerate() {
-                let width = self.column_widths[col_idx];
-                let formatted = self.format_cell(header, width, Alignment::Left);
-                buf.set_string(x, y, &formatted, col_header_style);
-                x += width as u16 + 2; // +2 for spacing between columns
-            }
-            y += 1;
-        }
-
-        // Render separator line under headers (margin first, then selector space)
-        if y < area.bottom() {
-            // Calculate total table width (all columns + spacing)
-            let total_width: usize = self.column_widths.iter().sum::<usize>()
-                + (self.column_widths.len().saturating_sub(1) * 2); // spacing between columns
-
-            let separator = config.box_chars.horizontal.repeat(total_width);
-            let separator_line = format!(
-                "{}{}{}",
-                " ".repeat(margin),
-                " ".repeat(SELECTOR_WIDTH),
-                separator
-            );
-
-            // Apply fg3 style from theme (or default if no theme)
-            let separator_style = if let Some(theme) = &config.theme {
-                Style::default().fg(theme.fg3)
-            } else {
-                Style::default()
-            };
-
-            buf.set_string(area.x, y, &separator_line, separator_style);
-            y += 1;
-        }
-
-        // Render rows
-        for (row_idx, row_cells) in self.cell_data.iter().enumerate() {
-            if y >= area.bottom() {
-                break;
-            }
-
-            // Render selector indicator (margin first, then selector)
-            let is_row_selected = self.selected_row == Some(row_idx) && self.focused;
-            let selector = if is_row_selected {
-                format!("{} ", config.box_chars.selector)
-            } else {
-                " ".repeat(SELECTOR_WIDTH)
-            };
-
-            // Render margin first
-            if margin > 0 {
-                buf.set_string(area.x, y, &" ".repeat(margin), Style::default());
-            }
-
-            // Then render selector with fg2 color from theme
-            let selector_style = if let Some(theme) = &config.theme {
-                Style::default().fg(theme.fg2)
-            } else {
-                Style::default()
-            };
-            buf.set_string(area.x + margin as u16, y, &selector, selector_style);
-
-            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
-            for (col_idx, cell_value) in row_cells.iter().enumerate() {
-                let width = self.column_widths[col_idx];
-                let align = self.column_aligns[col_idx];
-                let cell_text = cell_value.display_text();
-                let formatted = self.format_cell(cell_text, width, align);
-
-                let style = self.get_cell_style(row_idx, col_idx, config);
-
-                buf.set_string(x, y, &formatted, style);
-                x += width as u16 + 2;
-            }
-
-            y += 1;
-        }
+        self.render_internal(area, buf, config);
     }
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {
-        // TableWidget is now cloneable since we extract all cell data upfront
         Box::new(self.clone())
     }
 
     fn preferred_height(&self) -> Option<u16> {
-        let header_height = if self.header.is_some() { 3 } else { 0 }; // header + underline + blank
-        let col_header_height = if !self.column_headers.is_empty() {
-            1
-        } else {
-            0
-        };
-        let separator_height = if !self.column_headers.is_empty() {
-            1
-        } else {
-            0
-        }; // separator line under headers
+        let header_height = if self.header.is_some() { 3 } else { 0 };
+        let col_header_height = if !self.column_headers.is_empty() { 1 } else { 0 };
+        let separator_height = if !self.column_headers.is_empty() { 1 } else { 0 };
         let rows_height = self.cell_data.len() as u16;
         Some(header_height + col_header_height + separator_height + rows_height)
     }
@@ -623,7 +539,7 @@ impl ElementWidget for TableWidget {
         }
 
         let cols_width: usize = self.column_widths.iter().sum();
-        let spacing = (self.column_widths.len() - 1) * 2; // 2 spaces between columns
+        let spacing = (self.column_widths.len() - 1) * 2;
         Some((self.margin as usize + cols_width + spacing) as u16)
     }
 }
@@ -897,8 +813,7 @@ mod tests {
         )];
 
         let widget = TableWidget::from_data(&columns, rows)
-            .with_selection(1, 0) // Select row 1, col 0
-            .with_focused(true);
+            .with_focused_row(Some(1)); // Select row 1
 
         let config = test_config();
         let height = widget.preferred_height().unwrap();

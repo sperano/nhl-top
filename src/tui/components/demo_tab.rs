@@ -15,7 +15,11 @@ use ratatui::layout::Rect;
 
 use crate::config::DisplayConfig;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
-use crate::tui::document::{Document, DocumentBuilder, DocumentElement, DocumentView, LinkTarget};
+use crate::tui::components::create_standings_table_with_selection;
+use crate::tui::document::{
+    Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, LinkTarget,
+};
+use crate::tui::helpers::StandingsSorting;
 
 /// Build a DemoDocument and return the y-positions of its focusable elements
 ///
@@ -24,6 +28,23 @@ use crate::tui::document::{Document, DocumentBuilder, DocumentElement, DocumentV
 pub fn build_demo_focusable_positions(standings: Option<&Vec<Standing>>) -> Vec<u16> {
     let doc = DemoDocument::new(standings.cloned());
     doc.focusable_positions()
+}
+
+/// Build a DemoDocument and return the IDs of its focusable elements
+///
+/// This allows external code (like reducers) to get meaningful info about
+/// focused elements for display purposes.
+pub fn build_demo_focusable_ids(standings: Option<&Vec<Standing>>) -> Vec<String> {
+    let doc = DemoDocument::new(standings.cloned());
+    let elements = doc.build(&FocusContext::default());
+
+    let mut ids = Vec::new();
+    let mut y_offset = 0u16;
+    for element in &elements {
+        element.collect_focusable_ids(&mut ids, y_offset);
+        y_offset += element.height();
+    }
+    ids
 }
 
 /// Props for the Demo tab
@@ -168,57 +189,39 @@ impl DemoDocument {
         Self { standings }
     }
 
-    /// Build standings table lines as text elements
-    fn build_standings_section(&self, builder: DocumentBuilder) -> DocumentBuilder {
+    /// Build standings table using the shared StandingsTable component
+    fn build_standings_section(
+        &self,
+        builder: DocumentBuilder,
+        focus: &FocusContext,
+    ) -> DocumentBuilder {
         let builder = builder
-            .heading(2, "League Standings (Natural Height)")
+            .heading(2, "League Standings")
             .spacer(1)
-            .text("This demonstrates embedded data rendered at natural height:");
+            .text("This demonstrates the shared standings table embedded in a document:");
 
         match &self.standings {
             Some(standings) if !standings.is_empty() => {
-                // Sort by points (highest first)
+                // Sort by points (highest first) using the shared sorting trait
                 let mut sorted = standings.clone();
-                sorted.sort_by(|a, b| b.points.cmp(&a.points));
+                sorted.sort_by_points_desc();
 
-                // Header
-                let builder = builder
-                    .spacer(1)
-                    .text("Rank  Team                     GP   W   L  OT  PTS")
-                    .text("────  ───────────────────────  ──  ──  ──  ──  ───");
+                // Use the shared standings table component with focus state
+                let table = create_standings_table_with_selection(
+                    sorted,
+                    None,
+                    focus.focused_table_row,
+                );
 
-                // Add each team as a text line with a link
-                let mut b = builder;
-                for (i, standing) in sorted.iter().enumerate() {
-                    let rank = i + 1;
-                    let team_name = &standing.team_common_name.default;
-                    let abbrev = &standing.team_abbrev.default;
-
-                    // Create a focusable link for each team
-                    let link_id = format!("standings_{}", abbrev);
-                    let display = format!(
-                        "{:>4}  {:<23}  {:>2}  {:>2}  {:>2}  {:>2}  {:>3}",
-                        rank,
-                        team_name,
-                        standing.games_played(),
-                        standing.wins,
-                        standing.losses,
-                        standing.ot_losses,
-                        standing.points
-                    );
-                    b = b.link_with_id(&link_id, &display, LinkTarget::Action(format!("team:{}", abbrev)));
-                }
-                b
+                builder.spacer(1).table(table)
             }
-            _ => {
-                builder.text("(No standings data loaded - try refreshing)")
-            }
+            _ => builder.text("(No standings data loaded - try refreshing)"),
         }
     }
 }
 
 impl Document for DemoDocument {
-    fn build(&self) -> Vec<DocumentElement> {
+    fn build(&self, focus: &FocusContext) -> Vec<DocumentElement> {
         let builder = DocumentBuilder::new()
             .heading(1, "Document System Demo")
             .spacer(1)
@@ -229,7 +232,7 @@ impl Document for DemoDocument {
             .spacer(1);
 
         // Add standings section first (showcases natural height rendering)
-        let builder = self.build_standings_section(builder);
+        let builder = self.build_standings_section(builder, focus);
 
         // Then add the rest of the demo content
         builder
@@ -246,13 +249,13 @@ impl Document for DemoDocument {
             .heading(2, "Example Links")
             .text("These links demonstrate focusable elements:")
             .spacer(1)
-            .link_with_id("link_bos", "Boston Bruins", LinkTarget::Action("team:BOS".to_string()))
+            .link_with_focus("link_bos", "Boston Bruins", LinkTarget::Action("team:BOS".to_string()), focus)
             .spacer(1)
-            .link_with_id("link_tor", "Toronto Maple Leafs", LinkTarget::Action("team:TOR".to_string()))
+            .link_with_focus("link_tor", "Toronto Maple Leafs", LinkTarget::Action("team:TOR".to_string()), focus)
             .spacer(1)
-            .link_with_id("link_nyr", "New York Rangers", LinkTarget::Action("team:NYR".to_string()))
+            .link_with_focus("link_nyr", "New York Rangers", LinkTarget::Action("team:NYR".to_string()), focus)
             .spacer(1)
-            .link_with_id("link_mtl", "Montreal Canadiens", LinkTarget::Action("team:MTL".to_string()))
+            .link_with_focus("link_mtl", "Montreal Canadiens", LinkTarget::Action("team:MTL".to_string()), focus)
             .spacer(1)
             .separator()
             .spacer(1)
@@ -290,7 +293,7 @@ mod tests {
     #[test]
     fn test_demo_document_builds() {
         let doc = DemoDocument::new(None);
-        let elements = doc.build();
+        let elements = doc.build(&FocusContext::default());
 
         // Should have multiple elements
         assert!(elements.len() > 10);

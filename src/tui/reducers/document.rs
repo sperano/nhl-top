@@ -11,6 +11,34 @@ use crate::tui::state::AppState;
 /// Base number of focusable elements in the demo document (example links section)
 const BASE_FOCUSABLE_COUNT: usize = 4; // BOS, TOR, NYR, MTL links
 
+/// Format a focusable element ID for user-friendly display
+fn format_focusable_id(id: &str) -> String {
+    // Handle table cell IDs: "table_{row}_{col}" -> "Table row {row}"
+    if let Some(rest) = id.strip_prefix("table_") {
+        if let Some(row_str) = rest.split('_').next() {
+            if let Ok(row) = row_str.parse::<usize>() {
+                return format!("Table row {} (team)", row + 1);
+            }
+        }
+        return format!("Table cell: {}", rest);
+    }
+
+    // Handle link IDs
+    if let Some(rest) = id.strip_prefix("link_") {
+        // Known link IDs from demo
+        match rest {
+            "bos" => return "Boston Bruins".to_string(),
+            "tor" => return "Toronto Maple Leafs".to_string(),
+            "nyr" => return "New York Rangers".to_string(),
+            "mtl" => return "Montreal Canadiens".to_string(),
+            _ => return format!("Link: {}", rest),
+        }
+    }
+
+    // Fallback
+    id.to_string()
+}
+
 /// Calculate the total focusable count based on standings data
 fn get_focusable_count(state: &AppState) -> usize {
     let standings_count = state
@@ -117,8 +145,22 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
         DocumentAction::ActivateFocused => {
             debug!("Document: activate_focused");
             if let Some(idx) = state.ui.demo.focus_index {
-                debug!("  Activating link at index {}", idx);
-                // TODO: Handle link activation (e.g., navigate to team panel)
+                let id = state
+                    .ui
+                    .demo
+                    .focusable_ids
+                    .get(idx)
+                    .cloned()
+                    .unwrap_or_else(|| format!("unknown_{}", idx));
+
+                // Format the ID for display
+                let display_text = format_focusable_id(&id);
+                debug!("  Activating: {} (id={})", display_text, id);
+
+                // Set status message to show what was activated
+                state
+                    .system
+                    .set_status_message(format!("Activated: {}", display_text));
             }
             Some((state, Effect::None))
         }

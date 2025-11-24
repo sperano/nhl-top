@@ -4,7 +4,7 @@ use tracing::debug;
 
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
-use crate::tui::components::demo_tab::build_demo_focusable_positions;
+use crate::tui::components::demo_tab::{build_demo_focusable_ids, build_demo_focusable_positions};
 use crate::tui::reducers::standings_layout::build_standings_layout;
 use crate::tui::state::{AppState, LoadingKey};
 
@@ -63,9 +63,10 @@ fn handle_standings_loaded(
                 new_state.system.config.display_standings_western_first,
             );
 
-            // Rebuild demo document focusable positions when standings change
+            // Rebuild demo document focusable positions and IDs when standings change
             new_state.ui.demo.focusable_positions =
                 build_demo_focusable_positions(Some(&standings));
+            new_state.ui.demo.focusable_ids = build_demo_focusable_ids(Some(&standings));
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
@@ -75,8 +76,9 @@ fn handle_standings_loaded(
             );
             new_state.data.loading.remove(&LoadingKey::Standings);
 
-            // Rebuild demo positions for empty standings case
+            // Rebuild demo positions and IDs for empty standings case
             new_state.ui.demo.focusable_positions = build_demo_focusable_positions(None);
+            new_state.ui.demo.focusable_ids = build_demo_focusable_ids(None);
         }
     }
 

@@ -150,24 +150,6 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
                 )));
             }
 
-            // Update viewport_height for standings scrolling
-            // Subtract chrome: tab bar (2) + subtab bar (2) + status bar (1) + table header/separator (2) + padding (1) + 1
-            const STANDINGS_CHROME_HEIGHT: u16 = 9;
-            let viewport_height = area.height.saturating_sub(STANDINGS_CHROME_HEIGHT) as usize;
-
-            // Dispatch action to update viewport_height if it changed
-            let current_viewport_height = runtime.state().ui.standings.viewport_height;
-            if viewport_height != current_viewport_height {
-                tracing::debug!(
-                    "DRAW: viewport_height changed: {} -> {}",
-                    current_viewport_height,
-                    viewport_height
-                );
-                runtime.dispatch(Action::StandingsAction(
-                    StandingsAction::UpdateViewportHeight(viewport_height),
-                ));
-            }
-
             // Build virtual tree from current state
             let element = runtime.build();
 

@@ -22,7 +22,6 @@ pub struct TeamDetailPanelProps {
     pub standing: Option<Standing>,
     pub club_stats: Option<ClubStats>,
     pub loading: bool,
-    pub scroll_offset: usize,
     pub selected_index: Option<usize>,
 }
 
@@ -40,7 +39,6 @@ impl Component for TeamDetailPanel {
             standing: props.standing.clone(),
             club_stats: props.club_stats.clone(),
             loading: props.loading,
-            scroll_offset: props.scroll_offset,
             selected_index: props.selected_index,
         }))
     }
@@ -52,7 +50,6 @@ struct TeamDetailPanelWidget {
     standing: Option<Standing>,
     club_stats: Option<ClubStats>,
     loading: bool,
-    scroll_offset: usize,
     selected_index: Option<usize>,
 }
 
@@ -108,20 +105,12 @@ impl ElementWidget for TeamDetailPanelWidget {
         sorted_goalies.sort_by_games_played_desc();
 
         let total_skaters = sorted_skaters.len();
-        let total_players = total_skaters + sorted_goalies.len();
 
-        // Calculate visible window based on scroll_offset
-        // Available height for content (subtract borders, header, etc.)
-        let available_height = area.height.saturating_sub(10) as usize; // Account for border, team info, table headers
-        let visible_end = (self.scroll_offset + available_height).min(total_players);
-
-        // Determine which table(s) and rows to show
-        let show_skaters_from = self.scroll_offset.min(total_skaters);
-        let show_skaters_to = visible_end.min(total_skaters);
-        let show_goalies_from = self.scroll_offset.saturating_sub(total_skaters);
-        let show_goalies_to = visible_end
-            .saturating_sub(total_skaters)
-            .min(sorted_goalies.len());
+        // Render all players - no windowing
+        let show_skaters_from = 0;
+        let show_skaters_to = total_skaters;
+        let show_goalies_from = 0;
+        let show_goalies_to = sorted_goalies.len();
 
         // Create skaters table (windowed)
         let skater_columns = vec![
@@ -174,16 +163,17 @@ impl ElementWidget for TeamDetailPanelWidget {
             vec![]
         };
 
+        // TODO: Re-enable focus when TableWidget focus refactoring is complete
         // Determine which row is selected in skaters table (if any)
         // Adjust selection index to account for windowing
         let skater_selected_row = self
             .selected_index
             .filter(|&idx| idx >= show_skaters_from && idx < show_skaters_to)
             .map(|idx| idx - show_skaters_from);
+        let _ = skater_selected_row; // Suppress unused
 
         let skaters_table = TableWidget::from_data(&skater_columns, windowed_skaters)
-            .with_selection_opt(skater_selected_row, Some(0))
-            .with_focused(true)
+            // .with_focused_row(skater_selected_row)
             .with_header(format!(
                 "SKATERS ({}) - Regular Season",
                 stats.skaters.len()
@@ -253,6 +243,7 @@ impl ElementWidget for TeamDetailPanelWidget {
             vec![]
         };
 
+        // TODO: Re-enable focus when TableWidget focus refactoring is complete
         // Determine which row is selected in goalies table (if any)
         // Adjust selection index to account for windowing
         let goalie_selected_row = self
@@ -260,10 +251,10 @@ impl ElementWidget for TeamDetailPanelWidget {
             .and_then(|idx| idx.checked_sub(total_skaters))
             .filter(|&idx| idx >= show_goalies_from && idx < show_goalies_to)
             .map(|idx| idx - show_goalies_from);
+        let _ = goalie_selected_row; // Suppress unused
 
         let goalies_table = TableWidget::from_data(&goalie_columns, windowed_goalies)
-            .with_selection_opt(goalie_selected_row, Some(0))
-            .with_focused(true)
+            // .with_focused_row(goalie_selected_row)
             .with_header(format!(
                 "GOALIES ({}) - Regular Season",
                 stats.goalies.len()
@@ -294,7 +285,6 @@ impl ElementWidget for TeamDetailPanelWidget {
             standing: self.standing.clone(),
             club_stats: self.club_stats.clone(),
             loading: self.loading,
-            scroll_offset: self.scroll_offset,
             selected_index: self.selected_index,
         })
     }
@@ -453,7 +443,6 @@ mod tests {
             standing: Some(standing),
             club_stats: Some(club_stats),
             loading: false,
-            scroll_offset: 0,
             selected_index: None,
         };
 
@@ -503,7 +492,6 @@ mod tests {
             standing: Some(standing),
             club_stats: Some(club_stats),
             loading: false,
-            scroll_offset: 0,
             selected_index: None,
         };
 

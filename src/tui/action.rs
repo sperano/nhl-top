@@ -36,8 +36,6 @@ pub enum Action {
     PlayerStatsLoaded(i64, Result<PlayerLanding, String>),
 
     // UI actions
-    ScrollUp(usize),
-    ScrollDown(usize),
     FocusNext,
     FocusPrevious,
 
@@ -165,8 +163,6 @@ mod tests {
         assert!(Action::Quit.should_render());
         assert!(Action::ToggleCommandPalette.should_render());
         assert!(Action::PopPanel.should_render());
-        assert!(Action::ScrollUp(5).should_render());
-        assert!(Action::ScrollDown(10).should_render());
         assert!(Action::FocusNext.should_render());
         assert!(Action::FocusPrevious.should_render());
     }

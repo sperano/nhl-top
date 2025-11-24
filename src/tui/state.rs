@@ -51,7 +51,6 @@ impl Default for NavigationState {
 #[derive(Debug, Clone)]
 pub struct PanelState {
     pub panel: Panel,
-    pub scroll_offset: usize,
     /// Selected item index within the panel (None = no selection)
     /// Used for navigating lists (players, games, etc.) within panels
     pub selected_index: Option<usize>,
@@ -105,6 +104,9 @@ pub struct DemoUiState {
     /// Y-positions of focusable elements (populated by component during render)
     /// Used by reducer for accurate autoscrolling
     pub focusable_positions: Vec<u16>,
+    /// IDs of focusable elements (populated by component during render)
+    /// Used for meaningful display when activating elements
+    pub focusable_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -134,10 +136,6 @@ pub struct StandingsUiState {
     pub browse_mode: bool,
     pub selected_column: usize,
     pub selected_row: usize,
-    pub scroll_offset: usize,
-    /// Actual viewport height (number of teams visible)
-    /// Updated during rendering based on terminal size
-    pub viewport_height: usize,
     /// Cached layout: layout[column][row] = team_abbrev
     /// Rebuilt when standings data changes or view changes
     pub layout: Vec<Vec<String>>,
@@ -150,8 +148,6 @@ impl Default for StandingsUiState {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
-            viewport_height: 20, // Default fallback, updated during render
             layout: Vec::new(),
         }
     }

@@ -46,9 +46,10 @@ static STANDINGS_COLUMNS: LazyLock<Vec<ColumnDef<Standing>>> = LazyLock::new(|| 
 #[derive(Clone)]
 pub struct StandingsPanelProps {
     pub standings: Vec<Standing>,
-    pub selected_row: usize,
-    pub selected_column: usize,
-    pub browse_mode: bool,
+    /// Which row is focused in the left column (None = no focus)
+    pub focused_row_left: Option<usize>,
+    /// Which row is focused in the right column (None = no focus, only used in 2-column views)
+    pub focused_row_right: Option<usize>,
     pub config: Config,
 }
 
@@ -62,8 +63,7 @@ pub struct LeagueStandingsPanel;
 impl LeagueStandingsPanel {
     pub fn render(props: &StandingsPanelProps) -> Element {
         let table = TableWidget::from_data(&STANDINGS_COLUMNS, props.standings.clone())
-            .with_selection(props.selected_row, props.selected_column)
-            .with_focused(props.browse_mode)
+            .with_focused_row(props.focused_row_left)
             .with_margin(0);
 
         Element::Widget(Box::new(table))
@@ -109,29 +109,13 @@ impl ConferenceStandingsPanel {
         // Create left conference table
         let left_table = TableWidget::from_data(&STANDINGS_COLUMNS, groups[0].1.clone())
             .with_header(&groups[0].0)
-            .with_selection(
-                if props.selected_column == 0 {
-                    props.selected_row
-                } else {
-                    usize::MAX
-                },
-                0,
-            )
-            .with_focused(props.browse_mode && props.selected_column == 0)
+            .with_focused_row(props.focused_row_left)
             .with_margin(0);
 
         // Create right conference table
         let right_table = TableWidget::from_data(&STANDINGS_COLUMNS, groups[1].1.clone())
             .with_header(&groups[1].0)
-            .with_selection(
-                if props.selected_column == 1 {
-                    props.selected_row
-                } else {
-                    usize::MAX
-                },
-                0,
-            )
-            .with_focused(props.browse_mode && props.selected_column == 1)
+            .with_focused_row(props.focused_row_right)
             .with_margin(0);
 
         // Return horizontal layout with both tables
@@ -188,22 +172,10 @@ impl DivisionStandingsPanel {
         };
 
         // Create tables for left column divisions
-        let left_elements = Self::render_division_column(
-            &col1_divs,
-            0,
-            props.selected_column,
-            props.selected_row,
-            props.browse_mode,
-        );
+        let left_elements = Self::render_division_column(&col1_divs, props.focused_row_left);
 
         // Create tables for right column divisions
-        let right_elements = Self::render_division_column(
-            &col2_divs,
-            1,
-            props.selected_column,
-            props.selected_row,
-            props.browse_mode,
-        );
+        let right_elements = Self::render_division_column(&col2_divs, props.focused_row_right);
 
         // Create vertical layouts for each column
         const DIVISION_TABLE_HEIGHT: u16 = 12;
@@ -269,12 +241,13 @@ impl DivisionStandingsPanel {
     }
 
     /// Render a column of divisions with tables and spacing
+    ///
+    /// # Arguments
+    /// * `divisions` - List of (division_name, teams) pairs
+    /// * `focused_row` - Which row in this column is focused (None = no focus)
     fn render_division_column(
         divisions: &[(String, Vec<Standing>)],
-        column_index: usize,
-        selected_column: usize,
-        selected_row: usize,
-        browse_mode: bool,
+        focused_row: Option<usize>,
     ) -> Vec<Element> {
         let mut elements = Vec::new();
         let mut team_offset = 0;
@@ -282,20 +255,18 @@ impl DivisionStandingsPanel {
         for (idx, (div_name, teams)) in divisions.iter().enumerate() {
             let teams_count = teams.len();
 
-            // Calculate selection for this division
-            let row_in_division = if selected_column == column_index
-                && selected_row >= team_offset
-                && selected_row < team_offset + teams_count
-            {
-                selected_row - team_offset
-            } else {
-                usize::MAX
-            };
+            // Calculate focused row within this division
+            let row_in_division = focused_row.and_then(|row| {
+                if row >= team_offset && row < team_offset + teams_count {
+                    Some(row - team_offset)
+                } else {
+                    None
+                }
+            });
 
             let table = TableWidget::from_data(&STANDINGS_COLUMNS, teams.clone())
                 .with_header(div_name)
-                .with_selection(row_in_division, 0)
-                .with_focused(browse_mode && selected_column == column_index)
+                .with_focused_row(row_in_division)
                 .with_margin(0);
 
             elements.push(Element::Widget(Box::new(table)));
@@ -340,19 +311,38 @@ impl WildcardStandingsPanel {
         let central = grouped.get("Central").cloned().unwrap_or_default();
         let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
 
+        // Determine column order based on western_first config
+        // Left = Eastern, Right = Western by default, reversed if western_first
+        let (left_focused, right_focused) = if props.config.display_standings_western_first {
+            (props.focused_row_right, props.focused_row_left) // Western on left
+        } else {
+            (props.focused_row_left, props.focused_row_right) // Eastern on left
+        };
+
         // Build Eastern Conference column
         let eastern_elements = Self::build_wildcard_conference_column(
             "Atlantic",
             &atlantic,
             "Metropolitan",
             &metropolitan,
-            props,
-            0,
+            if props.config.display_standings_western_first {
+                right_focused
+            } else {
+                left_focused
+            },
         );
 
         // Build Western Conference column
         let western_elements = Self::build_wildcard_conference_column(
-            "Central", &central, "Pacific", &pacific, props, 1,
+            "Central",
+            &central,
+            "Pacific",
+            &pacific,
+            if props.config.display_standings_western_first {
+                left_focused
+            } else {
+                right_focused
+            },
         );
 
         // Determine column order based on western_first config
@@ -374,34 +364,25 @@ impl WildcardStandingsPanel {
     }
 
     /// Build a wildcard conference column (2 division top-3s + wildcard section)
+    ///
+    /// # Arguments
+    /// * `div1_name`, `div1_teams` - First division
+    /// * `div2_name`, `div2_teams` - Second division
+    /// * `focused_row` - Which row in this column is focused (None = no focus)
     fn build_wildcard_conference_column(
         div1_name: &str,
         div1_teams: &[Standing],
         div2_name: &str,
         div2_teams: &[Standing],
-        props: &StandingsPanelProps,
-        column_idx: usize,
+        focused_row: Option<usize>,
     ) -> Vec<Element> {
         let mut elements = Vec::new();
         let mut team_offset = 0;
 
-        // Adjust column index based on western_first config
-        let actual_column = if props.config.display_standings_western_first {
-            1 - column_idx // Flip: 0 -> 1, 1 -> 0
-        } else {
-            column_idx
-        };
-
         // Division 1 - top 3 teams
         let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
         if !div1_top3.is_empty() {
-            let table = Self::create_wildcard_table(
-                div1_name,
-                &div1_top3,
-                team_offset,
-                props,
-                actual_column,
-            );
+            let table = Self::create_wildcard_table(div1_name, &div1_top3, team_offset, focused_row);
             elements.push(Element::Widget(Box::new(table)));
             elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
             team_offset += div1_top3.len();
@@ -410,13 +391,7 @@ impl WildcardStandingsPanel {
         // Division 2 - top 3 teams
         let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
         if !div2_top3.is_empty() {
-            let table = Self::create_wildcard_table(
-                div2_name,
-                &div2_top3,
-                team_offset,
-                props,
-                actual_column,
-            );
+            let table = Self::create_wildcard_table(div2_name, &div2_top3, team_offset, focused_row);
             elements.push(Element::Widget(Box::new(table)));
             elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
             team_offset += div2_top3.len();
@@ -430,13 +405,8 @@ impl WildcardStandingsPanel {
         wildcard_teams.sort_by_points_desc();
 
         if !wildcard_teams.is_empty() {
-            let table = Self::create_wildcard_table(
-                "Wildcard",
-                &wildcard_teams,
-                team_offset,
-                props,
-                actual_column,
-            );
+            let table =
+                Self::create_wildcard_table("Wildcard", &wildcard_teams, team_offset, focused_row);
             elements.push(Element::Widget(Box::new(table)));
         }
 
@@ -444,29 +414,32 @@ impl WildcardStandingsPanel {
     }
 
     /// Create a table for wildcard view with proper selection
+    ///
+    /// # Arguments
+    /// * `header` - Table header text
+    /// * `teams` - Teams to display
+    /// * `team_offset` - Offset of first team in this table within the column's total teams
+    /// * `focused_row` - Which row in the column is focused (None = no focus)
     fn create_wildcard_table(
         header: &str,
         teams: &[Standing],
         team_offset: usize,
-        props: &StandingsPanelProps,
-        actual_column: usize,
+        focused_row: Option<usize>,
     ) -> TableWidget {
         let teams_count = teams.len();
 
-        // Calculate selection for this table
-        let row_in_table = if props.selected_column == actual_column
-            && props.selected_row >= team_offset
-            && props.selected_row < team_offset + teams_count
-        {
-            props.selected_row - team_offset
-        } else {
-            usize::MAX
-        };
+        // Calculate focused row within this table
+        let row_in_table = focused_row.and_then(|row| {
+            if row >= team_offset && row < team_offset + teams_count {
+                Some(row - team_offset)
+            } else {
+                None
+            }
+        });
 
         TableWidget::from_data(&STANDINGS_COLUMNS, teams.to_vec())
             .with_header(header)
-            .with_selection(row_in_table, 0)
-            .with_focused(props.browse_mode && props.selected_column == actual_column)
+            .with_focused_row(row_in_table)
             .with_margin(0)
     }
 
@@ -592,9 +565,8 @@ mod tests {
     fn create_test_props() -> StandingsPanelProps {
         StandingsPanelProps {
             standings: create_test_standings(),
-            selected_row: 0,
-            selected_column: 0,
-            browse_mode: false,
+            focused_row_left: None,
+            focused_row_right: None,
             config: Config::default(),
         }
     }
@@ -660,8 +632,7 @@ mod tests {
     #[test]
     fn test_league_panel_with_selection() {
         let mut props = create_test_props();
-        props.selected_row = 2;
-        props.browse_mode = true;
+        props.focused_row_left = Some(2);
 
         let element = LeagueStandingsPanel::render(&props);
         let config = DisplayConfig::default();
@@ -825,9 +796,7 @@ mod tests {
     #[test]
     fn test_conference_panel_with_left_selection() {
         let mut props = create_test_props();
-        props.selected_row = 1;
-        props.selected_column = 0;
-        props.browse_mode = true;
+        props.focused_row_left = Some(1);
 
         let element = ConferenceStandingsPanel::render(&props);
         let config = DisplayConfig::default();
@@ -880,9 +849,7 @@ mod tests {
     #[test]
     fn test_conference_panel_with_right_selection() {
         let mut props = create_test_props();
-        props.selected_row = 0;
-        props.selected_column = 1;
-        props.browse_mode = true;
+        props.focused_row_right = Some(0);
 
         let element = ConferenceStandingsPanel::render(&props);
         let config = DisplayConfig::default();

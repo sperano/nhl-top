@@ -84,7 +84,6 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                 .panel_stack
                 .push(super::state::PanelState {
                     panel: Panel::PlayerDetail { player_id },
-                    scroll_offset: 0,
                     selected_index: Some(0), // Start with first season selected
                 });
 
@@ -103,7 +102,6 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
                     panel: Panel::TeamDetail {
                         abbrev: team_abbrev,
                     },
-                    scroll_offset: 0,
                     selected_index: Some(0), // Start with first player selected
                 });
 
@@ -472,7 +470,6 @@ mod tests {
             }
             _ => panic!("Expected PlayerDetail panel"),
         }
-        assert_eq!(new_state.navigation.panel_stack[0].scroll_offset, 0);
         assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
         assert!(matches!(effect, Effect::None));
     }
@@ -491,7 +488,6 @@ mod tests {
             }
             _ => panic!("Expected TeamDetail panel"),
         }
-        assert_eq!(new_state.navigation.panel_stack[0].scroll_offset, 0);
         assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
         assert!(matches!(effect, Effect::None));
     }

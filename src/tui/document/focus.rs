@@ -100,7 +100,7 @@ impl FocusManager {
 
     /// Build a focus manager from a list of focusable elements
     ///
-    /// Elements are sorted by tab_order, then by y position.
+    /// Elements are sorted by y position (document order).
     pub fn from_elements(elements: &[super::elements::DocumentElement]) -> Self {
         let mut focusable = Vec::new();
         let mut y_offset = 0u16;
@@ -110,8 +110,8 @@ impl FocusManager {
             y_offset += element.height();
         }
 
-        // Sort by tab order, then by y position
-        focusable.sort_by(|a, b| a.tab_order.cmp(&b.tab_order).then(a.y.cmp(&b.y)));
+        // Sort by y position (document order) for natural reading flow
+        focusable.sort_by_key(|e| e.y);
 
         Self {
             elements: focusable,
@@ -175,6 +175,11 @@ impl FocusManager {
     /// Get the currently focused element
     pub fn current_element(&self) -> Option<&FocusableElement> {
         self.current_focus.map(|idx| &self.elements[idx])
+    }
+
+    /// Get the currently focused element's ID
+    pub fn get_current_id(&self) -> Option<&str> {
+        self.current_focus.map(|idx| self.elements[idx].id.as_str())
     }
 
     /// Get the currently focused element's position (y coordinate)

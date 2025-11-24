@@ -11,6 +11,7 @@ pub mod settings_tab;
 pub mod skater_stats_table;
 pub mod standings_panels;
 pub mod standings_tab;
+pub mod standings_table;
 pub mod status_bar;
 pub mod tabbed_panel;
 pub mod table;
@@ -30,7 +31,8 @@ pub use standings_panels::{
     WildcardStandingsPanel,
 };
 pub use standings_tab::StandingsTab;
+pub use standings_table::{create_standings_table, create_standings_table_with_selection, standings_columns};
 pub use status_bar::StatusBar;
 pub use tabbed_panel::{TabItem, TabbedPanel, TabbedPanelProps};
-pub use table::{Table, TableProps, TableWidget};
+pub use table::{Table, TableWidget};
 pub use team_detail_panel::{TeamDetailPanel, TeamDetailPanelProps};

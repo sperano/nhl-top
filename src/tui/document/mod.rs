@@ -27,10 +27,67 @@ pub use focus::{FocusManager, FocusableElement};
 pub use link::{DocumentLink, DocumentType, LinkParams, LinkTarget};
 pub use viewport::Viewport;
 
+/// Focus context passed when building a document
+#[derive(Clone, Debug, Default)]
+pub struct FocusContext {
+    /// ID of the currently focused element (if any)
+    pub focused_id: Option<String>,
+    /// Index of the focused row within a table (if focus is on a table)
+    pub focused_table_row: Option<usize>,
+}
+
+impl FocusContext {
+    /// Create a new focus context from an element ID
+    ///
+    /// If the ID is a table cell ID (format: "table_{row}_{col}"), extracts
+    /// the row number for table focus highlighting.
+    pub fn from_id(id: &str) -> Self {
+        let focused_id = Some(id.to_string());
+
+        // Parse table cell IDs: "table_{row}_{col}"
+        let focused_table_row = if id.starts_with("table_") {
+            id.strip_prefix("table_")
+                .and_then(|rest| rest.split('_').next())
+                .and_then(|row_str| row_str.parse::<usize>().ok())
+        } else {
+            None
+        };
+
+        Self {
+            focused_id,
+            focused_table_row,
+        }
+    }
+
+    /// Create a new focus context with a focused element ID (without parsing)
+    pub fn with_id(id: impl Into<String>) -> Self {
+        Self {
+            focused_id: Some(id.into()),
+            focused_table_row: None,
+        }
+    }
+
+    /// Create a new focus context with a focused table row
+    pub fn with_table_row(row: usize) -> Self {
+        Self {
+            focused_id: None,
+            focused_table_row: Some(row),
+        }
+    }
+
+    /// Check if the given ID is focused
+    pub fn is_focused(&self, id: &str) -> bool {
+        self.focused_id.as_ref().map(|s| s == id).unwrap_or(false)
+    }
+}
+
 /// A document represents unbounded content that can be scrolled through a viewport
 pub trait Document: Send + Sync {
     /// Build the document's element tree
-    fn build(&self) -> Vec<DocumentElement>;
+    ///
+    /// # Arguments
+    /// - `focus`: Focus context indicating which element should be focused
+    fn build(&self, focus: &FocusContext) -> Vec<DocumentElement>;
 
     /// Get the document's title for navigation/history
     fn title(&self) -> String;
@@ -40,7 +97,10 @@ pub trait Document: Send + Sync {
 
     /// Calculate the total height needed to render all elements
     fn calculate_height(&self) -> u16 {
-        self.build().iter().map(|elem| elem.height()).sum()
+        self.build(&FocusContext::default())
+            .iter()
+            .map(|elem| elem.height())
+            .sum()
     }
 
     /// Get y-positions of all focusable elements in this document
@@ -48,14 +108,14 @@ pub trait Document: Send + Sync {
     /// This is useful for storing positions in state so reducers can
     /// perform accurate autoscrolling without access to the document itself.
     fn focusable_positions(&self) -> Vec<u16> {
-        let elements = self.build();
+        let elements = self.build(&FocusContext::default());
         FocusManager::from_elements(&elements).y_positions()
     }
 
     /// Render the document to a buffer at full height
     /// Returns the buffer and the actual height used
-    fn render_full(&self, width: u16, config: &DisplayConfig) -> (Buffer, u16) {
-        let elements = self.build();
+    fn render_full(&self, width: u16, config: &DisplayConfig, focus: &FocusContext) -> (Buffer, u16) {
+        let elements = self.build(focus);
         let height = elements.iter().map(|e| e.height()).sum();
 
         let mut buffer = Buffer::empty(Rect::new(0, 0, width, height));
@@ -93,8 +153,8 @@ impl DocumentView {
         let doc_height = document.calculate_height();
         let viewport = Viewport::new(0, viewport_height, doc_height);
 
-        // Build focus manager from document elements
-        let elements = document.build();
+        // Build focus manager from document elements (no focus initially)
+        let elements = document.build(&FocusContext::default());
         let focus_manager = FocusManager::from_elements(&elements);
 
         Self {
@@ -268,15 +328,19 @@ impl DocumentView {
 
     /// Render the visible portion of the document
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        // Render full document if not cached or dimensions changed
-        if self.full_buffer.is_none()
-            || self.full_buffer.as_ref().unwrap().area.width != area.width
-        {
-            let (full_buf, height) = self.document.render_full(area.width, config);
-            self.full_buffer = Some(full_buf);
-            self.cached_height = height;
-            self.viewport.set_content_height(height);
-        }
+        // Build focus context from current focus state
+        let focus = self
+            .focus_manager
+            .get_current_id()
+            .map(|id| FocusContext::from_id(id))
+            .unwrap_or_default();
+
+        // Always re-render when focus might have changed
+        // TODO: Optimize by tracking if focus changed since last render
+        let (full_buf, height) = self.document.render_full(area.width, config, &focus);
+        self.full_buffer = Some(full_buf);
+        self.cached_height = height;
+        self.viewport.set_content_height(height);
 
         // Copy visible portion from full buffer to output buffer
         if let Some(full_buffer) = &self.full_buffer {
@@ -304,41 +368,8 @@ impl DocumentView {
                 }
             }
 
-            // Highlight focused element if visible
-            self.render_focus_highlight(area, buf, config);
-        }
-    }
-
-    /// Render focus highlight for the currently focused element
-    fn render_focus_highlight(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        use ratatui::style::Style;
-
-        if let Some(focused_rect) = self.focus_manager.get_focused_rect() {
-            if self.viewport.is_rect_visible(&focused_rect) {
-                // Adjust rect to viewport coordinates
-                let viewport_offset = self.viewport.offset();
-                let adjusted_rect = Rect::new(
-                    area.x + focused_rect.x,
-                    area.y + focused_rect.y.saturating_sub(viewport_offset),
-                    focused_rect.width,
-                    focused_rect.height,
-                );
-
-                // Create selection style from config
-                let selection_style = Style::default().fg(config.selection_fg);
-
-                // Apply focus highlighting
-                for y in adjusted_rect.top()..adjusted_rect.bottom() {
-                    for x in adjusted_rect.left()..adjusted_rect.right() {
-                        if x < area.x + area.width && y < area.y + area.height {
-                            let idx = (y * buf.area.width + x) as usize;
-                            if idx < buf.content.len() {
-                                buf.content[idx].set_style(selection_style);
-                            }
-                        }
-                    }
-                }
-            }
+            // Focus highlighting is now handled by the elements themselves
+            // (Link.focused, TableWidget.focused_row)
         }
     }
 
@@ -349,7 +380,7 @@ impl DocumentView {
 
     /// Rebuild the document (rebuilds element tree and focus manager)
     pub fn rebuild(&mut self) {
-        let elements = self.document.build();
+        let elements = self.document.build(&FocusContext::default());
         self.focus_manager = FocusManager::from_elements(&elements);
         self.cached_height = elements.iter().map(|e| e.height()).sum();
         self.viewport.set_content_height(self.cached_height);
@@ -374,7 +405,7 @@ mod tests {
     }
 
     impl Document for TestDocument {
-        fn build(&self) -> Vec<DocumentElement> {
+        fn build(&self, _focus: &FocusContext) -> Vec<DocumentElement> {
             let mut elements = Vec::new();
 
             elements.push(DocumentElement::heading(1, "Test Document"));
@@ -572,7 +603,7 @@ mod tests {
     fn test_empty_document() {
         struct EmptyDoc;
         impl Document for EmptyDoc {
-            fn build(&self) -> Vec<DocumentElement> {
+            fn build(&self, _focus: &FocusContext) -> Vec<DocumentElement> {
                 Vec::new()
             }
             fn title(&self) -> String {

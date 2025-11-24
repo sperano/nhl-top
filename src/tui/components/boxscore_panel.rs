@@ -31,7 +31,6 @@ pub struct BoxscorePanelProps {
     pub team_view: TeamView,           // For tabbed mode: which team to show
     pub selected_index: Option<usize>, // Selected player index (across all players)
     pub focused: bool,                 // Whether panel has focus for selection highlighting
-    pub scroll_offset: usize,          // Vertical scroll position for windowing
 }
 
 /// BoxscorePanel component - displays detailed game statistics
@@ -50,7 +49,6 @@ impl Component for BoxscorePanel {
             team_view: props.team_view.clone(),
             selected_index: props.selected_index,
             focused: props.focused,
-            scroll_offset: props.scroll_offset,
         }))
     }
 }
@@ -63,7 +61,6 @@ struct BoxscorePanelWidget {
     team_view: TeamView,
     selected_index: Option<usize>,
     focused: bool,
-    scroll_offset: usize,
 }
 
 impl ElementWidget for BoxscorePanelWidget {
@@ -98,7 +95,6 @@ impl ElementWidget for BoxscorePanelWidget {
             team_view: self.team_view.clone(),
             selected_index: self.selected_index,
             focused: self.focused,
-            scroll_offset: self.scroll_offset,
         })
     }
 }
@@ -351,9 +347,8 @@ impl BoxscorePanelWidget {
         let goalies_count = team_stats.goalies.len();
 
         tracing::debug!(
-            "BOXSCORE RENDER [{}]: scroll_offset={}, selected_index={:?}",
+            "BOXSCORE RENDER [{}]: selected_index={:?}",
             team_abbrev,
-            self.scroll_offset,
             self.selected_index
         );
         tracing::debug!(
@@ -403,147 +398,18 @@ impl BoxscorePanelWidget {
             total_content_height
         );
 
-        // Calculate visible window
-        let available_height = area.height as usize;
-        let visible_start = self.scroll_offset;
-        let visible_end = (visible_start + available_height).min(total_content_height);
+        // Render all sections - no windowing, just render everything
+        let forwards_visible = max_forwards_count > 0;
+        let forwards_window_start = 0;
+        let forwards_window_end = forwards_count;
 
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: visible_window=[{}, {}), available_height={}",
-            team_abbrev,
-            visible_start,
-            visible_end,
-            available_height
-        );
+        let defense_visible = max_defense_count > 0;
+        let defense_window_start = 0;
+        let defense_window_end = defense_count;
 
-        // Calculate which sections are visible and how much of each
-        let mut current_y = 0;
-
-        // Forwards section - check max_count for visibility (for alignment)
-        let (forwards_visible, forwards_window_start, forwards_window_end) =
-            if max_forwards_count > 0 {
-                let section_start = current_y;
-                let section_end = section_start + forwards_height;
-                current_y = section_end;
-
-                if visible_end <= section_start || visible_start >= section_end {
-                    // Section not visible
-                    (false, 0, 0)
-                } else {
-                    // Section at least partially visible
-                    // Account for chrome (title + sep + blank + column headers + sep)
-                    let data_start_in_section = SECTION_CHROME_LINES;
-                    let window_start_in_content = visible_start.saturating_sub(section_start);
-                    let window_end_in_content =
-                        (visible_end.saturating_sub(section_start)).min(forwards_height);
-
-                    if window_start_in_content >= data_start_in_section {
-                        // Visible area includes data rows (but only show rows that exist for this team)
-                        let row_start = window_start_in_content - data_start_in_section;
-                        let row_end = (window_end_in_content.saturating_sub(data_start_in_section))
-                            .min(forwards_count);
-                        (true, row_start, row_end)
-                    } else {
-                        // Only header visible, show first few rows
-                        (
-                            true,
-                            0,
-                            window_end_in_content
-                                .saturating_sub(data_start_in_section)
-                                .min(forwards_count),
-                        )
-                    }
-                }
-            } else {
-                (false, 0, 0)
-            };
-
-        // Defense section - check max_count for visibility (for alignment)
-        let (defense_visible, defense_window_start, defense_window_end) = if max_defense_count > 0 {
-            let section_start = current_y;
-            let section_end = section_start + defense_height;
-            current_y = section_end;
-
-            if visible_end <= section_start || visible_start >= section_end {
-                (false, 0, 0)
-            } else {
-                let data_start_in_section = SECTION_CHROME_LINES;
-                let window_start_in_content = visible_start.saturating_sub(section_start);
-                let window_end_in_content =
-                    (visible_end.saturating_sub(section_start)).min(defense_height);
-
-                if window_start_in_content >= data_start_in_section {
-                    let row_start = window_start_in_content - data_start_in_section;
-                    let row_end = (window_end_in_content.saturating_sub(data_start_in_section))
-                        .min(defense_count);
-                    (true, row_start, row_end)
-                } else {
-                    (
-                        true,
-                        0,
-                        window_end_in_content
-                            .saturating_sub(data_start_in_section)
-                            .min(defense_count),
-                    )
-                }
-            }
-        } else {
-            (false, 0, 0)
-        };
-
-        // Goalies section - check max_count for visibility (for alignment)
-        let (goalies_visible, goalies_window_start, goalies_window_end) = if max_goalies_count > 0 {
-            let section_start = current_y;
-            let section_end = section_start + goalies_height;
-
-            if visible_end <= section_start || visible_start >= section_end {
-                (false, 0, 0)
-            } else {
-                let data_start_in_section = SECTION_CHROME_LINES;
-                let window_start_in_content = visible_start.saturating_sub(section_start);
-                let window_end_in_content =
-                    (visible_end.saturating_sub(section_start)).min(goalies_height);
-
-                if window_start_in_content >= data_start_in_section {
-                    let row_start = window_start_in_content - data_start_in_section;
-                    let row_end = (window_end_in_content.saturating_sub(data_start_in_section))
-                        .min(goalies_count);
-                    (true, row_start, row_end)
-                } else {
-                    (
-                        true,
-                        0,
-                        window_end_in_content
-                            .saturating_sub(data_start_in_section)
-                            .min(goalies_count),
-                    )
-                }
-            }
-        } else {
-            (false, 0, 0)
-        };
-
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: forwards_window=[{}, {}), visible={}",
-            team_abbrev,
-            forwards_window_start,
-            forwards_window_end,
-            forwards_visible
-        );
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: defense_window=[{}, {}), visible={}",
-            team_abbrev,
-            defense_window_start,
-            defense_window_end,
-            defense_visible
-        );
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: goalies_window=[{}, {}), visible={}",
-            team_abbrev,
-            goalies_window_start,
-            goalies_window_end,
-            goalies_visible
-        );
+        let goalies_visible = max_goalies_count > 0;
+        let goalies_window_start = 0;
+        let goalies_window_end = goalies_count;
 
         // Calculate dynamic layout based on what's visible
         // IMPORTANT: Use MAX counts (not windowed counts) to ensure both columns have identical heights
@@ -619,14 +485,15 @@ impl BoxscorePanelWidget {
                 (None, false)
             };
 
-            let mut table = SkaterStatsTableWidget::from_game_stats(windowed_data)
-                .with_header(format!("{} {} - Forwards", team_abbrev, label))
-                .with_focused(focused);
-
-            if let Some(row) = selected_row {
-                let link_col = table.find_first_link_column().unwrap_or(0);
-                table = table.with_selection(row, link_col);
-            }
+            // TODO: Re-enable focus when TableWidget focus refactoring is complete
+            let table = SkaterStatsTableWidget::from_game_stats(windowed_data)
+                .with_header(format!("{} {} - Forwards", team_abbrev, label));
+            // .with_focused(focused);
+            // if let Some(row) = selected_row {
+            //     let link_col = table.find_first_link_column().unwrap_or(0);
+            //     table = table.with_selection(row, link_col);
+            // }
+            let _ = (selected_row, focused); // Suppress unused variable warnings
 
             table.render(sections[section_idx], buf, config);
             section_idx += 1;
@@ -658,14 +525,15 @@ impl BoxscorePanelWidget {
                 (None, false)
             };
 
-            let mut table = SkaterStatsTableWidget::from_game_stats(windowed_data)
-                .with_header(format!("{} {} - Defense", team_abbrev, label))
-                .with_focused(focused);
-
-            if let Some(row) = selected_row {
-                let link_col = table.find_first_link_column().unwrap_or(0);
-                table = table.with_selection(row, link_col);
-            }
+            // TODO: Re-enable focus when TableWidget focus refactoring is complete
+            let table = SkaterStatsTableWidget::from_game_stats(windowed_data)
+                .with_header(format!("{} {} - Defense", team_abbrev, label));
+            // .with_focused(focused);
+            // if let Some(row) = selected_row {
+            //     let link_col = table.find_first_link_column().unwrap_or(0);
+            //     table = table.with_selection(row, link_col);
+            // }
+            let _ = (selected_row, focused); // Suppress unused variable warnings
 
             table.render(sections[section_idx], buf, config);
             section_idx += 1;
@@ -697,14 +565,15 @@ impl BoxscorePanelWidget {
                 (None, false)
             };
 
-            let mut table = GoalieStatsTableWidget::from_game_stats(windowed_data)
-                .with_header(format!("{} {} - Goalies", team_abbrev, label))
-                .with_focused(focused);
-
-            if let Some(row) = selected_row {
-                let link_col = table.find_first_link_column().unwrap_or(0);
-                table = table.with_selection(row, link_col);
-            }
+            // TODO: Re-enable focus when TableWidget focus refactoring is complete
+            let table = GoalieStatsTableWidget::from_game_stats(windowed_data)
+                .with_header(format!("{} {} - Goalies", team_abbrev, label));
+            // .with_focused(focused);
+            // if let Some(row) = selected_row {
+            //     let link_col = table.find_first_link_column().unwrap_or(0);
+            //     table = table.with_selection(row, link_col);
+            // }
+            let _ = (selected_row, focused); // Suppress unused variable warnings
 
             table.render(sections[section_idx], buf, config);
         }
@@ -907,7 +776,7 @@ mod tests {
             },
         };
 
-        // Render the panel at scroll_offset=0 to see the Forwards and Defense sections
+        // Render the panel to see the Forwards and Defense sections
         let panel = BoxscorePanel;
         let props = BoxscorePanelProps {
             game_id: 2024020001,
@@ -916,7 +785,6 @@ mod tests {
             team_view: TeamView::Away,
             selected_index: None,
             focused: true,
-            scroll_offset: 0,
         };
 
         let element = panel.view(&props, &());

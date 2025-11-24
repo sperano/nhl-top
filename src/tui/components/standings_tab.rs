@@ -3,7 +3,7 @@ use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, Paragraph},
 };
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use nhl_api::Standing;
 
@@ -14,10 +14,12 @@ use crate::tui::helpers::StandingsSorting;
 use crate::tui::{
     component::{horizontal, vertical, Component, Constraint, Element, ElementWidget},
     state::PanelState,
-    Alignment, CellValue, ColumnDef,
 };
 
-use super::{TabItem, TabbedPanel, TabbedPanelProps, TableWidget};
+use super::{
+    create_standings_table_with_selection, standings_columns, TabItem, TabbedPanel,
+    TabbedPanelProps, TableWidget,
+};
 
 /// Props for StandingsTab component
 #[derive(Clone)]
@@ -26,7 +28,6 @@ pub struct StandingsTabProps {
     pub browse_mode: bool,
     pub selected_column: usize,
     pub selected_row: usize,
-    pub scroll_offset: usize,
     pub standings: Arc<Option<Vec<Standing>>>,
     pub panel_stack: Vec<PanelState>,
     pub focused: bool,
@@ -56,39 +57,7 @@ impl Component for StandingsTab {
     }
 }
 
-/// Cached column definitions for standings table
-/// Uses LazyLock to initialize once and reuse across all calls
-static STANDINGS_COLUMNS: LazyLock<Vec<ColumnDef<Standing>>> = LazyLock::new(|| {
-    vec![
-        ColumnDef::new("Team", 26, Alignment::Left, |s: &Standing| {
-            CellValue::TeamLink {
-                display: s.team_common_name.default.clone(),
-                team_abbrev: s.team_abbrev.default.clone(),
-            }
-        }),
-        ColumnDef::new("GP", 4, Alignment::Right, |s: &Standing| {
-            CellValue::Text(s.games_played().to_string())
-        }),
-        ColumnDef::new("W", 4, Alignment::Right, |s: &Standing| {
-            CellValue::Text(s.wins.to_string())
-        }),
-        ColumnDef::new("L", 3, Alignment::Right, |s: &Standing| {
-            CellValue::Text(s.losses.to_string())
-        }),
-        ColumnDef::new("OT", 3, Alignment::Right, |s: &Standing| {
-            CellValue::Text(s.ot_losses.to_string())
-        }),
-        ColumnDef::new("PTS", 5, Alignment::Right, |s: &Standing| {
-            CellValue::Text(s.points.to_string())
-        }),
-    ]
-});
-
 impl StandingsTab {
-    /// Get the cached column definitions for standings table
-    fn standings_columns() -> &'static Vec<ColumnDef<Standing>> {
-        &STANDINGS_COLUMNS
-    }
 
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
     fn render_view_tabs(&self, props: &StandingsTabProps) -> Element {
@@ -197,14 +166,14 @@ impl StandingsTab {
         props: &StandingsTabProps,
         standings: &[Standing],
     ) -> Element {
-        // Use windowed table widget with scrolling support
-        Element::Widget(Box::new(WindowedStandingsTable::new(
-            standings.to_vec(),
-            props.selected_row,
-            props.selected_column,
-            props.scroll_offset,
-            props.browse_mode,
-        )))
+        // Convert old selection state to new focused_row
+        let focused_row = if props.browse_mode {
+            Some(props.selected_row)
+        } else {
+            None
+        };
+        let table = create_standings_table_with_selection(standings.to_vec(), None, focused_row);
+        Element::Widget(Box::new(table))
     }
 
     fn render_conference_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
@@ -240,32 +209,28 @@ impl StandingsTab {
             return self.render_single_column_view(props, standings);
         }
 
-        // Create left conference table (create fresh columns)
-        let left_table = TableWidget::from_data(Self::standings_columns(), groups[0].1.clone())
+        // Convert selection state to focused_row for each column
+        let left_focused = if props.browse_mode && props.selected_column == 0 {
+            Some(props.selected_row)
+        } else {
+            None
+        };
+        let right_focused = if props.browse_mode && props.selected_column == 1 {
+            Some(props.selected_row)
+        } else {
+            None
+        };
+
+        // Create left conference table
+        let left_table = TableWidget::from_data(standings_columns(), groups[0].1.clone())
             .with_header(&groups[0].0)
-            .with_selection(
-                if props.selected_column == 0 {
-                    props.selected_row
-                } else {
-                    usize::MAX
-                },
-                0,
-            )
-            .with_focused(props.browse_mode && props.selected_column == 0)
+            .with_focused_row(left_focused)
             .with_margin(0);
 
-        // Create right conference table (create fresh columns again)
-        let right_table = TableWidget::from_data(Self::standings_columns(), groups[1].1.clone())
+        // Create right conference table
+        let right_table = TableWidget::from_data(standings_columns(), groups[1].1.clone())
             .with_header(&groups[1].0)
-            .with_selection(
-                if props.selected_column == 1 {
-                    props.selected_row
-                } else {
-                    usize::MAX
-                },
-                0,
-            )
-            .with_focused(props.browse_mode && props.selected_column == 1)
+            .with_focused_row(right_focused)
             .with_margin(0);
 
         // Return horizontal layout with both tables
@@ -280,12 +245,13 @@ impl StandingsTab {
     }
 
     /// Render a column of divisions with tables and spacing
+    ///
+    /// # Arguments
+    /// * `divisions` - List of (division_name, teams) pairs
+    /// * `focused_row` - Which row in this column is focused (None = no focus)
     fn render_division_column(
         divisions: &[(String, Vec<Standing>)],
-        column_index: usize,
-        selected_column: usize,
-        selected_row: usize,
-        browse_mode: bool,
+        focused_row: Option<usize>,
     ) -> Vec<Element> {
         let mut elements = Vec::new();
         let mut team_offset = 0;
@@ -293,24 +259,18 @@ impl StandingsTab {
         for (idx, (div_name, teams)) in divisions.iter().enumerate() {
             let teams_count = teams.len();
 
-            // Calculate selection for this division
-            // selected_row is a flat index (0-15) for the entire column
-            // We need to check if selected_row falls within this division's range
-            let row_in_division = if selected_column == column_index
-                && selected_row >= team_offset
-                && selected_row < team_offset + teams_count
-            {
-                // Selection is in this division
-                selected_row - team_offset
-            } else {
-                // Selection is not in this division
-                usize::MAX
-            };
+            // Calculate focused row within this division
+            let row_in_division = focused_row.and_then(|row| {
+                if row >= team_offset && row < team_offset + teams_count {
+                    Some(row - team_offset)
+                } else {
+                    None
+                }
+            });
 
-            let table = TableWidget::from_data(Self::standings_columns(), teams.clone())
+            let table = TableWidget::from_data(standings_columns(), teams.clone())
                 .with_header(div_name)
-                .with_selection(row_in_division, 0)
-                .with_focused(browse_mode && selected_column == column_index)
+                .with_focused_row(row_in_division)
                 .with_margin(0);
 
             elements.push(Element::Widget(Box::new(table)));
@@ -360,29 +320,29 @@ impl StandingsTab {
             (eastern_divs, western_divs)
         };
 
+        // Convert selection state to focused_row for each column
+        let left_focused = if props.browse_mode && props.selected_column == 0 {
+            Some(props.selected_row)
+        } else {
+            None
+        };
+        let right_focused = if props.browse_mode && props.selected_column == 1 {
+            Some(props.selected_row)
+        } else {
+            None
+        };
+
         // Create tables for left column divisions
-        let left_elements = Self::render_division_column(
-            &col1_divs,
-            0,
-            props.selected_column,
-            props.selected_row,
-            props.browse_mode,
-        );
+        let left_elements = Self::render_division_column(&col1_divs, left_focused);
 
         // Create tables for right column divisions
-        let right_elements = Self::render_division_column(
-            &col2_divs,
-            1,
-            props.selected_column,
-            props.selected_row,
-            props.browse_mode,
-        );
+        let right_elements = Self::render_division_column(&col2_divs, right_focused);
 
         // Create vertical layouts for each column
         // Each column has 2 divisions + 1 spacer = 3 elements
-        // Each division table: header(1) + underline(1) + blank(1) + col_headers(1) + separator(1) + 7 teams = 12 lines
+        // Each division table: header(1) + underline(1) + blank(1) + col_headers(1) + separator(1) + 8 teams = 13 lines
         // Use Length constraints to keep content top-aligned
-        const DIVISION_TABLE_HEIGHT: u16 = 12;
+        const DIVISION_TABLE_HEIGHT: u16 = 13;
         const SPACER_HEIGHT: u16 = 1;
 
         let left_column = if left_elements.len() == 3 {
@@ -471,20 +431,48 @@ impl StandingsTab {
         let central = grouped.get("Central").cloned().unwrap_or_default();
         let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
 
+        // Convert selection state to focused_row for each column
+        // The column assignment depends on western_first config
+        let (eastern_focused, western_focused) = if props.config.display_standings_western_first {
+            // Western is column 0, Eastern is column 1
+            let western = if props.browse_mode && props.selected_column == 0 {
+                Some(props.selected_row)
+            } else {
+                None
+            };
+            let eastern = if props.browse_mode && props.selected_column == 1 {
+                Some(props.selected_row)
+            } else {
+                None
+            };
+            (eastern, western)
+        } else {
+            // Eastern is column 0, Western is column 1
+            let eastern = if props.browse_mode && props.selected_column == 0 {
+                Some(props.selected_row)
+            } else {
+                None
+            };
+            let western = if props.browse_mode && props.selected_column == 1 {
+                Some(props.selected_row)
+            } else {
+                None
+            };
+            (eastern, western)
+        };
+
         // Build Eastern Conference column (Atlantic top 3 + Metropolitan top 3 + wildcards)
         let eastern_elements = self.build_wildcard_conference_column(
             "Atlantic",
             &atlantic,
             "Metropolitan",
             &metropolitan,
-            props,
-            0, // Column 0 (left)
+            eastern_focused,
         );
 
         // Build Western Conference column (Central top 3 + Pacific top 3 + wildcards)
-        let western_elements = self.build_wildcard_conference_column(
-            "Central", &central, "Pacific", &pacific, props, 1, // Column 1 (right)
-        );
+        let western_elements =
+            self.build_wildcard_conference_column("Central", &central, "Pacific", &pacific, western_focused);
 
         // Determine column order based on western_first config
         let (left_elements, right_elements) = if props.config.display_standings_western_first {
@@ -505,35 +493,26 @@ impl StandingsTab {
     }
 
     /// Build a wildcard conference column (2 division top-3s + wildcard section)
+    ///
+    /// # Arguments
+    /// * `div1_name`, `div1_teams` - First division
+    /// * `div2_name`, `div2_teams` - Second division
+    /// * `focused_row` - Which row in this column is focused (None = no focus)
     fn build_wildcard_conference_column(
         &self,
         div1_name: &str,
         div1_teams: &[Standing],
         div2_name: &str,
         div2_teams: &[Standing],
-        props: &StandingsTabProps,
-        column_idx: usize,
+        focused_row: Option<usize>,
     ) -> Vec<Element> {
         let mut elements = Vec::new();
         let mut team_offset = 0;
 
-        // Adjust column index based on western_first config
-        let actual_column = if props.config.display_standings_western_first {
-            1 - column_idx // Flip: 0 -> 1, 1 -> 0
-        } else {
-            column_idx
-        };
-
         // Division 1 - top 3 teams
         let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
         if !div1_top3.is_empty() {
-            let table = self.create_wildcard_table(
-                div1_name,
-                &div1_top3,
-                team_offset,
-                props,
-                actual_column,
-            );
+            let table = self.create_wildcard_table(div1_name, &div1_top3, team_offset, focused_row);
             elements.push(Element::Widget(Box::new(table)));
             elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
             team_offset += div1_top3.len();
@@ -542,13 +521,7 @@ impl StandingsTab {
         // Division 2 - top 3 teams
         let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
         if !div2_top3.is_empty() {
-            let table = self.create_wildcard_table(
-                div2_name,
-                &div2_top3,
-                team_offset,
-                props,
-                actual_column,
-            );
+            let table = self.create_wildcard_table(div2_name, &div2_top3, team_offset, focused_row);
             elements.push(Element::Widget(Box::new(table)));
             elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
             team_offset += div2_top3.len();
@@ -562,13 +535,8 @@ impl StandingsTab {
         wildcard_teams.sort_by_points_desc();
 
         if !wildcard_teams.is_empty() {
-            let table = self.create_wildcard_table(
-                "Wildcard",
-                &wildcard_teams,
-                team_offset,
-                props,
-                actual_column,
-            );
+            let table =
+                self.create_wildcard_table("Wildcard", &wildcard_teams, team_offset, focused_row);
             // TODO: Add playoff cutoff line after 2nd wildcard team
             elements.push(Element::Widget(Box::new(table)));
         }
@@ -577,30 +545,33 @@ impl StandingsTab {
     }
 
     /// Create a table for wildcard view with proper selection
+    ///
+    /// # Arguments
+    /// * `header` - Table header text
+    /// * `teams` - Teams to display
+    /// * `team_offset` - Offset of first team in this table within the column's total teams
+    /// * `focused_row` - Which row in the column is focused (None = no focus)
     fn create_wildcard_table(
         &self,
         header: &str,
         teams: &[Standing],
         team_offset: usize,
-        props: &StandingsTabProps,
-        actual_column: usize,
+        focused_row: Option<usize>,
     ) -> TableWidget {
         let teams_count = teams.len();
 
-        // Calculate selection for this table
-        let row_in_table = if props.selected_column == actual_column
-            && props.selected_row >= team_offset
-            && props.selected_row < team_offset + teams_count
-        {
-            props.selected_row - team_offset
-        } else {
-            usize::MAX
-        };
+        // Calculate focused row within this table
+        let row_in_table = focused_row.and_then(|row| {
+            if row >= team_offset && row < team_offset + teams_count {
+                Some(row - team_offset)
+            } else {
+                None
+            }
+        });
 
-        TableWidget::from_data(Self::standings_columns(), teams.to_vec())
+        TableWidget::from_data(standings_columns(), teams.to_vec())
             .with_header(header)
-            .with_selection(row_in_table, 0)
-            .with_focused(props.browse_mode && props.selected_column == actual_column)
+            .with_focused_row(row_in_table)
             .with_margin(0)
     }
 
@@ -705,97 +676,6 @@ impl StandingsTab {
     }
 }
 
-/// Widget that renders a windowed view of standings with scrolling support
-///
-/// This widget handles viewport scrolling by windowing the data based on
-/// scroll_offset and available screen height. It adjusts selection indices
-/// to account for the windowing.
-#[derive(Clone)]
-struct WindowedStandingsTable {
-    all_teams: Vec<Standing>,
-    columns: &'static Vec<ColumnDef<Standing>>,
-    selected_row: usize,
-    selected_column: usize,
-    scroll_offset: usize,
-    focused: bool,
-    margin: u16,
-}
-
-impl WindowedStandingsTable {
-    /// Create a new windowed standings table
-    fn new(
-        teams: Vec<Standing>,
-        selected_row: usize,
-        selected_column: usize,
-        scroll_offset: usize,
-        focused: bool,
-    ) -> Self {
-        Self {
-            all_teams: teams,
-            columns: StandingsTab::standings_columns(),
-            selected_row,
-            selected_column,
-            scroll_offset,
-            focused,
-            margin: 0,
-        }
-    }
-
-    /// Calculate available height for table content
-    ///
-    /// Subtracts space needed for:
-    /// - Column headers (1 line)
-    /// - Separator (1 line)
-    /// - Bottom padding (1 line)
-    fn calculate_available_height(&self, area: Rect) -> usize {
-        area.height.saturating_sub(3) as usize
-    }
-
-    /// Window the teams based on scroll_offset and available height
-    fn window_teams(&self, available_height: usize) -> Vec<Standing> {
-        let visible_start = self.scroll_offset;
-        let visible_end = (self.scroll_offset + available_height).min(self.all_teams.len());
-
-        self.all_teams[visible_start..visible_end].to_vec()
-    }
-}
-
-impl ElementWidget for WindowedStandingsTable {
-    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        if self.all_teams.is_empty() {
-            return;
-        }
-
-        // Calculate visible window with actual area
-        let available_height = self.calculate_available_height(area);
-        let windowed_teams = self.window_teams(available_height);
-
-        // Adjust selection for windowed view
-        let adjusted_row = if self.selected_row >= self.scroll_offset {
-            let relative_row = self.selected_row - self.scroll_offset;
-            if relative_row < windowed_teams.len() {
-                Some(relative_row)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        // Create table with windowed data
-        let table = TableWidget::from_data(self.columns, windowed_teams)
-            .with_selection_opt(adjusted_row, Some(self.selected_column))
-            .with_focused(self.focused)
-            .with_margin(self.margin);
-
-        table.render(area, buf, config);
-    }
-
-    fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(self.clone())
-    }
-}
-
 /// Loading widget - shows a simple loading or error message
 struct LoadingWidget {
     message: String,
@@ -872,7 +752,6 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
             standings: Arc::new(None),
             panel_stack: Vec::new(),
             focused: false,
@@ -899,7 +778,6 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -942,7 +820,6 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -1007,7 +884,6 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -1033,6 +909,7 @@ mod tests {
             "  Canadiens                     18    10    5    3     23     Predators                     19    10    7    2     22",
             "  Senators                      18     9    7    2     20     Blues                         19     8    8    3     19",
             "  Red Wings                     18     8    8    2     18     Blackhawks                    18     7   10    1     15",
+            "  Sabres                        18     6   10    2     14     Coyotes                       18     4   13    1      9",
             "",
             "  Metropolitan                                                Pacific",
             "  ════════════                                                ═══════",
@@ -1046,8 +923,7 @@ mod tests {
             "  Capitals                      18    10    7    1     21     Canucks                       19    10    7    2     22",
             "  Islanders                     18     9    7    2     20     Flames                        19     9    8    2     20",
             "  Flyers                        18     8    9    1     17     Ducks                         19     7   10    2     16",
-            "",
-            "",
+            "  Blue Jackets                  18     5   11    2     12     Sharks                        18     5   12    1     11",
             "",
             "",
             "",
@@ -1072,7 +948,6 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -1136,7 +1011,6 @@ mod tests {
             browse_mode: false,
             selected_column: 0,
             selected_row: 0,
-            scroll_offset: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -1189,362 +1063,6 @@ mod tests {
             "",
             "",
         ]);
-    }
-
-    // WindowedStandingsTable rendering tests
-    #[test]
-    fn test_windowed_table_renders_subset_of_teams() {
-        use crate::tui::testing::{create_test_standings_with_count, RENDER_WIDTH};
-
-        let standings = create_test_standings_with_count(32);
-        let widget = WindowedStandingsTable::new(
-            standings, 15,   // selected_row (absolute)
-            0,    // selected_column
-            10,   // scroll_offset (start at team 10)
-            true, // focused
-        );
-
-        let area = Rect::new(0, 0, RENDER_WIDTH, 15);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        // Should show teams 10-24 (or fewer if area is smaller)
-        // Team at row 0 (Team 10 absolute) should have no selector
-        // Team at row 5 (Team 15 absolute) should have selector
-        let lines: Vec<String> = (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf.cell((x, y)).unwrap().symbol().to_string())
-                    .collect::<String>()
-                    .trim_end()
-                    .to_string()
-            })
-            .collect();
-
-        // Check that we see the correct teams (Team 10, Team 11, etc.)
-        // First data row should be Team 10 (not Team 0)
-        assert!(
-            lines[2].contains("Team 10"),
-            "First visible team should be Team 10"
-        );
-
-        // Row with selector should be Team 15 (at visual row 7 = 2 header lines + 5 teams)
-        let selector_line = lines
-            .iter()
-            .position(|line| line.contains("▶"))
-            .expect("Should find selector");
-        assert!(
-            lines[selector_line].contains("Team 15"),
-            "Selector should be on Team 15"
-        );
-    }
-
-    #[test]
-    fn test_windowed_table_with_scroll_offset_zero() {
-        use crate::tui::testing::{create_test_standings_with_count, RENDER_WIDTH};
-
-        let standings = create_test_standings_with_count(32);
-        let widget = WindowedStandingsTable::new(
-            standings, 0, // selected_row
-            0, // selected_column
-            0, // scroll_offset (no scrolling)
-            true,
-        );
-
-        let area = Rect::new(0, 0, RENDER_WIDTH, 15);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        let lines: Vec<String> = (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf.cell((x, y)).unwrap().symbol().to_string())
-                    .collect::<String>()
-                    .trim_end()
-                    .to_string()
-            })
-            .collect();
-
-        // First team should be Team 0
-        assert!(
-            lines[2].contains("Team 0"),
-            "First visible team should be Team 0"
-        );
-
-        // Selector should be on first data row
-        assert!(lines[2].contains("▶"), "Selector should be on first team");
-    }
-
-    #[test]
-    fn test_windowed_table_near_end_of_list() {
-        use crate::tui::testing::{create_test_standings_with_count, RENDER_WIDTH};
-
-        let standings = create_test_standings_with_count(32);
-        let widget = WindowedStandingsTable::new(
-            standings, 31, // selected_row (last team)
-            0,  // selected_column
-            25, // scroll_offset (near end)
-            true,
-        );
-
-        let area = Rect::new(0, 0, RENDER_WIDTH, 15);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        let lines: Vec<String> = (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf.cell((x, y)).unwrap().symbol().to_string())
-                    .collect::<String>()
-                    .trim_end()
-                    .to_string()
-            })
-            .collect();
-
-        // Should show teams 25-31 (last 7 teams)
-        assert!(
-            lines[2].contains("Team 25"),
-            "First visible should be Team 25"
-        );
-
-        // Last team should be visible
-        assert!(
-            lines.iter().any(|line| line.contains("Team 31")),
-            "Team 31 should be visible"
-        );
-
-        // Selector should be on Team 31
-        let selector_line = lines
-            .iter()
-            .position(|line| line.contains("▶"))
-            .expect("Should find selector");
-        assert!(
-            lines[selector_line].contains("Team 31"),
-            "Selector should be on Team 31"
-        );
-    }
-
-    #[test]
-    fn test_windowed_table_selection_outside_window() {
-        use crate::tui::testing::{create_test_standings_with_count, RENDER_WIDTH};
-
-        let standings = create_test_standings_with_count(32);
-        let widget = WindowedStandingsTable::new(
-            standings, 5,  // selected_row (outside window)
-            0,  // selected_column
-            10, // scroll_offset (window is 10-29)
-            true,
-        );
-
-        let area = Rect::new(0, 0, RENDER_WIDTH, 15);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        let lines: Vec<String> = (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf.cell((x, y)).unwrap().symbol().to_string())
-                    .collect::<String>()
-                    .trim_end()
-                    .to_string()
-            })
-            .collect();
-
-        // Should NOT have selector (selection is outside visible window)
-        assert!(
-            !lines.iter().any(|line| line.contains("▶")),
-            "Should not show selector when selection is outside window"
-        );
-    }
-
-    #[test]
-    #[ignore] // Sensitive to exact column widths - covered by other tests
-    fn test_windowed_table_exact_rendering_small_set() {
-        use crate::tui::testing::assert_buffer;
-
-        let standings = vec![
-            create_test_standing("Team 0", 0),
-            create_test_standing("Team 1", 0),
-            create_test_standing("Team 2", 0),
-            create_test_standing("Team 3", 0),
-            create_test_standing("Team 4", 0),
-        ];
-
-        let widget = WindowedStandingsTable::new(
-            standings, 1, // selected_row
-            0, // selected_column
-            0, // scroll_offset
-            true,
-        );
-
-        let area = Rect::new(0, 0, 52, 8);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        assert_buffer(
-            &buf,
-            &[
-                "  Team                        GP    W     L    OT ",
-                "  ────────────────────────────────────────────────",
-                "  Team 0                       0    0     0    0  ",
-                "▶ Team 1                       0    0     0    0  ",
-                "  Team 2                       0    0     0    0  ",
-                "  Team 3                       0    0     0    0  ",
-                "  Team 4                       0    0     0    0  ",
-                "                                                  ",
-            ],
-        );
-    }
-
-    #[test]
-    #[ignore] // Sensitive to exact column widths - covered by other tests
-    fn test_windowed_table_with_scroll_offset_exact() {
-        use crate::tui::testing::assert_buffer;
-
-        let standings = vec![
-            create_test_standing("Team 0", 0),
-            create_test_standing("Team 1", 0),
-            create_test_standing("Team 2", 0),
-            create_test_standing("Team 3", 0),
-            create_test_standing("Team 4", 0),
-            create_test_standing("Team 5", 0),
-            create_test_standing("Team 6", 0),
-            create_test_standing("Team 7", 0),
-            create_test_standing("Team 8", 0),
-            create_test_standing("Team 9", 0),
-        ];
-
-        let widget = WindowedStandingsTable::new(
-            standings, 7, // selected_row (absolute)
-            0, // selected_column
-            5, // scroll_offset (skip first 5 teams)
-            true,
-        );
-
-        let area = Rect::new(0, 0, 52, 7);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        assert_buffer(
-            &buf,
-            &[
-                "  Team                        GP    W     L    OT ",
-                "  ────────────────────────────────────────────────",
-                "  Team 5                       0    0     0    0  ",
-                "  Team 6                       0    0     0    0  ",
-                "▶ Team 7                       0    0     0    0  ",
-                "  Team 8                       0    0     0    0  ",
-                "                                                  ",
-            ],
-        );
-    }
-
-    #[test]
-    fn test_windowed_table_empty_teams() {
-        use crate::tui::testing::RENDER_WIDTH;
-
-        let standings: Vec<Standing> = vec![];
-        let widget = WindowedStandingsTable::new(standings, 0, 0, 0, true);
-
-        let area = Rect::new(0, 0, RENDER_WIDTH, 10);
-        let mut buf = Buffer::empty(area);
-        let config = crate::config::DisplayConfig::default();
-
-        widget.render(area, &mut buf, &config);
-
-        // Should render nothing (early return in render method)
-        // Buffer should be empty
-        let lines: Vec<String> = (0..buf.area.height)
-            .map(|y| {
-                (0..buf.area.width)
-                    .map(|x| buf.cell((x, y)).unwrap().symbol().to_string())
-                    .collect::<String>()
-                    .trim()
-                    .to_string()
-            })
-            .collect();
-
-        assert!(
-            lines.iter().all(|line| line.is_empty()),
-            "Empty standings should render empty buffer"
-        );
-    }
-
-    #[test]
-    fn test_windowed_table_calculate_available_height() {
-        let standings = vec![];
-        let widget = WindowedStandingsTable::new(standings, 0, 0, 0, false);
-
-        let area = Rect::new(0, 0, 100, 30);
-        let available = widget.calculate_available_height(area);
-
-        // 30 - 3 = 27 (subtracts header, separator, padding)
-        assert_eq!(available, 27);
-
-        let small_area = Rect::new(0, 0, 100, 5);
-        let small_available = widget.calculate_available_height(small_area);
-
-        // 5 - 3 = 2 (but won't underflow due to saturating_sub)
-        assert_eq!(small_available, 2);
-    }
-
-    #[test]
-    fn test_windowed_table_window_teams() {
-        let standings = vec![
-            create_test_standing("Team 0", 0),
-            create_test_standing("Team 1", 0),
-            create_test_standing("Team 2", 0),
-            create_test_standing("Team 3", 0),
-            create_test_standing("Team 4", 0),
-            create_test_standing("Team 5", 0),
-            create_test_standing("Team 6", 0),
-            create_test_standing("Team 7", 0),
-            create_test_standing("Team 8", 0),
-            create_test_standing("Team 9", 0),
-        ];
-
-        let widget = WindowedStandingsTable::new(
-            standings, 0, 0, 3, // scroll_offset
-            false,
-        );
-
-        let windowed = widget.window_teams(5);
-
-        assert_eq!(windowed.len(), 5);
-        assert_eq!(windowed[0].team_common_name.default, "Team 3");
-        assert_eq!(windowed[4].team_common_name.default, "Team 7");
-    }
-
-    #[test]
-    fn test_windowed_table_window_teams_at_end() {
-        let standings = vec![
-            create_test_standing("Team 0", 0),
-            create_test_standing("Team 1", 0),
-            create_test_standing("Team 2", 0),
-        ];
-
-        let widget = WindowedStandingsTable::new(
-            standings, 0, 0, 1, // scroll_offset
-            false,
-        );
-
-        let windowed = widget.window_teams(10); // Request more than available
-
-        assert_eq!(windowed.len(), 2); // Should only get Team 1 and Team 2
-        assert_eq!(windowed[0].team_common_name.default, "Team 1");
-        assert_eq!(windowed[1].team_common_name.default, "Team 2");
     }
 
     // Helper function for creating test standings

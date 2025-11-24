@@ -11,8 +11,6 @@ pub fn reduce_panels(state: &AppState, action: &Action) -> Option<(AppState, Eff
     match action {
         Action::PushPanel(panel) => Some(push_panel(state.clone(), panel.clone())),
         Action::PopPanel => Some(pop_panel(state.clone())),
-        Action::ScrollUp(amount) => Some(scroll_panel_up(state.clone(), *amount)),
-        Action::ScrollDown(amount) => Some(scroll_panel_down(state.clone(), *amount)),
         Action::PanelSelectNext => Some(panel_select_next(state.clone())),
         Action::PanelSelectPrevious => Some(panel_select_previous(state.clone())),
         Action::PanelSelectItem => Some(panel_select_item(state.clone())),
@@ -25,7 +23,6 @@ fn push_panel(state: AppState, panel: Panel) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.navigation.panel_stack.push(PanelState {
         panel,
-        scroll_offset: 0,
         selected_index: Some(0), // Start with first item selected
     });
     (new_state, Effect::None)
@@ -67,36 +64,6 @@ fn pop_panel(state: AppState) -> (AppState, Effect) {
     // If no panels left, return focus to content
     if new_state.navigation.panel_stack.is_empty() {
         debug!("PANEL: Panel stack empty, returning focus to content");
-    }
-
-    (new_state, Effect::None)
-}
-
-fn scroll_panel_up(state: AppState, amount: usize) -> (AppState, Effect) {
-    let mut new_state = state;
-
-    // Scroll the current panel if one exists
-    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
-        panel.scroll_offset = panel.scroll_offset.saturating_sub(amount);
-        debug!(
-            "PANEL: Scrolled up by {}, new offset: {}",
-            amount, panel.scroll_offset
-        );
-    }
-
-    (new_state, Effect::None)
-}
-
-fn scroll_panel_down(state: AppState, amount: usize) -> (AppState, Effect) {
-    let mut new_state = state;
-
-    // Scroll the current panel if one exists
-    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
-        panel.scroll_offset = panel.scroll_offset.saturating_add(amount);
-        debug!(
-            "PANEL: Scrolled down by {}, new offset: {}",
-            amount, panel.scroll_offset
-        );
     }
 
     (new_state, Effect::None)
@@ -171,7 +138,6 @@ fn handle_team_roster_selection(
                 let mut new_state = state;
                 new_state.navigation.panel_stack.push(PanelState {
                     panel: Panel::PlayerDetail { player_id },
-                    scroll_offset: 0,
                     selected_index: None,
                 });
 
@@ -191,7 +157,6 @@ fn handle_team_roster_selection(
                 let mut new_state = state;
                 new_state.navigation.panel_stack.push(PanelState {
                     panel: Panel::PlayerDetail { player_id },
-                    scroll_offset: 0,
                     selected_index: None,
                 });
 
@@ -257,7 +222,6 @@ fn handle_boxscore_selection(
             let mut new_state = state;
             new_state.navigation.panel_stack.push(PanelState {
                 panel: Panel::PlayerDetail { player_id },
-                scroll_offset: 0,
                 selected_index: None,
             });
 
@@ -301,7 +265,6 @@ fn handle_player_season_selection(
                             panel: Panel::TeamDetail {
                                 abbrev: abbrev.to_string(),
                             },
-                            scroll_offset: 0,
                             selected_index: Some(0),
                         });
 
@@ -357,7 +320,6 @@ mod tests {
         let (new_state, _) = push_panel(state, panel.clone());
 
         assert_eq!(new_state.navigation.panel_stack.len(), 1);
-        assert_eq!(new_state.navigation.panel_stack[0].scroll_offset, 0);
         assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
     }
 
@@ -369,7 +331,6 @@ mod tests {
         // Push a boxscore panel and add loading state
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::Boxscore { game_id },
-            scroll_offset: 0,
             selected_index: None,
         });
         state.data.loading.insert(LoadingKey::Boxscore(game_id));
@@ -384,35 +345,12 @@ mod tests {
     }
 
     #[test]
-    fn test_scroll_panel() {
-        let mut state = AppState::default();
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
-                abbrev: "BOS".to_string(),
-            },
-            scroll_offset: 10,
-            selected_index: None,
-        });
-
-        let (state, _) = scroll_panel_down(state, 5);
-        assert_eq!(state.navigation.panel_stack[0].scroll_offset, 15);
-
-        let (state, _) = scroll_panel_up(state, 7);
-        assert_eq!(state.navigation.panel_stack[0].scroll_offset, 8);
-
-        // Test saturating subtraction
-        let (state, _) = scroll_panel_up(state, 20);
-        assert_eq!(state.navigation.panel_stack[0].scroll_offset, 0);
-    }
-
-    #[test]
     fn test_panel_selection() {
         let mut state = AppState::default();
         state.navigation.panel_stack.push(PanelState {
             panel: Panel::TeamDetail {
                 abbrev: "BOS".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(0),
         });
 
@@ -533,7 +471,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "EDM".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(0), // Select first skater
         });
 
@@ -652,7 +589,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "EDM".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(1), // Select first goalie (index 1, after 1 skater)
         });
 
@@ -770,7 +706,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "TST".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(2), // Select second goalie (index 2 = 1 skater + 1 goalie)
         });
 
@@ -895,7 +830,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "COL".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(0), // Select first VISUAL position (highest points)
         });
 
@@ -1012,7 +946,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "COL".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(1), // Select second VISUAL position
         });
 
@@ -1134,7 +1067,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "TST".to_string(),
             },
-            scroll_offset: 0,
             selected_index: Some(0), // Select first goalie visually (0 skaters + 0 = index 0)
         });
 
@@ -1300,7 +1232,6 @@ mod tests {
             panel: Panel::Boxscore {
                 game_id: TEST_GAME_ID,
             },
-            scroll_offset: 0,
             selected_index: Some(0), // Select first away forward
         });
 
@@ -1341,7 +1272,6 @@ mod tests {
             panel: Panel::Boxscore {
                 game_id: TEST_GAME_ID,
             },
-            scroll_offset: 0,
             selected_index: Some(1), // Index 1 = first home forward (after 1 away forward)
         });
 
@@ -1386,7 +1316,6 @@ mod tests {
             panel: Panel::Boxscore {
                 game_id: TEST_GAME_ID,
             },
-            scroll_offset: 0,
             selected_index: Some(1), // Index 1 = first away defenseman (after 1 forward)
         });
 
@@ -1487,7 +1416,6 @@ mod tests {
             panel: Panel::PlayerDetail {
                 player_id: TEST_PLAYER_ID,
             },
-            scroll_offset: 0,
             selected_index: Some(0), // Select first season (2023-2024, Bruins)
         });
 

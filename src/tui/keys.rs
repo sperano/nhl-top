@@ -338,6 +338,10 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                 // Navigate settings
                 return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp));
             }
+        } else if current_tab == Tab::Demo {
+            // Demo tab - Up focuses previous element (wraps around, doesn't exit)
+            debug!("KEY: Up pressed in Demo tab - focus previous");
+            return Some(Action::DocumentAction(DocumentAction::FocusPrev));
         } else {
             // Not in nested mode - Up returns to tab bar
             debug!("KEY: Up pressed in content - returning to tab bar");
@@ -437,7 +441,6 @@ mod tests {
             .panel_stack
             .push(super::super::state::PanelState {
                 panel: super::super::types::Panel::Boxscore { game_id: 123 },
-                scroll_offset: 0,
                 selected_index: None,
             });
 
@@ -658,7 +661,6 @@ mod tests {
             .panel_stack
             .push(super::super::state::PanelState {
                 panel: super::super::types::Panel::Boxscore { game_id: 123 },
-                scroll_offset: 0,
                 selected_index: Some(1),
             });
 
@@ -674,7 +676,6 @@ mod tests {
             .panel_stack
             .push(super::super::state::PanelState {
                 panel: super::super::types::Panel::Boxscore { game_id: 123 },
-                scroll_offset: 0,
                 selected_index: Some(0),
             });
 
@@ -690,7 +691,6 @@ mod tests {
             .panel_stack
             .push(super::super::state::PanelState {
                 panel: super::super::types::Panel::Boxscore { game_id: 123 },
-                scroll_offset: 0,
                 selected_index: Some(0),
             });
 
@@ -1298,5 +1298,59 @@ mod tests {
         let action = key_to_action(make_key(KeyCode::Enter), &state);
         // Should return None since color settings aren't editable
         assert!(action.is_none());
+    }
+
+    // Demo tab tests
+    #[test]
+    fn test_demo_tab_up_focuses_previous() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.navigation.content_focused = true;
+
+        let action = key_to_action(make_key(KeyCode::Up), &state);
+        // Up should focus previous element, NOT exit to tab bar
+        assert!(matches!(
+            action,
+            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+        ));
+    }
+
+    #[test]
+    fn test_demo_tab_down_scrolls() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.navigation.content_focused = true;
+
+        let action = key_to_action(make_key(KeyCode::Down), &state);
+        assert!(matches!(
+            action,
+            Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))
+        ));
+    }
+
+    #[test]
+    fn test_demo_tab_tab_focuses_next() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.navigation.content_focused = true;
+
+        let action = key_to_action(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), &state);
+        assert!(matches!(
+            action,
+            Some(Action::DocumentAction(DocumentAction::FocusNext))
+        ));
+    }
+
+    #[test]
+    fn test_demo_tab_shift_tab_focuses_prev() {
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.navigation.content_focused = true;
+
+        let action = key_to_action(KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT), &state);
+        assert!(matches!(
+            action,
+            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+        ));
     }
 }

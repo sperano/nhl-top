@@ -22,7 +22,6 @@ pub struct PlayerDetailPanelProps {
     pub player_id: i64,
     pub player_data: Option<PlayerLanding>,
     pub loading: bool,
-    pub scroll_offset: usize,
     pub selected_index: Option<usize>,
 }
 
@@ -39,7 +38,6 @@ impl Component for PlayerDetailPanel {
             player_id: props.player_id,
             player_data: props.player_data.clone(),
             loading: props.loading,
-            scroll_offset: props.scroll_offset,
             selected_index: props.selected_index,
         }))
     }
@@ -51,7 +49,6 @@ struct PlayerDetailPanelWidget {
     player_id: i64,
     player_data: Option<PlayerLanding>,
     loading: bool,
-    scroll_offset: usize,
     selected_index: Option<usize>,
 }
 
@@ -278,31 +275,19 @@ impl ElementWidget for PlayerDetailPanelWidget {
                 ]
             };
 
-            // Calculate windowing for scrolling
+            // Show all seasons - no windowing
             let total_seasons = season_stats.len();
-            let available_height =
-                area.height.saturating_sub(y - area.y).saturating_sub(4) as usize;
-            let visible_end = (self.scroll_offset + available_height).min(total_seasons);
-            let show_from = self.scroll_offset.min(total_seasons);
-            let show_to = visible_end;
-
-            let windowed_seasons: Vec<_> = season_stats[show_from..show_to].to_vec();
 
             // Build table first to find the link column
-            let mut seasons_table = TableWidget::from_data(&columns, windowed_seasons);
+            let mut seasons_table = TableWidget::from_data(&columns, season_stats.clone());
 
             // Find the first link column (should be Team column, index 1)
-            let link_column = seasons_table.find_first_link_column().unwrap_or(0);
-
-            // Adjust selection for windowing
-            let selected_row = self
-                .selected_index
-                .filter(|&idx| idx >= show_from && idx < show_to)
-                .map(|idx| idx - show_from);
+            // TODO: Re-enable focus when TableWidget focus refactoring is complete
+            let _ = seasons_table.find_first_link_column(); // Suppress unused
+            let _ = self.selected_index; // Suppress unused
 
             seasons_table = seasons_table
-                .with_selection_opt(selected_row, Some(link_column))
-                .with_focused(true)
+                // .with_focused_row(self.selected_index)
                 .with_header(format!("SEASON BY SEASON ({} NHL seasons)", total_seasons))
                 .with_margin(2);
 
@@ -415,7 +400,6 @@ mod tests {
             player_id: 8479318,
             player_data: Some(player),
             loading: false,
-            scroll_offset: 0,
             selected_index: None,
         };
 
@@ -435,7 +419,6 @@ mod tests {
             player_id: 8479318,
             player_data: None,
             loading: true,
-            scroll_offset: 0,
             selected_index: None,
         };
 
@@ -454,7 +437,6 @@ mod tests {
             player_id: 8479318,
             player_data: None,
             loading: false,
-            scroll_offset: 0,
             selected_index: None,
         };
 
@@ -475,7 +457,6 @@ mod tests {
             player_id: 8479318,
             player_data: Some(player),
             loading: false,
-            scroll_offset: 0,
             selected_index: None,
         };
 

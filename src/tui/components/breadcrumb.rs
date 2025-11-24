@@ -114,7 +114,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            scroll_offset: 0,
             selected_index: None,
         }];
 
@@ -133,7 +132,6 @@ mod tests {
             panel: Panel::Boxscore {
                 game_id: 2024020001,
             },
-            scroll_offset: 0,
             selected_index: None,
         }];
 
@@ -153,12 +151,10 @@ mod tests {
                 panel: Panel::Boxscore {
                     game_id: 2024020001,
                 },
-                scroll_offset: 0,
                 selected_index: None,
             },
             PanelState {
                 panel: Panel::PlayerDetail { player_id: 8471675 },
-                scroll_offset: 0,
                 selected_index: None,
             },
         ];
@@ -260,7 +256,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            scroll_offset: 0,
             selected_index: None,
         }];
 
@@ -272,7 +267,6 @@ mod tests {
     fn test_breadcrumb_with_player_detail() {
         let panel_stack = vec![PanelState {
             panel: Panel::PlayerDetail { player_id: 8478402 },
-            scroll_offset: 0,
             selected_index: None,
         }];
 

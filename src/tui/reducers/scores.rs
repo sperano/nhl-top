@@ -78,7 +78,6 @@ fn handle_select_game(state: AppState) -> (AppState, Effect) {
                 // Push boxscore panel onto stack
                 new_state.navigation.panel_stack.push(PanelState {
                     panel: Panel::Boxscore { game_id },
-                    scroll_offset: 0,
                     selected_index: Some(0), // Start with first player selected
                 });
 
@@ -96,7 +95,6 @@ fn handle_select_game_by_id(state: AppState, game_id: i64) -> (AppState, Effect)
     // Push boxscore panel onto stack
     new_state.navigation.panel_stack.push(PanelState {
         panel: Panel::Boxscore { game_id },
-        scroll_offset: 0,
         selected_index: Some(0), // Start with first player selected
     });
 

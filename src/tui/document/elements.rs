@@ -8,6 +8,8 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::config::DisplayConfig;
+use crate::tui::component::ElementWidget;
+use crate::tui::components::TableWidget;
 
 use super::focus::FocusableElement;
 use super::link::LinkTarget;
@@ -32,6 +34,8 @@ pub enum DocumentElement {
         display: String,
         target: LinkTarget,
         id: String,
+        /// Whether this link is currently focused
+        focused: bool,
     },
 
     /// Horizontal separator
@@ -56,6 +60,19 @@ pub enum DocumentElement {
         /// Focusable elements within this custom element
         focusable: Vec<FocusableElement>,
     },
+
+    /// A table widget rendered at natural height
+    ///
+    /// Tables are rendered using the existing TableWidget, which supports:
+    /// - Column headers and alignment
+    /// - Player and team links as focusable cells
+    /// - Selection highlighting
+    Table {
+        /// The table widget (already contains all cell data)
+        widget: TableWidget,
+        /// Focusable elements extracted from link cells
+        focusable: Vec<FocusableElement>,
+    },
 }
 
 impl std::fmt::Debug for DocumentElement {
@@ -71,11 +88,17 @@ impl std::fmt::Debug for DocumentElement {
                 .field("level", level)
                 .field("content", content)
                 .finish(),
-            Self::Link { display, target, id } => f
+            Self::Link {
+                display,
+                target,
+                id,
+                focused,
+            } => f
                 .debug_struct("Link")
                 .field("display", display)
                 .field("target", target)
                 .field("id", id)
+                .field("focused", focused)
                 .finish(),
             Self::Separator => write!(f, "Separator"),
             Self::Spacer { height } => f.debug_struct("Spacer").field("height", height).finish(),
@@ -87,6 +110,12 @@ impl std::fmt::Debug for DocumentElement {
             Self::Custom { height, focusable, .. } => f
                 .debug_struct("Custom")
                 .field("height", height)
+                .field("focusable_count", &focusable.len())
+                .finish(),
+            Self::Table { widget, focusable } => f
+                .debug_struct("Table")
+                .field("rows", &widget.row_count())
+                .field("columns", &widget.column_count())
                 .field("focusable_count", &focusable.len())
                 .finish(),
         }
@@ -114,6 +143,7 @@ impl DocumentElement {
             Self::Spacer { height } => *height,
             Self::Group { children, .. } => children.iter().map(|c| c.height()).sum(),
             Self::Custom { height, .. } => *height,
+            Self::Table { widget, .. } => widget.preferred_height().unwrap_or(0),
         }
     }
 
@@ -124,7 +154,12 @@ impl DocumentElement {
     /// - `y_offset`: Current y offset in the document
     pub fn collect_focusable(&self, out: &mut Vec<FocusableElement>, y_offset: u16) {
         match self {
-            Self::Link { display, target, id } => {
+            Self::Link {
+                display,
+                target,
+                id,
+                ..
+            } => {
                 out.push(FocusableElement {
                     id: id.clone(),
                     y: y_offset,
@@ -150,6 +185,41 @@ impl DocumentElement {
                     out.push(adjusted);
                 }
             }
+            Self::Table { focusable, .. } => {
+                // Add focusable elements with adjusted y positions
+                for elem in focusable {
+                    let mut adjusted = elem.clone();
+                    adjusted.y += y_offset;
+                    adjusted.rect.y += y_offset;
+                    out.push(adjusted);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Collect focusable element IDs from this element (simpler version for display)
+    ///
+    /// # Arguments
+    /// - `out`: Vector to append IDs to
+    /// - `_y_offset`: Current y offset (unused but kept for consistency)
+    pub fn collect_focusable_ids(&self, out: &mut Vec<String>, _y_offset: u16) {
+        match self {
+            Self::Link { id, .. } => {
+                out.push(id.clone());
+            }
+            Self::Group { children, .. } => {
+                let mut child_offset = _y_offset;
+                for child in children {
+                    child.collect_focusable_ids(out, child_offset);
+                    child_offset += child.height();
+                }
+            }
+            Self::Custom { focusable, .. } | Self::Table { focusable, .. } => {
+                for elem in focusable {
+                    out.push(elem.id.clone());
+                }
+            }
             _ => {}
         }
     }
@@ -163,8 +233,10 @@ impl DocumentElement {
             Self::Heading { level, content } => {
                 render_heading(*level, content, area, buf, config);
             }
-            Self::Link { display, .. } => {
-                render_link(display, area, buf);
+            Self::Link {
+                display, focused, ..
+            } => {
+                render_link(display, *focused, area, buf, config);
             }
             Self::Separator => {
                 render_separator(area, buf, config);
@@ -177,6 +249,9 @@ impl DocumentElement {
             }
             Self::Custom { render_fn, .. } => {
                 render_fn(area, buf, config);
+            }
+            Self::Table { widget, .. } => {
+                widget.render(area, buf, config);
             }
         }
     }
@@ -211,6 +286,21 @@ impl DocumentElement {
             id: id.into(),
             display: display.into(),
             target,
+            focused: false,
+        }
+    }
+
+    /// Create a focused link element
+    pub fn focused_link(
+        id: impl Into<String>,
+        display: impl Into<String>,
+        target: LinkTarget,
+    ) -> Self {
+        Self::Link {
+            id: id.into(),
+            display: display.into(),
+            target,
+            focused: true,
         }
     }
 
@@ -238,6 +328,55 @@ impl DocumentElement {
             children,
             style: Some(style),
         }
+    }
+
+    /// Create a table element from a TableWidget
+    ///
+    /// Extracts focusable elements from link cells in the table.
+    /// The table renders at its natural height within the document.
+    pub fn table(widget: TableWidget) -> Self {
+        use crate::tui::CellValue;
+
+        let mut focusable = Vec::new();
+
+        // Calculate the y-offset where data rows start:
+        // - Optional header (3 lines: header + underline + blank)
+        // - Column headers (1 line)
+        // - Separator (1 line)
+        let header_offset: u16 = if widget.has_header() { 3 } else { 0 };
+        let col_header_offset: u16 = 2; // column headers + separator
+        let data_start_y = header_offset + col_header_offset;
+
+        // Extract focusable elements from link cells
+        for row_idx in 0..widget.row_count() {
+            for col_idx in 0..widget.column_count() {
+                if let Some(cell) = widget.get_cell_value(row_idx, col_idx) {
+                    if cell.is_link() {
+                        let y = data_start_y + row_idx as u16;
+                        let link_target = match &cell {
+                            CellValue::PlayerLink { player_id, .. } => {
+                                Some(LinkTarget::Action(format!("player:{}", player_id)))
+                            }
+                            CellValue::TeamLink { team_abbrev, .. } => {
+                                Some(LinkTarget::Action(format!("team:{}", team_abbrev)))
+                            }
+                            _ => None,
+                        };
+
+                        focusable.push(FocusableElement {
+                            id: format!("table_{}_{}", row_idx, col_idx),
+                            y,
+                            height: 1,
+                            rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
+                            link_target,
+                            tab_order: (row_idx * 100 + col_idx) as i32,
+                        });
+                    }
+                }
+            }
+        }
+
+        Self::Table { widget, focusable }
     }
 }
 
@@ -294,12 +433,27 @@ fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, _confi
     }
 }
 
-fn render_link(display: &str, area: Rect, buf: &mut Buffer) {
-    let style = Style::default()
-        .fg(Color::Blue)
-        .add_modifier(Modifier::UNDERLINED);
+fn render_link(display: &str, focused: bool, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+    use crate::config::SELECTION_STYLE_MODIFIER;
 
-    for (x, ch) in display.chars().enumerate() {
+    let style = if focused {
+        // Focused: use selection style (BOLD + REVERSED)
+        Style::default().add_modifier(SELECTION_STYLE_MODIFIER)
+    } else {
+        // Unfocused: blue underlined
+        Style::default()
+            .fg(Color::Blue)
+            .add_modifier(Modifier::UNDERLINED)
+    };
+
+    // Add selector for focused links
+    let prefix = if focused {
+        format!("{} ", config.box_chars.selector)
+    } else {
+        "  ".to_string()
+    };
+
+    for (x, ch) in prefix.chars().chain(display.chars()).enumerate() {
         if x as u16 >= area.width {
             break;
         }
@@ -517,11 +671,36 @@ mod tests {
 
         elem.render(Rect::new(0, 0, 20, 5), &mut buf, &config);
 
-        // Check that "Click" was rendered
-        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "C");
+        // Links now have a 2-char prefix ("  " for unfocused, "▶ " for focused)
+        // Check that prefix space was rendered
+        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), " ");
+        // Check that "Click" starts at position 2
+        assert_eq!(buf.cell((2, 0)).unwrap().symbol(), "C");
         // Check style (blue, underlined)
-        let style = buf.cell((0, 0)).unwrap().style();
+        let style = buf.cell((2, 0)).unwrap().style();
         assert_eq!(style.fg, Some(Color::Blue));
+    }
+
+    #[test]
+    fn test_render_focused_link() {
+        let elem = DocumentElement::focused_link(
+            "test_link",
+            "Click",
+            LinkTarget::Action("test".to_string()),
+        );
+        let mut buf = Buffer::empty(Rect::new(0, 0, 20, 5));
+        let config = DisplayConfig::default();
+
+        elem.render(Rect::new(0, 0, 20, 5), &mut buf, &config);
+
+        // Focused links have "▶ " prefix
+        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "▶");
+        // Check that "Click" starts at position 2
+        assert_eq!(buf.cell((2, 0)).unwrap().symbol(), "C");
+        // Focused links use BOLD + REVERSED, not blue
+        let style = buf.cell((2, 0)).unwrap().style();
+        assert!(style.add_modifier.contains(Modifier::BOLD));
+        assert!(style.add_modifier.contains(Modifier::REVERSED));
     }
 
     #[test]
@@ -609,5 +788,167 @@ mod tests {
         let elem = DocumentElement::separator();
         let debug_str = format!("{:?}", elem);
         assert!(debug_str.contains("Separator"));
+    }
+
+    #[test]
+    fn test_table_element_height() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        // Create a simple table with 3 rows
+        let columns: Vec<ColumnDef<&str>> = vec![
+            ColumnDef::new("Name", 10, Alignment::Left, |row: &&str| {
+                CellValue::Text(row.to_string())
+            }),
+        ];
+        let data = vec!["Alice", "Bob", "Charlie"];
+        let table = TableWidget::from_data(&columns, data);
+        let elem = DocumentElement::table(table);
+
+        // TableWidget height = col headers (1) + separator (1) + 3 data rows = 5
+        assert_eq!(elem.height(), 5);
+    }
+
+    #[test]
+    fn test_table_element_focusable_extraction() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        // Create a table with link cells
+        let columns: Vec<ColumnDef<(&str, &str)>> = vec![
+            ColumnDef::new("Team", 15, Alignment::Left, |row: &(&str, &str)| {
+                CellValue::TeamLink {
+                    display: row.0.to_string(),
+                    team_abbrev: row.1.to_string(),
+                }
+            }),
+        ];
+        let data = vec![("Bruins", "BOS"), ("Maple Leafs", "TOR")];
+        let table = TableWidget::from_data(&columns, data);
+        let elem = DocumentElement::table(table);
+
+        // Collect focusable elements
+        let mut focusable = Vec::new();
+        elem.collect_focusable(&mut focusable, 0);
+
+        // Should have 2 focusable elements (one per row)
+        assert_eq!(focusable.len(), 2);
+        assert_eq!(focusable[0].id, "table_0_0");
+        assert_eq!(focusable[1].id, "table_1_0");
+
+        // Check link targets
+        match &focusable[0].link_target {
+            Some(LinkTarget::Action(action)) => assert_eq!(action, "team:BOS"),
+            _ => panic!("Expected team action"),
+        }
+        match &focusable[1].link_target {
+            Some(LinkTarget::Action(action)) => assert_eq!(action, "team:TOR"),
+            _ => panic!("Expected team action"),
+        }
+    }
+
+    #[test]
+    fn test_table_element_focusable_y_positions() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        // Create a table with links
+        let columns: Vec<ColumnDef<&str>> = vec![
+            ColumnDef::new("Player", 15, Alignment::Left, |row: &&str| {
+                CellValue::PlayerLink {
+                    display: row.to_string(),
+                    player_id: 12345,
+                }
+            }),
+        ];
+        let data = vec!["Player1", "Player2"];
+        let table = TableWidget::from_data(&columns, data);
+        let elem = DocumentElement::table(table);
+
+        // Collect focusable at y_offset of 10
+        let mut focusable = Vec::new();
+        elem.collect_focusable(&mut focusable, 10);
+
+        // Y positions should be adjusted by offset
+        // Data starts at y=2 (col headers + separator), then +10 offset = 12
+        assert_eq!(focusable[0].y, 12);
+        assert_eq!(focusable[1].y, 13);
+    }
+
+    #[test]
+    fn test_table_element_no_focusable_text_only() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        // Create a table with only text cells (no links)
+        let columns: Vec<ColumnDef<i32>> = vec![
+            ColumnDef::new("Value", 5, Alignment::Right, |row: &i32| {
+                CellValue::Text(row.to_string())
+            }),
+        ];
+        let data = vec![1, 2, 3];
+        let table = TableWidget::from_data(&columns, data);
+        let elem = DocumentElement::table(table);
+
+        // Collect focusable elements
+        let mut focusable = Vec::new();
+        elem.collect_focusable(&mut focusable, 0);
+
+        // Should have no focusable elements (text cells aren't focusable)
+        assert_eq!(focusable.len(), 0);
+    }
+
+    #[test]
+    fn test_table_element_debug_format() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        let columns: Vec<ColumnDef<&str>> = vec![
+            ColumnDef::new("Col1", 10, Alignment::Left, |_: &&str| CellValue::Text("x".to_string())),
+            ColumnDef::new("Col2", 10, Alignment::Left, |_: &&str| CellValue::Text("y".to_string())),
+        ];
+        let data = vec!["a", "b", "c"];
+        let table = TableWidget::from_data(&columns, data);
+        let elem = DocumentElement::table(table);
+
+        let debug_str = format!("{:?}", elem);
+        assert!(debug_str.contains("Table"));
+        assert!(debug_str.contains("rows"));
+        assert!(debug_str.contains("columns"));
+        assert!(debug_str.contains("focusable_count"));
+    }
+
+    #[test]
+    fn test_table_element_render() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+        use crate::tui::testing::assert_buffer;
+
+        let columns: Vec<ColumnDef<&str>> = vec![
+            ColumnDef::new("Name", 10, Alignment::Left, |row: &&str| {
+                CellValue::Text(row.to_string())
+            }),
+        ];
+        let data = vec!["Alice", "Bob"];
+        let table = TableWidget::from_data(&columns, data);
+        let elem = DocumentElement::table(table);
+
+        let mut buf = Buffer::empty(Rect::new(0, 0, 15, 5));
+        let config = DisplayConfig::default();
+
+        elem.render(Rect::new(0, 0, 15, 5), &mut buf, &config);
+
+        // Verify the table renders with margin, column header and data
+        // TableWidget adds 2 space margin on left
+        assert_buffer(
+            &buf,
+            &[
+                "  Name",
+                "  ──────────",
+                "  Alice",
+                "  Bob",
+                "",
+            ],
+        );
     }
 }

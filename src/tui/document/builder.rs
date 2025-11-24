@@ -4,6 +4,8 @@
 
 use ratatui::style::Style;
 
+use crate::tui::components::TableWidget;
+
 use super::elements::DocumentElement;
 use super::link::LinkTarget;
 
@@ -68,6 +70,29 @@ impl DocumentBuilder {
         self
     }
 
+    /// Add a link element with a custom ID and focus context
+    ///
+    /// The link will be rendered as focused if the focus context's focused_id
+    /// matches the provided ID.
+    pub fn link_with_focus(
+        mut self,
+        id: impl Into<String>,
+        display: impl Into<String>,
+        target: LinkTarget,
+        focus: &super::FocusContext,
+    ) -> Self {
+        let id = id.into();
+        let is_focused = focus.is_focused(&id);
+        if is_focused {
+            self.elements
+                .push(DocumentElement::focused_link(id, display, target));
+        } else {
+            self.elements
+                .push(DocumentElement::link(id, display, target));
+        }
+        self
+    }
+
     /// Add a horizontal separator
     pub fn separator(mut self) -> Self {
         self.elements.push(DocumentElement::separator());
@@ -83,6 +108,15 @@ impl DocumentBuilder {
     /// Add a pre-built element
     pub fn element(mut self, element: DocumentElement) -> Self {
         self.elements.push(element);
+        self
+    }
+
+    /// Add a table element
+    ///
+    /// Tables render at their natural height and extract focusable elements
+    /// from link cells (PlayerLink, TeamLink).
+    pub fn table(mut self, widget: TableWidget) -> Self {
+        self.elements.push(DocumentElement::table(widget));
         self
     }
 
@@ -456,6 +490,64 @@ mod tests {
                 assert_eq!(children.len(), 3);
             }
             _ => panic!("Expected Group"),
+        }
+    }
+
+    #[test]
+    fn test_builder_table() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        let columns: Vec<ColumnDef<&str>> = vec![
+            ColumnDef::new("Name", 10, Alignment::Left, |row: &&str| {
+                CellValue::Text(row.to_string())
+            }),
+        ];
+        let data = vec!["Alice", "Bob"];
+        let table = TableWidget::from_data(&columns, data);
+
+        let elements = DocumentBuilder::new()
+            .heading(1, "Table Demo")
+            .table(table)
+            .build();
+
+        assert_eq!(elements.len(), 2);
+        match &elements[1] {
+            DocumentElement::Table { widget, .. } => {
+                assert_eq!(widget.row_count(), 2);
+                assert_eq!(widget.column_count(), 1);
+            }
+            _ => panic!("Expected Table"),
+        }
+    }
+
+    #[test]
+    fn test_builder_table_with_links() {
+        use crate::tui::{Alignment, CellValue, ColumnDef};
+        use crate::tui::components::TableWidget;
+
+        let columns: Vec<ColumnDef<(&str, &str)>> = vec![
+            ColumnDef::new("Team", 15, Alignment::Left, |row: &(&str, &str)| {
+                CellValue::TeamLink {
+                    display: row.0.to_string(),
+                    team_abbrev: row.1.to_string(),
+                }
+            }),
+        ];
+        let data = vec![("Bruins", "BOS"), ("Leafs", "TOR")];
+        let table = TableWidget::from_data(&columns, data);
+
+        let elements = DocumentBuilder::new()
+            .table(table)
+            .build();
+
+        assert_eq!(elements.len(), 1);
+        match &elements[0] {
+            DocumentElement::Table { focusable, .. } => {
+                // Should extract focusable elements from link cells
+                assert_eq!(focusable.len(), 2);
+            }
+            _ => panic!("Expected Table"),
         }
     }
 }

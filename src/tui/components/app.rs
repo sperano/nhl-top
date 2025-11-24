@@ -133,7 +133,6 @@ impl App {
                     team_view: TeamView::Away, // TODO: Store in panel state to allow switching
                     selected_index: panel_state.selected_index,
                     focused: true, // Panel has focus when it's on the stack
-                    scroll_offset: panel_state.scroll_offset,
                 };
                 BoxscorePanel.view(&props, &())
             }
@@ -159,7 +158,6 @@ impl App {
                         .data
                         .loading
                         .contains(&LoadingKey::TeamRosterStats(abbrev.clone())),
-                    scroll_offset: panel_state.scroll_offset,
                     selected_index: panel_state.selected_index,
                 };
                 TeamDetailPanel.view(&props, &())
@@ -172,7 +170,6 @@ impl App {
                         .data
                         .loading
                         .contains(&LoadingKey::PlayerStats(*player_id)),
-                    scroll_offset: panel_state.scroll_offset,
                     selected_index: panel_state.selected_index,
                 };
                 PlayerDetailPanel.view(&props, &())
@@ -202,7 +199,6 @@ impl App {
             browse_mode: state.ui.standings.browse_mode,
             selected_column: state.ui.standings.selected_column,
             selected_row: state.ui.standings.selected_row,
-            scroll_offset: state.ui.standings.scroll_offset,
             standings: state.data.standings.clone(),
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,

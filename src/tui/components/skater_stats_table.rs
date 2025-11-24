@@ -111,21 +111,9 @@ impl SkaterStatsTableWidget {
         self
     }
 
-    /// Set selection state (row and column indices)
-    pub fn with_selection(mut self, row: usize, col: usize) -> Self {
-        self.inner = self.inner.with_selection(row, col);
-        self
-    }
-
-    /// Set optional selection state (None = no selection)
-    pub fn with_selection_opt(mut self, row: Option<usize>, col: Option<usize>) -> Self {
-        self.inner = self.inner.with_selection_opt(row, col);
-        self
-    }
-
-    /// Set focused state (affects selection highlighting)
-    pub fn with_focused(mut self, focused: bool) -> Self {
-        self.inner = self.inner.with_focused(focused);
+    /// Set which row is focused (externally managed)
+    pub fn with_focused_row(mut self, row: Option<usize>) -> Self {
+        self.inner = self.inner.with_focused_row(row);
         self
     }
 
@@ -212,8 +200,7 @@ mod tests {
 
         let table = SkaterStatsTableWidget::from_game_stats(skaters)
             .with_header("Forwards")
-            .with_selection(0, 0)
-            .with_focused(true);
+            .with_focused_row(Some(0));
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -244,8 +231,7 @@ mod tests {
     #[test]
     fn test_table_with_no_data() {
         let table = SkaterStatsTableWidget::from_game_stats(vec![])
-            .with_header("No Skaters")
-            .with_focused(false);
+            .with_header("No Skaters");
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);

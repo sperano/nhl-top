@@ -76,7 +76,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            scroll_offset: 0,
             selected_index: None,
         }];
         let trail = breadcrumb_trail(&stack);
@@ -90,12 +89,10 @@ mod tests {
                 panel: Panel::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                scroll_offset: 0,
                 selected_index: None,
             },
             PanelState {
                 panel: Panel::PlayerDetail { player_id: 8478402 },
-                scroll_offset: 0,
                 selected_index: None,
             },
         ];
@@ -110,12 +107,10 @@ mod tests {
                 panel: Panel::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                scroll_offset: 0,
                 selected_index: None,
             },
             PanelState {
                 panel: Panel::PlayerDetail { player_id: 8478402 },
-                scroll_offset: 0,
                 selected_index: None,
             },
         ];
@@ -132,7 +127,6 @@ mod tests {
             panel: Panel::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            scroll_offset: 0,
             selected_index: None,
         }];
         assert!(!is_at_root(&with_panel));
@@ -148,12 +142,10 @@ mod tests {
                 panel: Panel::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                scroll_offset: 0,
                 selected_index: None,
             },
             PanelState {
                 panel: Panel::PlayerDetail { player_id: 8478402 },
-                scroll_offset: 0,
                 selected_index: None,
             },
         ];
@@ -175,12 +167,10 @@ mod tests {
                 panel: Panel::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                scroll_offset: 0,
                 selected_index: None,
             },
             PanelState {
                 panel: Panel::PlayerDetail { player_id: 8478402 },
-                scroll_offset: 0,
                 selected_index: None,
             },
         ];
