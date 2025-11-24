@@ -165,6 +165,10 @@ pub struct SettingsUiState {
     pub modal_selected_index: usize, // Selected index within the modal
 }
 
+/// Default help message shown in the status bar
+pub const DEFAULT_STATUS_MESSAGE: &str =
+    "Keys: ←→ navigate | ↓ enter | ↑/ESC back | q quit | 1-6 jump to tab | / command palette";
+
 #[derive(Debug, Clone, Default)]
 pub struct SystemState {
     pub last_refresh: Option<SystemTime>,
@@ -182,6 +186,11 @@ impl SystemState {
     pub fn set_status_error_message(&mut self, message: String) {
         self.status_message = Some(message);
         self.status_is_error = true;
+    }
+
+    pub fn reset_status_message(&mut self) {
+        self.status_message = Some(DEFAULT_STATUS_MESSAGE.to_string());
+        self.status_is_error = false;
     }
 }
 
@@ -235,5 +244,35 @@ mod tests {
         state.set_status_error_message("Error message".to_string());
         assert_eq!(state.status_message, Some("Error message".to_string()));
         assert!(state.status_is_error);
+    }
+
+    #[test]
+    fn test_reset_status_message() {
+        let mut state = SystemState::default();
+
+        // Set a custom message
+        state.set_status_message("Custom message".to_string());
+        assert_eq!(state.status_message, Some("Custom message".to_string()));
+
+        // Reset should restore default
+        state.reset_status_message();
+        assert_eq!(
+            state.status_message,
+            Some(DEFAULT_STATUS_MESSAGE.to_string())
+        );
+        assert!(!state.status_is_error);
+    }
+
+    #[test]
+    fn test_reset_status_message_clears_error_flag() {
+        let mut state = SystemState::default();
+
+        // Set an error message
+        state.set_status_error_message("Error".to_string());
+        assert!(state.status_is_error);
+
+        // Reset should clear error flag
+        state.reset_status_message();
+        assert!(!state.status_is_error);
     }
 }

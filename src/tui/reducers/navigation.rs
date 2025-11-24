@@ -79,6 +79,12 @@ fn enter_content_focus(state: AppState) -> (AppState, Effect) {
 fn exit_content_focus(state: AppState) -> (AppState, Effect) {
     debug!("FOCUS: Exiting content focus (Up key to tab bar)");
     let mut new_state = state;
+
+    // Reset status message if exiting from Demo tab
+    if new_state.navigation.current_tab == Tab::Demo {
+        new_state.system.reset_status_message();
+    }
+
     new_state.navigation.content_focused = false;
 
     // Also exit any tab-specific modes when returning to tab bar

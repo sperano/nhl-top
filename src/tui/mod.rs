@@ -105,10 +105,7 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
     // Create initial AppState with config
     let mut initial_state = AppState::default();
     initial_state.system.config = config.clone();
-    initial_state.system.set_status_message(
-        "Keys: ←→ navigate | ↓ enter | ↑/ESC back | q quit | 1-6 jump to tab | / command palette"
-            .to_string(),
-    );
+    initial_state.system.reset_status_message();
 
     // Create runtime with DataEffects
     let mut runtime = Runtime::new(initial_state, data_effects);

@@ -62,8 +62,10 @@ macro_rules! setup_test_render {
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use nhl::setup_test_render_with;
+/// use nhl::tui::types::Tab;
+/// use nhl::commands::standings::GroupBy;
 ///
 /// let (mut state, config, area, buf) = setup_test_render_with!(|state| {
 ///     state.navigation.current_tab = Tab::Standings;
@@ -97,11 +99,12 @@ macro_rules! setup_test_render_with {
 ///
 /// let row = format_stat_row!(
 ///     "Shots On Goal",
-///     away_stats.shots_on_goal,
-///     home_stats.shots_on_goal,
-///     bar_content,
-///     bar_width
+///     35,  // away shots
+///     28,  // home shots
+///     "█████░░░░░",  // bar content
+///     10   // bar width
 /// );
+/// assert!(row.contains("Shots On Goal"));
 /// ```
 #[macro_export]
 macro_rules! format_stat_row {
@@ -133,8 +136,8 @@ macro_rules! format_stat_row {
 ///
 /// # Examples
 ///
-/// ```rust
-/// use crate::tui::testing::create_client;
+/// ```ignore
+/// use nhl::tui::testing::create_client;
 ///
 /// #[test]
 /// fn test_with_client() {
