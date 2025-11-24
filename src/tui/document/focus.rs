@@ -8,6 +8,17 @@ use ratatui::layout::Rect;
 use super::link::LinkTarget;
 use crate::tui::focus_helpers;
 
+/// Position of an element within a Row for left/right navigation
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RowPosition {
+    /// Y position that uniquely identifies the Row
+    pub row_y: u16,
+    /// Index of the child container within the Row (0 = leftmost)
+    pub child_idx: usize,
+    /// Index within the child container
+    pub idx_within_child: usize,
+}
+
 /// Type-safe identifier for focusable elements
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FocusableId {
@@ -85,11 +96,8 @@ pub struct FocusableElement {
     pub rect: Rect,
     /// Optional link target if this is a link
     pub link_target: Option<LinkTarget>,
-    /// Tab order (lower numbers get focus first)
-    pub tab_order: i32,
-    /// Row membership for left/right navigation: (row_y, child_index, index_within_child)
-    /// row_y uniquely identifies the Row by its y position
-    pub row_position: Option<(u16, usize, usize)>,
+    /// Row membership for left/right navigation within Row elements
+    pub row_position: Option<RowPosition>,
 }
 
 impl FocusableElement {
@@ -107,7 +115,6 @@ impl FocusableElement {
             height,
             rect,
             link_target,
-            tab_order: 0,
             row_position: None,
         }
     }
@@ -120,7 +127,6 @@ impl FocusableElement {
             height: 1,
             rect: Rect::new(0, y, width, 1),
             link_target: Some(target),
-            tab_order: 0,
             row_position: None,
         }
     }
@@ -139,7 +145,6 @@ impl FocusableElement {
             height: rect.height,
             rect,
             link_target: target,
-            tab_order: 0,
             row_position: None,
         }
     }
@@ -222,54 +227,6 @@ impl FocusManager {
         let changed = new_focus.is_some();
         self.current_focus = new_focus;
         changed
-    }
-
-    /// Navigate to corresponding element in the left sibling within a Row
-    ///
-    /// Returns true if focus changed. Only works if current element is in a Row.
-    pub fn focus_left(&mut self) -> bool {
-        let Some(current_idx) = self.current_focus else {
-            return false;
-        };
-        let Some((row_y, child_idx, idx_within)) = self.elements[current_idx].row_position else {
-            return false;
-        };
-        if child_idx == 0 {
-            return false; // Already at leftmost child
-        }
-        // Find element in left sibling at same index_within_child
-        let target_child_idx = child_idx - 1;
-        if let Some(new_idx) = self.find_row_element(row_y, target_child_idx, idx_within) {
-            self.current_focus = Some(new_idx);
-            return true;
-        }
-        false
-    }
-
-    /// Navigate to corresponding element in the right sibling within a Row
-    ///
-    /// Returns true if focus changed. Only works if current element is in a Row.
-    pub fn focus_right(&mut self) -> bool {
-        let Some(current_idx) = self.current_focus else {
-            return false;
-        };
-        let Some((row_y, child_idx, idx_within)) = self.elements[current_idx].row_position else {
-            return false;
-        };
-        // Find element in right sibling at same index_within_child
-        let target_child_idx = child_idx + 1;
-        if let Some(new_idx) = self.find_row_element(row_y, target_child_idx, idx_within) {
-            self.current_focus = Some(new_idx);
-            return true;
-        }
-        false
-    }
-
-    /// Find an element by its row position
-    fn find_row_element(&self, row_y: u16, child_idx: usize, idx_within: usize) -> Option<usize> {
-        self.elements.iter().position(|e| {
-            e.row_position == Some((row_y, child_idx, idx_within))
-        })
     }
 
     /// Get the currently focused element index
@@ -368,8 +325,13 @@ impl FocusManager {
     }
 
     /// Get row positions for all elements
-    pub fn row_positions(&self) -> Vec<Option<(u16, usize, usize)>> {
+    pub fn row_positions(&self) -> Vec<Option<RowPosition>> {
         self.elements.iter().map(|e| e.row_position).collect()
+    }
+
+    /// Get all focusable element IDs in document order
+    pub fn ids(&self) -> Vec<FocusableId> {
+        self.elements.iter().map(|e| e.id.clone()).collect()
     }
 }
 
@@ -386,7 +348,6 @@ mod tests {
                 height: 1,
                 rect: Rect::new(0, i as u16 * 2, 10, 1),
                 link_target: Some(LinkTarget::Action(format!("action_{}", i))),
-                tab_order: i as i32,
                 row_position: None,
             })
             .collect()
@@ -515,7 +476,6 @@ mod tests {
             height: 2,
             rect: Rect::new(3, 5, 15, 2),
             link_target: None,
-            tab_order: 0,
             row_position: None,
         });
 
@@ -534,7 +494,6 @@ mod tests {
             height: 1,
             rect: Rect::new(0, 0, 10, 1),
             link_target: Some(target.clone()),
-            tab_order: 0,
             row_position: None,
         });
 
@@ -554,7 +513,6 @@ mod tests {
             height: 1,
             rect: Rect::new(0, 0, 10, 1),
             link_target: Some(target.clone()),
-            tab_order: 0,
             row_position: None,
         });
 
@@ -657,7 +615,7 @@ mod tests {
         assert_eq!(elem.height, 1);
         assert_eq!(elem.rect, Rect::new(0, 10, 20, 1));
         assert_eq!(elem.link_target, Some(target));
-        assert_eq!(elem.tab_order, 0);
+        assert_eq!(elem.row_position, None);
     }
 
     #[test]
@@ -696,7 +654,6 @@ mod tests {
             height: 3,
             rect: Rect::new(0, 5, 10, 3),
             link_target: None,
-            tab_order: 0,
             row_position: None,
         });
 

@@ -8,7 +8,7 @@ use crate::commands::scores_format::PeriodScores;
 use crate::commands::standings::GroupBy;
 use crate::config::Config;
 
-use super::document::FocusableId;
+use super::document::{FocusableId, RowPosition};
 use super::types::{Panel, SettingsCategory, Tab};
 
 /// Root application state - single source of truth
@@ -108,8 +108,8 @@ pub struct DemoUiState {
     /// IDs of focusable elements (populated by component during render)
     /// Used for meaningful display when activating elements
     pub focusable_ids: Vec<FocusableId>,
-    /// Row positions for left/right navigation: (row_y, child_index, index_within_child)
-    pub focusable_row_positions: Vec<Option<(u16, usize, usize)>>,
+    /// Row positions for left/right navigation within Row elements
+    pub focusable_row_positions: Vec<Option<RowPosition>>,
 }
 
 #[derive(Debug, Clone)]

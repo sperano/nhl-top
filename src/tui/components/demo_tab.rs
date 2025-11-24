@@ -18,8 +18,7 @@ use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
 use crate::tui::components::TableWidget;
 use crate::tui::document::{
-    Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, FocusableId,
-    LinkTarget,
+    Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, LinkTarget,
 };
 use crate::tui::helpers::StandingsSorting;
 use crate::tui::{Alignment, CellValue, ColumnDef};
@@ -102,42 +101,6 @@ fn create_player_table(players: Vec<DemoPlayer>, focused_row: Option<usize>) -> 
     ];
 
     TableWidget::from_data(&columns, players).with_focused_row(focused_row)
-}
-
-/// Build a DemoDocument and return the y-positions of its focusable elements
-///
-/// This allows external code (like reducers) to get accurate focusable positions
-/// when the document's underlying data changes (e.g., standings load).
-pub fn build_demo_focusable_positions(standings: Option<&Vec<Standing>>) -> Vec<u16> {
-    let doc = DemoDocument::new(standings.cloned());
-    doc.focusable_positions()
-}
-
-/// Build a DemoDocument and return the row positions of its focusable elements
-///
-/// Returns (row_y, child_index, index_within_child) for elements in Rows, None for others.
-pub fn build_demo_focusable_row_positions(
-    standings: Option<&Vec<Standing>>,
-) -> Vec<Option<(u16, usize, usize)>> {
-    let doc = DemoDocument::new(standings.cloned());
-    doc.focusable_row_positions()
-}
-
-/// Build a DemoDocument and return the IDs of its focusable elements
-///
-/// This allows external code (like reducers) to get meaningful info about
-/// focused elements for display purposes.
-pub fn build_demo_focusable_ids(standings: Option<&Vec<Standing>>) -> Vec<FocusableId> {
-    let doc = DemoDocument::new(standings.cloned());
-    let elements = doc.build(&FocusContext::default());
-
-    let mut ids = Vec::new();
-    let mut y_offset = 0u16;
-    for element in &elements {
-        element.collect_focusable_ids(&mut ids, y_offset);
-        y_offset += element.height();
-    }
-    ids
 }
 
 /// Props for the Demo tab
@@ -273,12 +236,12 @@ impl ElementWidget for DemoTabWidget {
 }
 
 /// Demo document showcasing all document element types
-struct DemoDocument {
+pub struct DemoDocument {
     standings: Option<Vec<Standing>>,
 }
 
 impl DemoDocument {
-    fn new(standings: Option<Vec<Standing>>) -> Self {
+    pub fn new(standings: Option<Vec<Standing>>) -> Self {
         Self { standings }
     }
 

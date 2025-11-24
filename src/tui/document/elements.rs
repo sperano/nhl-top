@@ -5,13 +5,13 @@
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 
 use crate::config::DisplayConfig;
 use crate::tui::component::ElementWidget;
 use crate::tui::components::TableWidget;
 
-use super::focus::{FocusableElement, FocusableId};
+use super::focus::{FocusableElement, FocusableId, RowPosition};
 use super::link::LinkTarget;
 
 /// Height of table header section (header text + underline + blank line)
@@ -19,10 +19,6 @@ pub(crate) const TABLE_HEADER_HEIGHT: u16 = 3;
 
 /// Height of column headers section (column names + separator)
 pub(crate) const TABLE_COLUMN_HEADER_HEIGHT: u16 = 2;
-
-/// Multiplier for row index in tab order calculation
-/// Ensures all cells in row N come before cells in row N+1
-pub(crate) const TAB_ORDER_ROW_WEIGHT: i32 = 100;
 
 /// Elements that can be part of a document
 #[derive(Clone)]
@@ -196,7 +192,6 @@ impl DocumentElement {
                     height: 1,
                     rect: Rect::new(0, y_offset, display.chars().count() as u16, 1),
                     link_target: Some(target.clone()),
-                    tab_order: 0,
                     row_position: None,
                 });
             }
@@ -232,7 +227,11 @@ impl DocumentElement {
                     child.collect_focusable(out, y_offset);
                     // Tag each element with its row position
                     for (idx_within_child, elem) in out[start_idx..].iter_mut().enumerate() {
-                        elem.row_position = Some((y_offset, child_idx, idx_within_child));
+                        elem.row_position = Some(RowPosition {
+                            row_y: y_offset,
+                            child_idx,
+                            idx_within_child,
+                        });
                     }
                 }
             }
@@ -426,7 +425,6 @@ impl DocumentElement {
                             height: 1,
                             rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
                             link_target,
-                            tab_order: 0,
                             row_position: None,
                         });
                     }
@@ -782,10 +780,10 @@ mod tests {
         assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "▶");
         // Check that "Click" starts at position 2
         assert_eq!(buf.cell((2, 0)).unwrap().symbol(), "C");
-        // Focused links use BOLD + REVERSED, not blue
+        // Focused links use BOLD + REVERSED modifiers
         let style = buf.cell((2, 0)).unwrap().style();
-        assert!(style.add_modifier.contains(Modifier::BOLD));
-        assert!(style.add_modifier.contains(Modifier::REVERSED));
+        assert!(style.add_modifier.contains(ratatui::style::Modifier::BOLD));
+        assert!(style.add_modifier.contains(ratatui::style::Modifier::REVERSED));
     }
 
     #[test]

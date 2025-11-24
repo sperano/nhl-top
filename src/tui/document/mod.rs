@@ -24,7 +24,7 @@ use crate::config::DisplayConfig;
 
 pub use builder::DocumentBuilder;
 pub use elements::DocumentElement;
-pub use focus::{FocusManager, FocusableElement, FocusableId};
+pub use focus::{FocusManager, FocusableElement, FocusableId, RowPosition};
 pub use link::{DocumentLink, DocumentType, LinkParams, LinkTarget};
 pub use viewport::Viewport;
 pub use widget::DocumentElementWidget;
@@ -114,10 +114,18 @@ pub trait Document: Send + Sync {
 
     /// Get row positions for all focusable elements in this document
     ///
-    /// Returns (row_y, child_index, index_within_child) for elements in Rows, None for others.
-    fn focusable_row_positions(&self) -> Vec<Option<(u16, usize, usize)>> {
+    /// Returns RowPosition for elements in Rows, None for others.
+    fn focusable_row_positions(&self) -> Vec<Option<RowPosition>> {
         let elements = self.build(&FocusContext::default());
         FocusManager::from_elements(&elements).row_positions()
+    }
+
+    /// Get IDs of all focusable elements in this document
+    ///
+    /// Returns IDs in document order (top to bottom, left to right for rows).
+    fn focusable_ids(&self) -> Vec<FocusableId> {
+        let elements = self.build(&FocusContext::default());
+        FocusManager::from_elements(&elements).ids()
     }
 
     /// Render the document to a buffer at full height

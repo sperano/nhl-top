@@ -6,6 +6,7 @@ use tracing::debug;
 
 use crate::tui::action::{Action, DocumentAction};
 use crate::tui::component::Effect;
+use crate::tui::document::RowPosition;
 use crate::tui::state::AppState;
 
 /// Base number of focusable elements in the demo document
@@ -211,56 +212,51 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
     }
 }
 
-/// Find the element to the left in the same Row (wraps around)
-/// Returns the index of the element in the adjacent left child with the same index_within_child
-fn find_left_element(state: &AppState) -> Option<usize> {
-    let demo = &state.ui.demo;
-    let current_idx = demo.focus_index?;
-    let (row_y, child_idx, idx_within) = demo.focusable_row_positions.get(current_idx).copied()??;
-
-    // Find max child index in this row for wrapping
-    let max_child_idx = demo
-        .focusable_row_positions
-        .iter()
-        .filter_map(|pos| pos.filter(|(y, _, _)| *y == row_y).map(|(_, c, _)| c))
-        .max()?;
-
-    let target_child_idx = if child_idx == 0 {
-        max_child_idx // Wrap to rightmost
-    } else {
-        child_idx - 1
-    };
-
-    // Find element in the same row, target child, same index within child
-    demo.focusable_row_positions
-        .iter()
-        .position(|pos| *pos == Some((row_y, target_child_idx, idx_within)))
+/// Direction for row sibling navigation
+enum RowDirection {
+    Left,
+    Right,
 }
 
-/// Find the element to the right in the same Row (wraps around)
-/// Returns the index of the element in the adjacent right child with the same index_within_child
-fn find_right_element(state: &AppState) -> Option<usize> {
+/// Find element in adjacent Row child (with wrapping)
+fn find_row_sibling(state: &AppState, direction: RowDirection) -> Option<usize> {
     let demo = &state.ui.demo;
     let current_idx = demo.focus_index?;
-    let (row_y, child_idx, idx_within) = demo.focusable_row_positions.get(current_idx).copied()??;
+    let current_pos = demo.focusable_row_positions.get(current_idx).copied()??;
 
-    // Find max child index in this row for wrapping
     let max_child_idx = demo
         .focusable_row_positions
         .iter()
-        .filter_map(|pos| pos.filter(|(y, _, _)| *y == row_y).map(|(_, c, _)| c))
+        .filter_map(|pos| {
+            pos.filter(|p| p.row_y == current_pos.row_y)
+                .map(|p| p.child_idx)
+        })
         .max()?;
 
-    let target_child_idx = if child_idx >= max_child_idx {
-        0 // Wrap to leftmost
-    } else {
-        child_idx + 1
+    let target_child_idx = match direction {
+        RowDirection::Left if current_pos.child_idx == 0 => max_child_idx,
+        RowDirection::Left => current_pos.child_idx - 1,
+        RowDirection::Right if current_pos.child_idx >= max_child_idx => 0,
+        RowDirection::Right => current_pos.child_idx + 1,
     };
 
-    // Find element in the same row, target child, same index within child
+    let target_pos = RowPosition {
+        row_y: current_pos.row_y,
+        child_idx: target_child_idx,
+        idx_within_child: current_pos.idx_within_child,
+    };
+
     demo.focusable_row_positions
         .iter()
-        .position(|pos| *pos == Some((row_y, target_child_idx, idx_within)))
+        .position(|pos| *pos == Some(target_pos))
+}
+
+fn find_left_element(state: &AppState) -> Option<usize> {
+    find_row_sibling(state, RowDirection::Left)
+}
+
+fn find_right_element(state: &AppState) -> Option<usize> {
+    find_row_sibling(state, RowDirection::Right)
 }
 
 /// Autoscroll to keep the focused element visible using actual positions from FocusManager
@@ -494,6 +490,10 @@ mod tests {
         assert_eq!(new_state.ui.demo.viewport_height, viewport_height);
     }
 
+    fn rp(row_y: u16, child_idx: usize, idx_within_child: usize) -> Option<RowPosition> {
+        Some(RowPosition { row_y, child_idx, idx_within_child })
+    }
+
     #[test]
     fn test_focus_left_moves_to_adjacent_child() {
         // Setup: Element at index 3 is in row at y=10, child 1, index_within 0
@@ -501,12 +501,12 @@ mod tests {
         let mut state = AppState::default();
         state.ui.demo.focus_index = Some(3);
         state.ui.demo.focusable_row_positions = vec![
-            Some((10, 0, 0)), // index 0: row y=10, child 0, idx_within 0
-            Some((10, 0, 1)), // index 1: row y=10, child 0, idx_within 1
-            Some((10, 0, 2)), // index 2: row y=10, child 0, idx_within 2
-            Some((10, 1, 0)), // index 3: row y=10, child 1, idx_within 0 (CURRENT)
-            Some((10, 1, 1)), // index 4: row y=10, child 1, idx_within 1
-            Some((10, 1, 2)), // index 5: row y=10, child 1, idx_within 2
+            rp(10, 0, 0), // index 0: row y=10, child 0, idx_within 0
+            rp(10, 0, 1), // index 1: row y=10, child 0, idx_within 1
+            rp(10, 0, 2), // index 2: row y=10, child 0, idx_within 2
+            rp(10, 1, 0), // index 3: row y=10, child 1, idx_within 0 (CURRENT)
+            rp(10, 1, 1), // index 4: row y=10, child 1, idx_within 1
+            rp(10, 1, 2), // index 5: row y=10, child 1, idx_within 2
         ];
 
         let (new_state, _) = handle_document_action(state, &DocumentAction::FocusLeft).unwrap();
@@ -522,12 +522,12 @@ mod tests {
         let mut state = AppState::default();
         state.ui.demo.focus_index = Some(1);
         state.ui.demo.focusable_row_positions = vec![
-            Some((10, 0, 0)), // index 0
-            Some((10, 0, 1)), // index 1 (CURRENT)
-            Some((10, 0, 2)), // index 2
-            Some((10, 1, 0)), // index 3
-            Some((10, 1, 1)), // index 4
-            Some((10, 1, 2)), // index 5
+            rp(10, 0, 0), // index 0
+            rp(10, 0, 1), // index 1 (CURRENT)
+            rp(10, 0, 2), // index 2
+            rp(10, 1, 0), // index 3
+            rp(10, 1, 1), // index 4
+            rp(10, 1, 2), // index 5
         ];
 
         let (new_state, _) = handle_document_action(state, &DocumentAction::FocusRight).unwrap();
@@ -542,10 +542,10 @@ mod tests {
         let mut state = AppState::default();
         state.ui.demo.focus_index = Some(1);
         state.ui.demo.focusable_row_positions = vec![
-            Some((10, 0, 0)),
-            Some((10, 0, 1)), // CURRENT - at child 0
-            Some((10, 1, 0)),
-            Some((10, 1, 1)), // Target - same idx_within (1) but child 1
+            rp(10, 0, 0),
+            rp(10, 0, 1), // CURRENT - at child 0
+            rp(10, 1, 0),
+            rp(10, 1, 1), // Target - same idx_within (1) but child 1
         ];
 
         let (new_state, _) = handle_document_action(state, &DocumentAction::FocusLeft).unwrap();
@@ -560,10 +560,10 @@ mod tests {
         let mut state = AppState::default();
         state.ui.demo.focus_index = Some(3);
         state.ui.demo.focusable_row_positions = vec![
-            Some((10, 0, 0)),
-            Some((10, 0, 1)), // Target - same idx_within (1) but child 0
-            Some((10, 1, 0)),
-            Some((10, 1, 1)), // CURRENT - at rightmost child
+            rp(10, 0, 0),
+            rp(10, 0, 1), // Target - same idx_within (1) but child 0
+            rp(10, 1, 0),
+            rp(10, 1, 1), // CURRENT - at rightmost child
         ];
 
         let (new_state, _) = handle_document_action(state, &DocumentAction::FocusRight).unwrap();
@@ -580,7 +580,7 @@ mod tests {
         state.ui.demo.focusable_row_positions = vec![
             None, // Not in a row
             None,
-            Some((10, 0, 0)),
+            rp(10, 0, 0),
         ];
 
         let (new_state, _) = handle_document_action(state, &DocumentAction::FocusLeft).unwrap();

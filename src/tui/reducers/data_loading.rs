@@ -4,9 +4,8 @@ use tracing::debug;
 
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
-use crate::tui::components::demo_tab::{
-    build_demo_focusable_ids, build_demo_focusable_positions, build_demo_focusable_row_positions,
-};
+use crate::tui::components::demo_tab::DemoDocument;
+use crate::tui::document::Document;
 use crate::tui::reducers::standings_layout::build_standings_layout;
 use crate::tui::state::{AppState, LoadingKey};
 
@@ -66,11 +65,10 @@ fn handle_standings_loaded(
             );
 
             // Rebuild demo document focusable data when standings change
-            new_state.ui.demo.focusable_positions =
-                build_demo_focusable_positions(Some(&standings));
-            new_state.ui.demo.focusable_ids = build_demo_focusable_ids(Some(&standings));
-            new_state.ui.demo.focusable_row_positions =
-                build_demo_focusable_row_positions(Some(&standings));
+            let demo_doc = DemoDocument::new(Some(standings));
+            new_state.ui.demo.focusable_positions = demo_doc.focusable_positions();
+            new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
+            new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
@@ -81,9 +79,10 @@ fn handle_standings_loaded(
             new_state.data.loading.remove(&LoadingKey::Standings);
 
             // Rebuild demo focusable data for empty standings case
-            new_state.ui.demo.focusable_positions = build_demo_focusable_positions(None);
-            new_state.ui.demo.focusable_ids = build_demo_focusable_ids(None);
-            new_state.ui.demo.focusable_row_positions = build_demo_focusable_row_positions(None);
+            let demo_doc = DemoDocument::new(None);
+            new_state.ui.demo.focusable_positions = demo_doc.focusable_positions();
+            new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
+            new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
         }
     }
 
