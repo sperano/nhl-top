@@ -19,7 +19,8 @@ const BASE_FOCUSABLE_COUNT: usize = 14;
 const DEFAULT_VIEWPORT_HEIGHT: u16 = 20;
 
 /// Padding lines above/below focused element for autoscroll
-const AUTOSCROLL_PADDING: u16 = 2;
+/// This ensures scrolling starts before the element reaches the edge
+const AUTOSCROLL_PADDING: u16 = 3;
 
 /// Minimum page size for page up/down operations
 const MIN_PAGE_SIZE: u16 = 10;
@@ -98,31 +99,20 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             }
 
             let standings = &mut state.ui.standings;
-            let wrapped = match standings.focus_index {
+            match standings.focus_index {
                 None => {
                     standings.focus_index = Some(0);
-                    false
                 }
                 Some(idx) if idx + 1 >= focusable_count => {
                     standings.focus_index = Some(0);
                     standings.scroll_offset = 0;
-                    true // Wrapped - don't autoscroll
                 }
                 Some(idx) => {
                     standings.focus_index = Some(idx + 1);
-                    false
                 }
             };
 
-            // Autoscroll to keep focused element visible (unless we wrapped)
-            if !wrapped {
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.standings.focus_index,
-                    focusable_positions: &state.ui.standings.focusable_positions,
-                    viewport_height: state.ui.standings.viewport_height,
-                    scroll_offset: &mut state.ui.standings.scroll_offset,
-                });
-            }
+            // DocumentView handles autoscrolling during render
 
             Some((state, Effect::None))
         }
@@ -133,32 +123,21 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             }
 
             let standings = &mut state.ui.standings;
-            let wrapped = match standings.focus_index {
+            match standings.focus_index {
                 None => {
                     standings.focus_index = Some(focusable_count - 1);
                     standings.scroll_offset = u16::MAX;
-                    true // Wrapped - don't autoscroll
                 }
                 Some(0) => {
                     standings.focus_index = Some(focusable_count - 1);
                     standings.scroll_offset = u16::MAX;
-                    true // Wrapped - don't autoscroll
                 }
                 Some(idx) => {
                     standings.focus_index = Some(idx - 1);
-                    false
                 }
             };
 
-            // Autoscroll to keep focused element visible (unless we wrapped)
-            if !wrapped {
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.standings.focus_index,
-                    focusable_positions: &state.ui.standings.focusable_positions,
-                    viewport_height: state.ui.standings.viewport_height,
-                    scroll_offset: &mut state.ui.standings.scroll_offset,
-                });
-            }
+            // DocumentView handles autoscrolling during render
 
             Some((state, Effect::None))
         }
@@ -206,15 +185,34 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             Some((state, Effect::None))
         }
 
-        // Left/Right and SyncFocusablePositions not used for simple league table yet
+        DocumentAction::FocusLeft => {
+            debug!("Standings Document: focus_left");
+            if let Some(new_idx) = find_standings_left_element(&state) {
+                state.ui.standings.focus_index = Some(new_idx);
+            }
+            // DocumentView handles autoscrolling during render
+            Some((state, Effect::None))
+        }
+
+        DocumentAction::FocusRight => {
+            debug!("Standings Document: focus_right");
+            if let Some(new_idx) = find_standings_right_element(&state) {
+                state.ui.standings.focus_index = Some(new_idx);
+            }
+            // DocumentView handles autoscrolling during render
+            Some((state, Effect::None))
+        }
+
+        // SyncFocusablePositions not used for standings yet
         _ => Some((state, Effect::None)),
     }
 }
 
 fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Option<(AppState, Effect)> {
-    // For Standings tab in League view, handle document actions
+    // For Standings tab in document-based views (League or Conference), handle document actions
     if state.navigation.current_tab == Tab::Standings
-        && state.ui.standings.view == crate::commands::standings::GroupBy::League {
+        && (state.ui.standings.view == crate::commands::standings::GroupBy::League
+            || state.ui.standings.view == crate::commands::standings::GroupBy::Conference) {
         return handle_standings_document_action(state, action);
     }
 
@@ -449,6 +447,48 @@ fn find_right_element(state: &AppState) -> Option<usize> {
     find_row_sibling(state, RowDirection::Right)
 }
 
+/// Find element in adjacent Row child for standings (with wrapping)
+fn find_standings_row_sibling(state: &AppState, direction: RowDirection) -> Option<usize> {
+    let standings = &state.ui.standings;
+    let current_idx = standings.focus_index?;
+    let current_pos = standings.focusable_row_positions.get(current_idx).copied()??;
+
+    let max_child_idx = standings
+        .focusable_row_positions
+        .iter()
+        .filter_map(|pos| {
+            pos.filter(|p| p.row_y == current_pos.row_y)
+                .map(|p| p.child_idx)
+        })
+        .max()?;
+
+    let target_child_idx = match direction {
+        RowDirection::Left if current_pos.child_idx == 0 => max_child_idx,
+        RowDirection::Left => current_pos.child_idx - 1,
+        RowDirection::Right if current_pos.child_idx >= max_child_idx => 0,
+        RowDirection::Right => current_pos.child_idx + 1,
+    };
+
+    let target_pos = RowPosition {
+        row_y: current_pos.row_y,
+        child_idx: target_child_idx,
+        idx_within_child: current_pos.idx_within_child,
+    };
+
+    standings
+        .focusable_row_positions
+        .iter()
+        .position(|pos| *pos == Some(target_pos))
+}
+
+fn find_standings_left_element(state: &AppState) -> Option<usize> {
+    find_standings_row_sibling(state, RowDirection::Left)
+}
+
+fn find_standings_right_element(state: &AppState) -> Option<usize> {
+    find_standings_row_sibling(state, RowDirection::Right)
+}
+
 /// Generic structure holding document scroll state
 struct DocumentScrollState<'a> {
     focus_index: Option<usize>,
@@ -465,18 +505,36 @@ fn autoscroll_to_focus(scroll_state: DocumentScrollState) {
         _ => return, // No focus or positions not synced yet
     };
 
+    let focus_idx = scroll_state.focus_index.unwrap();
+
     // Use actual viewport height, with reasonable fallback
     let viewport_height = scroll_state.viewport_height.max(DEFAULT_VIEWPORT_HEIGHT);
 
+    // Calculate the visible range with padding
+    // Top edge: scroll_offset + AUTOSCROLL_PADDING
+    // Bottom edge: scroll_offset + viewport_height - AUTOSCROLL_PADDING - 1
+    let top_edge = scroll_state.scroll_offset.saturating_add(AUTOSCROLL_PADDING);
+    let bottom_edge = scroll_state.scroll_offset.saturating_add(viewport_height).saturating_sub(AUTOSCROLL_PADDING).saturating_sub(1);
+
+    debug!(
+        "Autoscroll: idx={}, element_y={}, scroll={}, viewport={}, top_edge={}, bottom_edge={}",
+        focus_idx, element_y, scroll_state.scroll_offset, viewport_height, top_edge, bottom_edge
+    );
+
     // Calculate new scroll offset
-    let new_offset = if element_y < scroll_state.scroll_offset.saturating_add(AUTOSCROLL_PADDING) {
-        // If element is above viewport (with padding), scroll up
-        Some(element_y.saturating_sub(AUTOSCROLL_PADDING))
-    } else if element_y >= *scroll_state.scroll_offset + viewport_height.saturating_sub(AUTOSCROLL_PADDING) {
-        // If element is below viewport (with padding), scroll down
-        Some(element_y.saturating_sub(viewport_height - AUTOSCROLL_PADDING - 1))
+    let new_offset = if element_y < top_edge {
+        // Element is above the safe zone - scroll up to keep it AUTOSCROLL_PADDING from top
+        let offset = element_y.saturating_sub(AUTOSCROLL_PADDING);
+        debug!("  -> Scrolling UP to {}", offset);
+        Some(offset)
+    } else if element_y > bottom_edge {
+        // Element is below the safe zone - scroll down to keep it AUTOSCROLL_PADDING from bottom
+        let offset = element_y.saturating_add(AUTOSCROLL_PADDING).saturating_add(1).saturating_sub(viewport_height);
+        debug!("  -> Scrolling DOWN to {}", offset);
+        Some(offset)
     } else {
-        // Element is visible - no scroll needed
+        // Element is within the safe zone - no scroll needed
+        debug!("  -> No scroll needed (in safe zone)");
         None
     };
 
@@ -657,9 +715,9 @@ mod tests {
 
         // Focus moves to index 1 (y=25), should scroll to make it visible
         assert_eq!(new_state.ui.demo.focus_index, Some(1));
-        // Scroll offset should be adjusted: element_y - (viewport_height - padding - 1)
-        // = 25 - (20 - 2 - 1) = 25 - 17 = 8
-        assert_eq!(new_state.ui.demo.scroll_offset, 8);
+        // Scroll offset should be adjusted: element_y + AUTOSCROLL_PADDING + 1 - viewport_height
+        // = 25 + 3 + 1 - 20 = 9
+        assert_eq!(new_state.ui.demo.scroll_offset, 9);
     }
 
     #[test]
@@ -677,8 +735,8 @@ mod tests {
 
         // Focus moves to index 0 (y=5), should scroll up to make it visible
         assert_eq!(new_state.ui.demo.focus_index, Some(0));
-        // Scroll offset should be adjusted: element_y - padding = 5 - 2 = 3
-        assert_eq!(new_state.ui.demo.scroll_offset, 3);
+        // Scroll offset should be adjusted: element_y - AUTOSCROLL_PADDING = 5 - 3 = 2
+        assert_eq!(new_state.ui.demo.scroll_offset, 2);
     }
 
     #[test]

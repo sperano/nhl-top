@@ -3,6 +3,7 @@
 //! This module contains Document implementations for the different standings
 //! views (League, Conference, Division, Wildcard).
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use nhl_api::Standing;
@@ -12,6 +13,7 @@ use ratatui::layout::Rect;
 use crate::config::{Config, DisplayConfig};
 use crate::tui::component::ElementWidget;
 use crate::tui::document::{Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext};
+use crate::tui::helpers::StandingsSorting;
 
 use super::{standings_columns, TableWidget};
 
@@ -50,26 +52,124 @@ impl Document for LeagueStandingsDocument {
     }
 }
 
+/// Conference standings document - two tables side-by-side in a Row element
+pub struct ConferenceStandingsDocument {
+    standings: Arc<Vec<Standing>>,
+    config: Config,
+}
+
+impl ConferenceStandingsDocument {
+    pub fn new(standings: Arc<Vec<Standing>>, config: Config) -> Self {
+        Self { standings, config }
+    }
+
+    /// Group standings by conference and return (Eastern, Western) sorted by points
+    fn group_by_conference(&self) -> (Vec<Standing>, Vec<Standing>) {
+        let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
+        for standing in self.standings.as_ref() {
+            let conference = standing
+                .conference_name
+                .clone()
+                .unwrap_or_else(|| "Unknown".to_string());
+            grouped
+                .entry(conference)
+                .or_default()
+                .push(standing.clone());
+        }
+
+        // Sort teams within each conference by points
+        for teams in grouped.values_mut() {
+            teams.sort_by_points_desc();
+        }
+
+        // Extract Eastern and Western (BTreeMap gives us alphabetically sorted keys)
+        let eastern = grouped.get("Eastern").cloned().unwrap_or_default();
+        let western = grouped.get("Western").cloned().unwrap_or_default();
+
+        (eastern, western)
+    }
+}
+
+impl Document for ConferenceStandingsDocument {
+    fn build(&self, focus: &FocusContext) -> Vec<DocumentElement> {
+        const LEFT_TABLE: &str = "conference_left";
+        const RIGHT_TABLE: &str = "conference_right";
+
+        let (eastern, western) = self.group_by_conference();
+
+        // Determine column order based on western_first config
+        let (left_teams, right_teams, left_header, right_header) =
+            if self.config.display_standings_western_first {
+                (western, eastern, "Western", "Eastern")
+            } else {
+                (eastern, western, "Eastern", "Western")
+            };
+
+        // Create left table
+        let left_table = TableWidget::from_data(standings_columns(), left_teams)
+            .with_header(left_header)
+            .with_focused_row(focus.focused_table_row(LEFT_TABLE))
+            .with_margin(0);
+
+        // Create right table
+        let right_table = TableWidget::from_data(standings_columns(), right_teams)
+            .with_header(right_header)
+            .with_focused_row(focus.focused_table_row(RIGHT_TABLE))
+            .with_margin(0);
+
+        // Use Row element to place tables side-by-side
+        DocumentBuilder::new()
+            .row(vec![
+                DocumentElement::table(LEFT_TABLE, left_table),
+                DocumentElement::table(RIGHT_TABLE, right_table),
+            ])
+            .build()
+    }
+
+    fn title(&self) -> String {
+        "Conference Standings".to_string()
+    }
+
+    fn id(&self) -> String {
+        "conference_standings".to_string()
+    }
+}
+
 /// Widget that renders a standings document with DocumentView
 ///
 /// This widget wraps DocumentView and applies focus/scroll state from AppState.
+/// It can render either League or Conference standings based on the document type.
 pub struct StandingsDocumentWidget {
-    pub standings: Arc<Vec<Standing>>,
-    pub config: Config,
-    pub focus_index: Option<usize>,
-    pub scroll_offset: u16,
+    doc: Arc<dyn Document>,
+    focus_index: Option<usize>,
+    scroll_offset: u16,
+}
+
+impl StandingsDocumentWidget {
+    /// Create widget for League standings
+    pub fn league(standings: Arc<Vec<Standing>>, config: Config, focus_index: Option<usize>, scroll_offset: u16) -> Self {
+        Self {
+            doc: Arc::new(LeagueStandingsDocument::new(standings, config)),
+            focus_index,
+            scroll_offset,
+        }
+    }
+
+    /// Create widget for Conference standings
+    pub fn conference(standings: Arc<Vec<Standing>>, config: Config, focus_index: Option<usize>, scroll_offset: u16) -> Self {
+        Self {
+            doc: Arc::new(ConferenceStandingsDocument::new(standings, config)),
+            focus_index,
+            scroll_offset,
+        }
+    }
 }
 
 impl ElementWidget for StandingsDocumentWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, display_config: &DisplayConfig) {
-        // Create the document
-        let doc = Arc::new(LeagueStandingsDocument::new(
-            self.standings.clone(),
-            self.config.clone(),
-        ));
-
+        tracing::debug!("StandingsDocumentWidget: area.height={}, area.y={}", area.height, area.y);
         // Create DocumentView with viewport height
-        let mut view = DocumentView::new(doc, area.height);
+        let mut view = DocumentView::new(self.doc.clone(), area.height);
 
         // Apply focus state from AppState
         if let Some(idx) = self.focus_index {
@@ -85,8 +185,7 @@ impl ElementWidget for StandingsDocumentWidget {
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {
         Box::new(StandingsDocumentWidget {
-            standings: self.standings.clone(),
-            config: self.config.clone(),
+            doc: self.doc.clone(),
             focus_index: self.focus_index,
             scroll_offset: self.scroll_offset,
         })
@@ -229,6 +328,134 @@ mod tests {
         // Each subsequent focusable is 1 line below the previous
         for i in 1..positions.len() {
             assert_eq!(positions[i], positions[i - 1] + 1);
+        }
+    }
+
+    // === Conference Standings Tests ===
+
+    #[test]
+    fn test_conference_standings_document_renders() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = ConferenceStandingsDocument::new(standings, config);
+
+        // Build with no focus
+        let elements = doc.build(&FocusContext::default());
+
+        // Should have one element: a Row containing two tables
+        assert_eq!(elements.len(), 1);
+
+        // Check that it's a Row element
+        match &elements[0] {
+            DocumentElement::Row { children, .. } => {
+                // Should have 2 children (left and right conference tables)
+                assert_eq!(children.len(), 2);
+
+                // Both children should be tables
+                for child in children {
+                    match child {
+                        DocumentElement::Table { widget, .. } => {
+                            // Each conference should have 16 teams
+                            assert_eq!(widget.row_count(), 16);
+                        }
+                        _ => panic!("Expected Table element in Row"),
+                    }
+                }
+            }
+            _ => panic!("Expected Row element"),
+        }
+    }
+
+    #[test]
+    fn test_conference_standings_document_metadata() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = ConferenceStandingsDocument::new(standings, config);
+
+        assert_eq!(doc.title(), "Conference Standings");
+        assert_eq!(doc.id(), "conference_standings");
+    }
+
+    #[test]
+    fn test_conference_standings_focusable_positions() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = ConferenceStandingsDocument::new(standings, config);
+
+        let positions = doc.focusable_positions();
+
+        // Should have 32 focusable positions (16 per conference)
+        assert_eq!(positions.len(), 32);
+
+        // With Row layout, positions alternate between left and right tables
+        // So positions are NOT sorted, but they follow a pattern
+        // All positions should be >= 5 (after headers in both tables)
+        assert!(positions.iter().all(|&p| p >= 5));
+    }
+
+    #[test]
+    fn test_conference_standings_row_positions() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = ConferenceStandingsDocument::new(standings, config);
+
+        let row_positions = doc.focusable_row_positions();
+
+        // Should have 32 row positions
+        assert_eq!(row_positions.len(), 32);
+
+        // All should be Some (within a Row)
+        assert!(row_positions.iter().all(|rp| rp.is_some()));
+
+        // Check that we have elements from both columns (0 and 1)
+        let column_0_count = row_positions.iter().filter(|rp| {
+            rp.as_ref().map_or(false, |p| p.child_idx == 0)
+        }).count();
+        let column_1_count = row_positions.iter().filter(|rp| {
+            rp.as_ref().map_or(false, |p| p.child_idx == 1)
+        }).count();
+
+        // Should have 16 teams in each column
+        assert_eq!(column_0_count, 16);
+        assert_eq!(column_1_count, 16);
+    }
+
+    #[test]
+    fn test_conference_standings_respects_western_first_config() {
+        let standings = Arc::new(create_test_standings());
+
+        // Test with western_first = false (Eastern left, Western right)
+        let mut config = Config::default();
+        config.display_standings_western_first = false;
+        let doc = ConferenceStandingsDocument::new(standings.clone(), config);
+        let elements = doc.build(&FocusContext::default());
+
+        // Verify Row structure
+        match &elements[0] {
+            DocumentElement::Row { children, .. } => {
+                // Should have 2 table children
+                assert_eq!(children.len(), 2);
+                assert!(matches!(children[0], DocumentElement::Table { .. }));
+                assert!(matches!(children[1], DocumentElement::Table { .. }));
+            }
+            _ => panic!("Expected Row element"),
+        }
+
+        // Test with western_first = true (Western left, Eastern right)
+        let mut config = Config::default();
+        config.display_standings_western_first = true;
+        let doc = ConferenceStandingsDocument::new(standings, config);
+        let elements = doc.build(&FocusContext::default());
+
+        // Verify Row structure (same structure, different internal ordering)
+        match &elements[0] {
+            DocumentElement::Row { children, .. } => {
+                // Should have 2 table children
+                assert_eq!(children.len(), 2);
+                assert!(matches!(children[0], DocumentElement::Table { .. }));
+                assert!(matches!(children[1], DocumentElement::Table { .. }));
+            }
+            _ => panic!("Expected Row element"),
         }
     }
 }

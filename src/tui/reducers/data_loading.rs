@@ -2,10 +2,11 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use tracing::debug;
 
+use crate::commands::standings::GroupBy;
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
 use crate::tui::components::demo_tab::DemoDocument;
-use crate::tui::components::LeagueStandingsDocument;
+use crate::tui::components::{ConferenceStandingsDocument, LeagueStandingsDocument};
 use crate::tui::document::Document;
 use crate::tui::reducers::standings_layout::build_standings_layout;
 use crate::tui::state::{AppState, LoadingKey};
@@ -71,14 +72,34 @@ fn handle_standings_loaded(
             new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
             new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
 
-            // Rebuild league standings document focusable data
-            let league_doc = LeagueStandingsDocument::new(
-                Arc::new(standings),
-                new_state.system.config.clone(),
-            );
-            new_state.ui.standings.focusable_positions = league_doc.focusable_positions();
-            new_state.ui.standings.focusable_ids = league_doc.focusable_ids();
-            new_state.ui.standings.focusable_row_positions = league_doc.focusable_row_positions();
+            // Rebuild standings document focusable data based on current view
+            // Use Conference document for Conference view, League for League view
+            match new_state.ui.standings.view {
+                GroupBy::Conference => {
+                    let conference_doc = ConferenceStandingsDocument::new(
+                        Arc::new(standings),
+                        new_state.system.config.clone(),
+                    );
+                    new_state.ui.standings.focusable_positions = conference_doc.focusable_positions();
+                    new_state.ui.standings.focusable_ids = conference_doc.focusable_ids();
+                    new_state.ui.standings.focusable_row_positions = conference_doc.focusable_row_positions();
+                }
+                GroupBy::League => {
+                    let league_doc = LeagueStandingsDocument::new(
+                        Arc::new(standings),
+                        new_state.system.config.clone(),
+                    );
+                    new_state.ui.standings.focusable_positions = league_doc.focusable_positions();
+                    new_state.ui.standings.focusable_ids = league_doc.focusable_ids();
+                    new_state.ui.standings.focusable_row_positions = league_doc.focusable_row_positions();
+                }
+                _ => {
+                    // For other views (Division, Wildcard), clear focusable data since they don't use documents yet
+                    new_state.ui.standings.focusable_positions.clear();
+                    new_state.ui.standings.focusable_ids.clear();
+                    new_state.ui.standings.focusable_row_positions.clear();
+                }
+            }
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);

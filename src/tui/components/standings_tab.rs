@@ -174,12 +174,12 @@ impl StandingsTab {
         if props.view == GroupBy::League {
             use super::StandingsDocumentWidget;
 
-            return Element::Widget(Box::new(StandingsDocumentWidget {
-                standings: Arc::new(standings.to_vec()),
-                config: props.config.clone(),
-                focus_index: props.focus_index,
-                scroll_offset: props.scroll_offset,
-            }));
+            return Element::Widget(Box::new(StandingsDocumentWidget::league(
+                Arc::new(standings.to_vec()),
+                props.config.clone(),
+                props.focus_index,
+                props.scroll_offset,
+            )));
         }
 
         // For other single-column views (if any), use the old rendering
@@ -194,71 +194,15 @@ impl StandingsTab {
     }
 
     fn render_conference_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
-        use std::collections::BTreeMap;
+        // Use the document system for Conference view (like League view)
+        use super::StandingsDocumentWidget;
 
-        // Group standings by conference
-        let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
-        for standing in standings {
-            let conference = standing
-                .conference_name
-                .clone()
-                .unwrap_or_else(|| "Unknown".to_string());
-            grouped
-                .entry(conference)
-                .or_default()
-                .push(standing.clone());
-        }
-
-        // Convert to vec to determine ordering
-        let mut groups: Vec<_> = grouped.into_iter().collect();
-
-        // If western_first is true, reverse to show Western first
-        // BTreeMap gives us Eastern, Western alphabetically
-        if groups.len() == 2 {
-            let western_first = props.config.display_standings_western_first;
-            if western_first {
-                groups.reverse();
-            }
-        }
-
-        // If we don't have exactly 2 conferences, fall back to single column
-        if groups.len() != 2 {
-            return self.render_single_column_view(props, standings);
-        }
-
-        // Convert selection state to focused_row for each column
-        let left_focused = if props.browse_mode && props.selected_column == 0 {
-            Some(props.selected_row)
-        } else {
-            None
-        };
-        let right_focused = if props.browse_mode && props.selected_column == 1 {
-            Some(props.selected_row)
-        } else {
-            None
-        };
-
-        // Create left conference table
-        let left_table = TableWidget::from_data(standings_columns(), groups[0].1.clone())
-            .with_header(&groups[0].0)
-            .with_focused_row(left_focused)
-            .with_margin(0);
-
-        // Create right conference table
-        let right_table = TableWidget::from_data(standings_columns(), groups[1].1.clone())
-            .with_header(&groups[1].0)
-            .with_focused_row(right_focused)
-            .with_margin(0);
-
-        // Return horizontal layout with both tables
-        // Split 50/50 between left and right conference
-        horizontal(
-            [Constraint::Percentage(50), Constraint::Percentage(50)],
-            vec![
-                Element::Widget(Box::new(left_table)),
-                Element::Widget(Box::new(right_table)),
-            ],
-        )
+        Element::Widget(Box::new(StandingsDocumentWidget::conference(
+            Arc::new(standings.to_vec()),
+            props.config.clone(),
+            props.focus_index,
+            props.scroll_offset,
+        )))
     }
 
     /// Render a column of divisions with tables and spacing
@@ -985,30 +929,31 @@ mod tests {
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
+        // Conference view now uses document system with teams sorted by points
         assert_buffer(&buf, &[
             "Wildcard │ Division │ Conference │ League",
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
-            "  Eastern                                                     Western",
-            "  ═══════                                                     ═══════",
+            "  Eastern                                                      Western",
+            "  ═══════                                                      ═══════",
             "",
-            "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
-            "  Panthers                      19    14    3    2     30     Avalanche                     19    16    2    1     33",
-            "  Bruins                        18    13    4    1     27     Stars                         20    14    4    2     30",
-            "  Maple Leafs                   19    12    5    2     26     Jets                          19    13    5    1     27",
-            "  Lightning                     18    11    6    1     23     Wild                          19    11    6    2     24",
-            "  Canadiens                     18    10    5    3     23     Predators                     19    10    7    2     22",
-            "  Senators                      18     9    7    2     20     Blues                         19     8    8    3     19",
-            "  Red Wings                     18     8    8    2     18     Blackhawks                    18     7   10    1     15",
-            "  Sabres                        18     6   10    2     14     Coyotes                       18     4   13    1      9",
-            "  Devils                        18    15    2    1     31     Golden Knights                19    15    3    1     31",
-            "  Hurricanes                    19    14    3    2     30     Oilers                        20    14    4    2     30",
-            "  Rangers                       18    12    5    1     25     Kings                         19    12    6    1     25",
-            "  Penguins                      19    11    6    2     24     Kraken                        19    11    6    2     24",
-            "  Capitals                      18    10    7    1     21     Canucks                       19    10    7    2     22",
-            "  Islanders                     18     9    7    2     20     Flames                        19     9    8    2     20",
-            "  Flyers                        18     8    9    1     17     Ducks                         19     7   10    2     16",
-            "  Blue Jackets                  18     5   11    2     12     Sharks                        18     5   12    1     11",
+            "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
+            "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
+            "  Devils                        18    15    2    1     31      Avalanche                     19    16    2    1     33",
+            "  Panthers                      19    14    3    2     30      Golden Knights                19    15    3    1     31",
+            "  Hurricanes                    19    14    3    2     30      Stars                         20    14    4    2     30",
+            "  Bruins                        18    13    4    1     27      Oilers                        20    14    4    2     30",
+            "  Maple Leafs                   19    12    5    2     26      Jets                          19    13    5    1     27",
+            "  Rangers                       18    12    5    1     25      Kings                         19    12    6    1     25",
+            "  Penguins                      19    11    6    2     24      Wild                          19    11    6    2     24",
+            "  Lightning                     18    11    6    1     23      Kraken                        19    11    6    2     24",
+            "  Canadiens                     18    10    5    3     23      Predators                     19    10    7    2     22",
+            "  Capitals                      18    10    7    1     21      Canucks                       19    10    7    2     22",
+            "  Senators                      18     9    7    2     20      Flames                        19     9    8    2     20",
+            "  Islanders                     18     9    7    2     20      Blues                         19     8    8    3     19",
+            "  Red Wings                     18     8    8    2     18      Ducks                         19     7   10    2     16",
+            "  Flyers                        18     8    9    1     17      Blackhawks                    18     7   10    1     15",
+            "  Sabres                        18     6   10    2     14      Sharks                        18     5   12    1     11",
+            "  Blue Jackets                  18     5   11    2     12      Coyotes                       18     4   13    1      9",
             "",
             "",
             "",
