@@ -15,8 +15,9 @@ use crate::tui::types::Tab;
 /// - 10 player table cells (5 forwards + 5 defensemen, 1 link column each)
 const BASE_FOCUSABLE_COUNT: usize = 14;
 
-/// Default viewport height when actual height not yet known
-const DEFAULT_VIEWPORT_HEIGHT: u16 = 20;
+/// Minimum viewport height - if smaller than this, autoscroll may behave oddly
+/// but we still use the actual value rather than clamping (which causes worse bugs)
+const MIN_VIEWPORT_HEIGHT: u16 = 5;
 
 /// Padding lines above/below focused element for autoscroll
 /// This ensures scrolling starts before the element reaches the edge
@@ -74,7 +75,7 @@ fn get_viewport_height(state: &AppState) -> u16 {
     match state.navigation.current_tab {
         Tab::Demo => state.ui.demo.viewport_height,
         Tab::Standings => state.ui.standings.viewport_height,
-        _ => DEFAULT_VIEWPORT_HEIGHT,
+        _ => MIN_VIEWPORT_HEIGHT,
     }
 }
 
@@ -99,20 +100,30 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             }
 
             let standings = &mut state.ui.standings;
-            match standings.focus_index {
+            let wrapped = match standings.focus_index {
                 None => {
                     standings.focus_index = Some(0);
+                    false
                 }
                 Some(idx) if idx + 1 >= focusable_count => {
                     standings.focus_index = Some(0);
                     standings.scroll_offset = 0;
+                    true
                 }
                 Some(idx) => {
                     standings.focus_index = Some(idx + 1);
+                    false
                 }
             };
 
-            // DocumentView handles autoscrolling during render
+            if !wrapped {
+                autoscroll_to_focus(DocumentScrollState {
+                    focus_index: state.ui.standings.focus_index,
+                    focusable_positions: &state.ui.standings.focusable_positions,
+                    viewport_height: state.ui.standings.viewport_height,
+                    scroll_offset: &mut state.ui.standings.scroll_offset,
+                });
+            }
 
             Some((state, Effect::None))
         }
@@ -123,21 +134,31 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             }
 
             let standings = &mut state.ui.standings;
-            match standings.focus_index {
+            let wrapped = match standings.focus_index {
                 None => {
                     standings.focus_index = Some(focusable_count - 1);
                     standings.scroll_offset = u16::MAX;
+                    true
                 }
                 Some(0) => {
                     standings.focus_index = Some(focusable_count - 1);
                     standings.scroll_offset = u16::MAX;
+                    true
                 }
                 Some(idx) => {
                     standings.focus_index = Some(idx - 1);
+                    false
                 }
             };
 
-            // DocumentView handles autoscrolling during render
+            if !wrapped {
+                autoscroll_to_focus(DocumentScrollState {
+                    focus_index: state.ui.standings.focus_index,
+                    focusable_positions: &state.ui.standings.focusable_positions,
+                    viewport_height: state.ui.standings.viewport_height,
+                    scroll_offset: &mut state.ui.standings.scroll_offset,
+                });
+            }
 
             Some((state, Effect::None))
         }
@@ -189,8 +210,13 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             debug!("Standings Document: focus_left");
             if let Some(new_idx) = find_standings_left_element(&state) {
                 state.ui.standings.focus_index = Some(new_idx);
+                autoscroll_to_focus(DocumentScrollState {
+                    focus_index: state.ui.standings.focus_index,
+                    focusable_positions: &state.ui.standings.focusable_positions,
+                    viewport_height: state.ui.standings.viewport_height,
+                    scroll_offset: &mut state.ui.standings.scroll_offset,
+                });
             }
-            // DocumentView handles autoscrolling during render
             Some((state, Effect::None))
         }
 
@@ -198,8 +224,13 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
             debug!("Standings Document: focus_right");
             if let Some(new_idx) = find_standings_right_element(&state) {
                 state.ui.standings.focus_index = Some(new_idx);
+                autoscroll_to_focus(DocumentScrollState {
+                    focus_index: state.ui.standings.focus_index,
+                    focusable_positions: &state.ui.standings.focusable_positions,
+                    viewport_height: state.ui.standings.viewport_height,
+                    scroll_offset: &mut state.ui.standings.scroll_offset,
+                });
             }
-            // DocumentView handles autoscrolling during render
             Some((state, Effect::None))
         }
 
@@ -209,6 +240,22 @@ fn handle_standings_document_action(mut state: AppState, action: &DocumentAction
 }
 
 fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Option<(AppState, Effect)> {
+    // UpdateViewportHeight applies globally to all document-based tabs
+    if let DocumentAction::UpdateViewportHeight { demo, standings } = action {
+        let demo_changed = state.ui.demo.viewport_height != *demo;
+        let standings_changed = state.ui.standings.viewport_height != *standings;
+        if demo_changed || standings_changed {
+            debug!(
+                "Document: update_viewport_height demo={}->{}, standings={}->{}",
+                state.ui.demo.viewport_height, demo,
+                state.ui.standings.viewport_height, standings
+            );
+            state.ui.demo.viewport_height = *demo;
+            state.ui.standings.viewport_height = *standings;
+        }
+        return Some((state, Effect::None));
+    }
+
     // For Standings tab in document-based views (League or Conference), handle document actions
     if state.navigation.current_tab == Tab::Standings
         && (state.ui.standings.view == crate::commands::standings::GroupBy::League
@@ -397,6 +444,9 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
             state.ui.demo.viewport_height = *viewport_height;
             Some((state, Effect::None))
         }
+
+        // UpdateViewportHeight is handled at the top of this function before tab dispatch
+        DocumentAction::UpdateViewportHeight { .. } => unreachable!("handled earlier in function"),
     }
 }
 
@@ -507,34 +557,32 @@ fn autoscroll_to_focus(scroll_state: DocumentScrollState) {
 
     let focus_idx = scroll_state.focus_index.unwrap();
 
-    // Use actual viewport height, with reasonable fallback
-    let viewport_height = scroll_state.viewport_height.max(DEFAULT_VIEWPORT_HEIGHT);
+    // Use actual viewport height (must be at least MIN_VIEWPORT_HEIGHT for sane behavior)
+    let viewport_height = scroll_state.viewport_height.max(MIN_VIEWPORT_HEIGHT);
 
-    // Calculate the visible range with padding
-    // Top edge: scroll_offset + AUTOSCROLL_PADDING
-    // Bottom edge: scroll_offset + viewport_height - AUTOSCROLL_PADDING - 1
-    let top_edge = scroll_state.scroll_offset.saturating_add(AUTOSCROLL_PADDING);
-    let bottom_edge = scroll_state.scroll_offset.saturating_add(viewport_height).saturating_sub(AUTOSCROLL_PADDING).saturating_sub(1);
+    // Calculate viewport bounds (without padding - we only scroll when truly outside)
+    let viewport_top = *scroll_state.scroll_offset;
+    let viewport_bottom = viewport_top.saturating_add(viewport_height);
 
     debug!(
-        "Autoscroll: idx={}, element_y={}, scroll={}, viewport={}, top_edge={}, bottom_edge={}",
-        focus_idx, element_y, scroll_state.scroll_offset, viewport_height, top_edge, bottom_edge
+        "Autoscroll: idx={}, element_y={}, scroll={}, viewport={}, top={}, bottom={}",
+        focus_idx, element_y, scroll_state.scroll_offset, viewport_height, viewport_top, viewport_bottom
     );
 
-    // Calculate new scroll offset
-    let new_offset = if element_y < top_edge {
-        // Element is above the safe zone - scroll up to keep it AUTOSCROLL_PADDING from top
+    // Calculate new scroll offset - only scroll if element is outside viewport
+    let new_offset = if element_y < viewport_top {
+        // Element is above viewport - scroll up with padding
         let offset = element_y.saturating_sub(AUTOSCROLL_PADDING);
         debug!("  -> Scrolling UP to {}", offset);
         Some(offset)
-    } else if element_y > bottom_edge {
-        // Element is below the safe zone - scroll down to keep it AUTOSCROLL_PADDING from bottom
-        let offset = element_y.saturating_add(AUTOSCROLL_PADDING).saturating_add(1).saturating_sub(viewport_height);
+    } else if element_y >= viewport_bottom {
+        // Element is below viewport - scroll down with padding
+        let offset = element_y.saturating_sub(viewport_height - AUTOSCROLL_PADDING - 1);
         debug!("  -> Scrolling DOWN to {}", offset);
         Some(offset)
     } else {
-        // Element is within the safe zone - no scroll needed
-        debug!("  -> No scroll needed (in safe zone)");
+        // Element is visible - no scroll needed
+        debug!("  -> No scroll needed (element visible)");
         None
     };
 
@@ -852,5 +900,154 @@ mod tests {
 
         // Should stay at index 0 (no change)
         assert_eq!(new_state.ui.demo.focus_index, Some(0));
+    }
+
+    #[test]
+    fn test_autoscroll_element_at_edge_no_scroll() {
+        // When element is at the very edge but still visible, no scroll needed
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.scroll_offset = 10;
+        state.ui.demo.viewport_height = 20;
+        // Viewport shows lines 10-30
+        // Elements at lines 10 (top edge) and 29 (bottom edge) are both visible
+        state.ui.demo.focusable_positions = vec![10, 15, 29];
+
+        // Navigate to element at line 29 (bottom edge)
+        let (state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+
+        // Element at y=29 is visible (viewport is 10-30), no scroll needed
+        assert_eq!(new_state.ui.demo.focus_index, Some(2));
+        assert_eq!(new_state.ui.demo.scroll_offset, 10);
+    }
+
+    #[test]
+    fn test_update_viewport_height() {
+        let mut state = AppState::default();
+        state.ui.demo.viewport_height = 0;
+        state.ui.standings.viewport_height = 0;
+
+        let (new_state, _) =
+            handle_document_action(state, &DocumentAction::UpdateViewportHeight { demo: 31, standings: 29 }).unwrap();
+
+        // Each tab gets its own viewport height
+        assert_eq!(new_state.ui.demo.viewport_height, 31);
+        assert_eq!(new_state.ui.standings.viewport_height, 29);
+    }
+
+    #[test]
+    fn test_update_viewport_height_no_change_when_same() {
+        let mut state = AppState::default();
+        state.ui.demo.viewport_height = 31;
+        state.ui.standings.viewport_height = 29;
+
+        // Same values should still return state (no-op but handled)
+        let (new_state, _) =
+            handle_document_action(state, &DocumentAction::UpdateViewportHeight { demo: 31, standings: 29 }).unwrap();
+
+        assert_eq!(new_state.ui.demo.viewport_height, 31);
+        assert_eq!(new_state.ui.standings.viewport_height, 29);
+    }
+
+    #[test]
+    fn test_standings_viewport_is_smaller_due_to_subtabs() {
+        // This test documents why standings has a smaller viewport than demo.
+        // Standings has nested TabbedPanel (Wildcard/Division/Conference/League subtabs)
+        // which adds 2 extra lines of chrome.
+        //
+        // Terminal height: 35
+        // Base chrome (main tabs + status bar): 4 lines
+        // Standings subtab chrome: 2 lines
+        //
+        // Demo viewport: 35 - 4 = 31
+        // Standings viewport: 35 - 6 = 29
+        let mut state = AppState::default();
+        state.ui.demo.viewport_height = 0;
+        state.ui.standings.viewport_height = 0;
+
+        // Simulating terminal height of 35
+        let terminal_height: u16 = 35;
+        let base_chrome: u16 = 4;
+        let standings_subtab_chrome: u16 = 2;
+
+        let demo_viewport = terminal_height - base_chrome;
+        let standings_viewport = terminal_height - base_chrome - standings_subtab_chrome;
+
+        let (new_state, _) = handle_document_action(
+            state,
+            &DocumentAction::UpdateViewportHeight { demo: demo_viewport, standings: standings_viewport }
+        ).unwrap();
+
+        assert_eq!(new_state.ui.demo.viewport_height, 31);
+        assert_eq!(new_state.ui.standings.viewport_height, 29);
+
+        // The 2-line difference is critical for correct down-scroll behavior
+        // Without this, autoscroll triggers late because viewport_bottom is too far down
+    }
+
+    #[test]
+    fn test_autoscroll_down_with_correct_viewport_height() {
+        // This test verifies the fix for the autoscroll asymmetry bug.
+        // With viewport_height=31, an element at y=20 should be visible
+        // and NOT trigger scrolling when navigating to it.
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.scroll_offset = 0;
+        state.ui.demo.viewport_height = 31; // Realistic viewport (not default 20)
+        // Element at y=5 (first), element at y=20 (second)
+        // With viewport [0, 31), element at y=20 is visible - no scroll needed
+        state.ui.demo.focusable_positions = vec![5, 20];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+
+        // Focus moves to index 1 (y=20)
+        assert_eq!(new_state.ui.demo.focus_index, Some(1));
+        // Element at y=20 is within viewport [0, 31), so NO scroll
+        assert_eq!(new_state.ui.demo.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_down_with_wrong_viewport_height_would_scroll() {
+        // This demonstrates the bug: with viewport_height=20 (the wrong value),
+        // an element at y=20 triggers scrolling because 20 >= 20.
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.scroll_offset = 0;
+        state.ui.demo.viewport_height = 20; // Wrong/default value
+        state.ui.demo.focusable_positions = vec![5, 20];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+
+        // Focus moves to index 1 (y=20)
+        assert_eq!(new_state.ui.demo.focus_index, Some(1));
+        // With wrong viewport_height=20, element at y=20 is AT the boundary
+        // viewport_bottom = 0 + 20 = 20, and 20 >= 20 triggers scroll
+        // new_offset = element_y - (viewport_height - padding - 1) = 20 - (20 - 3 - 1) = 20 - 16 = 4
+        assert_eq!(new_state.ui.demo.scroll_offset, 4);
+    }
+
+    #[test]
+    fn test_autoscroll_up_works_regardless_of_viewport_height() {
+        // UP navigation doesn't use viewport_height in its condition,
+        // so it works correctly even with the wrong viewport_height value.
+        // This explains the asymmetry observed in the bug.
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(1);
+        state.ui.demo.scroll_offset = 10; // Viewing lines 10-30 (with height 20) or 10-41 (with height 31)
+        state.ui.demo.viewport_height = 20; // Wrong value, but doesn't matter for UP
+        state.ui.demo.focusable_positions = vec![5, 15]; // y=5 is above viewport, y=15 is visible
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusPrev).unwrap();
+
+        // Focus moves to index 0 (y=5), which is above viewport
+        assert_eq!(new_state.ui.demo.focus_index, Some(0));
+        // Condition: element_y < viewport_top => 5 < 10 => TRUE => scroll
+        // new_offset = element_y - padding = 5 - 3 = 2
+        assert_eq!(new_state.ui.demo.scroll_offset, 2);
     }
 }

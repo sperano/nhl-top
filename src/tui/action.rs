@@ -141,6 +141,10 @@ pub enum DocumentAction {
     PageUp,
     /// Page down (scroll by viewport height)
     PageDown,
+    /// Update viewport heights from terminal (dispatched on resize/render)
+    /// This is critical for correct autoscroll calculations
+    /// Parameters: (demo_viewport_height, standings_viewport_height)
+    UpdateViewportHeight { demo: u16, standings: u16 },
     /// Sync focusable element positions from component (for accurate autoscrolling)
     /// Parameters: (positions, viewport_height)
     SyncFocusablePositions(Vec<u16>, u16),
