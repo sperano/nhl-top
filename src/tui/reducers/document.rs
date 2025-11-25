@@ -7,7 +7,7 @@ use tracing::debug;
 use crate::tui::action::{Action, DocumentAction};
 use crate::tui::component::Effect;
 use crate::tui::document::RowPosition;
-use crate::tui::state::AppState;
+use crate::tui::state::{AppState, DocumentState};
 use crate::tui::types::Tab;
 
 /// Base number of focusable elements in the demo document
@@ -43,39 +43,9 @@ fn get_focusable_count(state: &AppState) -> usize {
         }
         Tab::Standings => {
             // For League view, focusable count comes from the document metadata
-            state.ui.standings.focusable_positions.len()
+            state.ui.standings_doc.focusable_positions.len()
         }
         _ => 0,
-    }
-}
-
-/// Get a mutable reference to the document UI state for the current tab
-fn get_doc_state_mut(state: &mut AppState) -> Option<(&mut Option<usize>, &mut u16, &Vec<u16>, &Vec<crate::tui::document::FocusableId>, &Vec<Option<RowPosition>>)> {
-    match state.navigation.current_tab {
-        Tab::Demo => Some((
-            &mut state.ui.demo.focus_index,
-            &mut state.ui.demo.scroll_offset,
-            &state.ui.demo.focusable_positions,
-            &state.ui.demo.focusable_ids,
-            &state.ui.demo.focusable_row_positions,
-        )),
-        Tab::Standings if state.ui.standings.view == crate::commands::standings::GroupBy::League => Some((
-            &mut state.ui.standings.focus_index,
-            &mut state.ui.standings.scroll_offset,
-            &state.ui.standings.focusable_positions,
-            &state.ui.standings.focusable_ids,
-            &state.ui.standings.focusable_row_positions,
-        )),
-        _ => None,
-    }
-}
-
-/// Get viewport height for the current tab
-fn get_viewport_height(state: &AppState) -> u16 {
-    match state.navigation.current_tab {
-        Tab::Demo => state.ui.demo.viewport_height,
-        Tab::Standings => state.ui.standings.viewport_height,
-        _ => MIN_VIEWPORT_HEIGHT,
     }
 }
 
@@ -89,220 +59,149 @@ pub fn reduce_document(state: &AppState, action: &Action) -> Option<(AppState, E
     }
 }
 
-/// Handle document actions for Standings tab (League view)
-fn handle_standings_document_action(mut state: AppState, action: &DocumentAction) -> Option<(AppState, Effect)> {
-    let focusable_count = state.ui.standings.focusable_positions.len();
+// ============================================================================
+// Generic document navigation helpers
+// ============================================================================
 
-    match action {
-        DocumentAction::FocusNext => {
-            if focusable_count == 0 {
-                return Some((state, Effect::None));
-            }
+/// Move focus to next element, wrapping from last to first
+fn doc_focus_next(doc: &mut DocumentState, focusable_count: usize) -> bool {
+    if focusable_count == 0 {
+        return false;
+    }
 
-            let standings = &mut state.ui.standings;
-            let wrapped = match standings.focus_index {
-                None => {
-                    standings.focus_index = Some(0);
-                    false
-                }
-                Some(idx) if idx + 1 >= focusable_count => {
-                    standings.focus_index = Some(0);
-                    standings.scroll_offset = 0;
-                    true
-                }
-                Some(idx) => {
-                    standings.focus_index = Some(idx + 1);
-                    false
-                }
-            };
-
-            if !wrapped {
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.standings.focus_index,
-                    focusable_positions: &state.ui.standings.focusable_positions,
-                    viewport_height: state.ui.standings.viewport_height,
-                    scroll_offset: &mut state.ui.standings.scroll_offset,
-                });
-            }
-
-            Some((state, Effect::None))
+    match doc.focus_index {
+        None => {
+            doc.focus_index = Some(0);
+            false // didn't wrap
         }
-
-        DocumentAction::FocusPrev => {
-            if focusable_count == 0 {
-                return Some((state, Effect::None));
-            }
-
-            let standings = &mut state.ui.standings;
-            let wrapped = match standings.focus_index {
-                None => {
-                    standings.focus_index = Some(focusable_count - 1);
-                    standings.scroll_offset = u16::MAX;
-                    true
-                }
-                Some(0) => {
-                    standings.focus_index = Some(focusable_count - 1);
-                    standings.scroll_offset = u16::MAX;
-                    true
-                }
-                Some(idx) => {
-                    standings.focus_index = Some(idx - 1);
-                    false
-                }
-            };
-
-            if !wrapped {
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.standings.focus_index,
-                    focusable_positions: &state.ui.standings.focusable_positions,
-                    viewport_height: state.ui.standings.viewport_height,
-                    scroll_offset: &mut state.ui.standings.scroll_offset,
-                });
-            }
-
-            Some((state, Effect::None))
+        Some(idx) if idx + 1 >= focusable_count => {
+            doc.focus_index = Some(0);
+            doc.scroll_offset = 0;
+            true // wrapped
         }
-
-        DocumentAction::ScrollUp(lines) => {
-            state.ui.standings.scroll_offset = state.ui.standings.scroll_offset.saturating_sub(*lines);
-            Some((state, Effect::None))
+        Some(idx) => {
+            doc.focus_index = Some(idx + 1);
+            false
         }
-
-        DocumentAction::ScrollDown(lines) => {
-            state.ui.standings.scroll_offset = state.ui.standings.scroll_offset.saturating_add(*lines);
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::ScrollToTop => {
-            state.ui.standings.scroll_offset = 0;
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::ScrollToBottom => {
-            state.ui.standings.scroll_offset = u16::MAX;
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::PageUp => {
-            let page_size = state.ui.standings.viewport_height.max(MIN_PAGE_SIZE);
-            state.ui.standings.scroll_offset = state.ui.standings.scroll_offset.saturating_sub(page_size);
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::PageDown => {
-            let page_size = state.ui.standings.viewport_height.max(MIN_PAGE_SIZE);
-            state.ui.standings.scroll_offset = state.ui.standings.scroll_offset.saturating_add(page_size);
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::ActivateFocused => {
-            if let Some(idx) = state.ui.standings.focus_index {
-                if let Some(id) = state.ui.standings.focusable_ids.get(idx) {
-                    let display_text = id.display_name();
-                    debug!("  Activating: {} (id={:?})", display_text, id);
-                    state.system.set_status_message(format!("Activated: {}", display_text));
-                }
-            }
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::FocusLeft => {
-            debug!("Standings Document: focus_left");
-            if let Some(new_idx) = find_standings_left_element(&state) {
-                state.ui.standings.focus_index = Some(new_idx);
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.standings.focus_index,
-                    focusable_positions: &state.ui.standings.focusable_positions,
-                    viewport_height: state.ui.standings.viewport_height,
-                    scroll_offset: &mut state.ui.standings.scroll_offset,
-                });
-            }
-            Some((state, Effect::None))
-        }
-
-        DocumentAction::FocusRight => {
-            debug!("Standings Document: focus_right");
-            if let Some(new_idx) = find_standings_right_element(&state) {
-                state.ui.standings.focus_index = Some(new_idx);
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.standings.focus_index,
-                    focusable_positions: &state.ui.standings.focusable_positions,
-                    viewport_height: state.ui.standings.viewport_height,
-                    scroll_offset: &mut state.ui.standings.scroll_offset,
-                });
-            }
-            Some((state, Effect::None))
-        }
-
-        // SyncFocusablePositions not used for standings yet
-        _ => Some((state, Effect::None)),
     }
 }
+
+/// Move focus to previous element, wrapping from first to last
+fn doc_focus_prev(doc: &mut DocumentState, focusable_count: usize) -> bool {
+    if focusable_count == 0 {
+        return false;
+    }
+
+    match doc.focus_index {
+        None => {
+            doc.focus_index = Some(focusable_count - 1);
+            doc.scroll_offset = u16::MAX;
+            true // wrapped
+        }
+        Some(0) => {
+            doc.focus_index = Some(focusable_count - 1);
+            doc.scroll_offset = u16::MAX;
+            true // wrapped
+        }
+        Some(idx) => {
+            doc.focus_index = Some(idx - 1);
+            false
+        }
+    }
+}
+
+/// Scroll document up by N lines
+fn doc_scroll_up(doc: &mut DocumentState, lines: u16) {
+    doc.scroll_offset = doc.scroll_offset.saturating_sub(lines);
+}
+
+/// Scroll document down by N lines
+fn doc_scroll_down(doc: &mut DocumentState, lines: u16) {
+    doc.scroll_offset = doc.scroll_offset.saturating_add(lines);
+}
+
+/// Page up (scroll by viewport height)
+fn doc_page_up(doc: &mut DocumentState) {
+    let page_size = doc.viewport_height.max(MIN_PAGE_SIZE);
+    doc.scroll_offset = doc.scroll_offset.saturating_sub(page_size);
+}
+
+/// Page down (scroll by viewport height)
+fn doc_page_down(doc: &mut DocumentState) {
+    let page_size = doc.viewport_height.max(MIN_PAGE_SIZE);
+    doc.scroll_offset = doc.scroll_offset.saturating_add(page_size);
+}
+
+/// Activate the currently focused element, returning the display text if any
+fn doc_activate_focused(doc: &DocumentState) -> Option<String> {
+    let idx = doc.focus_index?;
+    let id = doc.focusable_ids.get(idx)?;
+    Some(id.display_name())
+}
+
+/// Create autoscroll state from a document state
+fn autoscroll_state_from_doc(doc: &mut DocumentState) -> DocumentScrollState<'_> {
+    DocumentScrollState {
+        focus_index: doc.focus_index,
+        focusable_positions: &doc.focusable_positions,
+        viewport_height: doc.viewport_height,
+        scroll_offset: &mut doc.scroll_offset,
+    }
+}
+
+// ============================================================================
+// Main document action handler
+// ============================================================================
 
 fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Option<(AppState, Effect)> {
     // UpdateViewportHeight applies globally to all document-based tabs
     if let DocumentAction::UpdateViewportHeight { demo, standings } = action {
         let demo_changed = state.ui.demo.viewport_height != *demo;
-        let standings_changed = state.ui.standings.viewport_height != *standings;
+        let standings_changed = state.ui.standings_doc.viewport_height != *standings;
         if demo_changed || standings_changed {
             debug!(
                 "Document: update_viewport_height demo={}->{}, standings={}->{}",
                 state.ui.demo.viewport_height, demo,
-                state.ui.standings.viewport_height, standings
+                state.ui.standings_doc.viewport_height, standings
             );
             state.ui.demo.viewport_height = *demo;
-            state.ui.standings.viewport_height = *standings;
+            state.ui.standings_doc.viewport_height = *standings;
         }
         return Some((state, Effect::None));
     }
 
-    // For Standings tab in document-based views (League or Conference), handle document actions
-    if state.navigation.current_tab == Tab::Standings
+    // Determine which document state to use based on current tab
+    let is_standings_doc = state.navigation.current_tab == Tab::Standings
         && (state.ui.standings.view == crate::commands::standings::GroupBy::League
-            || state.ui.standings.view == crate::commands::standings::GroupBy::Conference) {
-        return handle_standings_document_action(state, action);
-    }
+            || state.ui.standings.view == crate::commands::standings::GroupBy::Conference);
 
-    // For Demo tab, use the original logic below
-    let focusable_count = get_focusable_count(&state);
+    let is_demo = state.navigation.current_tab == Tab::Demo;
+
+    // Get focusable count for the appropriate document
+    let focusable_count = if is_standings_doc {
+        state.ui.standings_doc.focusable_count()
+    } else if is_demo {
+        get_focusable_count(&state)
+    } else {
+        return None; // Not a document-based tab
+    };
 
     match action {
         DocumentAction::FocusNext => {
             debug!("Document: focus_next (count={})", focusable_count);
 
-            if focusable_count == 0 {
-                return Some((state, Effect::None));
-            }
-
-            let demo = &mut state.ui.demo;
-
-            let wrapped = match demo.focus_index {
-                None => {
-                    // No focus yet, focus first element
-                    demo.focus_index = Some(0);
-                    false
-                }
-                Some(idx) if idx + 1 >= focusable_count => {
-                    // At last element, wrap to first and scroll to top
-                    demo.focus_index = Some(0);
-                    demo.scroll_offset = 0;
-                    true // Wrapped - don't autoscroll
-                }
-                Some(idx) => {
-                    // Move to next element
-                    demo.focus_index = Some(idx + 1);
-                    false
-                }
+            let wrapped = if is_standings_doc {
+                doc_focus_next(&mut state.ui.standings_doc, focusable_count)
+            } else {
+                doc_focus_next(&mut state.ui.demo, focusable_count)
             };
 
-            // Autoscroll to keep focused element visible (unless we wrapped)
-            if !wrapped {
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.demo.focus_index,
-                    focusable_positions: &state.ui.demo.focusable_positions,
-                    viewport_height: state.ui.demo.viewport_height,
-                    scroll_offset: &mut state.ui.demo.scroll_offset,
-                });
+            if !wrapped && focusable_count > 0 {
+                if is_standings_doc {
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.standings_doc));
+                } else {
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.demo));
+                }
             }
 
             Some((state, Effect::None))
@@ -311,41 +210,18 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
         DocumentAction::FocusPrev => {
             debug!("Document: focus_prev (count={})", focusable_count);
 
-            if focusable_count == 0 {
-                return Some((state, Effect::None));
-            }
-
-            let demo = &mut state.ui.demo;
-
-            let wrapped = match demo.focus_index {
-                None => {
-                    // No focus yet, focus last element
-                    demo.focus_index = Some(focusable_count - 1);
-                    // Scroll to bottom to show last element - will be clamped by rendering
-                    demo.scroll_offset = u16::MAX;
-                    true // Treat as wrapped - don't autoscroll
-                }
-                Some(0) => {
-                    // At first element, wrap to last - will be clamped by rendering
-                    demo.focus_index = Some(focusable_count - 1);
-                    demo.scroll_offset = u16::MAX;
-                    true // Wrapped - don't autoscroll
-                }
-                Some(idx) => {
-                    // Move to previous element
-                    demo.focus_index = Some(idx - 1);
-                    false
-                }
+            let wrapped = if is_standings_doc {
+                doc_focus_prev(&mut state.ui.standings_doc, focusable_count)
+            } else {
+                doc_focus_prev(&mut state.ui.demo, focusable_count)
             };
 
-            // Autoscroll to keep focused element visible (unless we wrapped)
-            if !wrapped {
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.demo.focus_index,
-                    focusable_positions: &state.ui.demo.focusable_positions,
-                    viewport_height: state.ui.demo.viewport_height,
-                    scroll_offset: &mut state.ui.demo.scroll_offset,
-                });
+            if !wrapped && focusable_count > 0 {
+                if is_standings_doc {
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.standings_doc));
+                } else {
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.demo));
+                }
             }
 
             Some((state, Effect::None))
@@ -353,84 +229,116 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
 
         DocumentAction::FocusLeft => {
             debug!("Document: focus_left");
-            if let Some(new_idx) = find_left_element(&state) {
-                state.ui.demo.focus_index = Some(new_idx);
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.demo.focus_index,
-                    focusable_positions: &state.ui.demo.focusable_positions,
-                    viewport_height: state.ui.demo.viewport_height,
-                    scroll_offset: &mut state.ui.demo.scroll_offset,
-                });
+            let new_idx = if is_standings_doc {
+                find_standings_left_element(&state)
+            } else {
+                find_left_element(&state)
+            };
+
+            if let Some(idx) = new_idx {
+                if is_standings_doc {
+                    state.ui.standings_doc.focus_index = Some(idx);
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.standings_doc));
+                } else {
+                    state.ui.demo.focus_index = Some(idx);
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.demo));
+                }
             }
             Some((state, Effect::None))
         }
 
         DocumentAction::FocusRight => {
             debug!("Document: focus_right");
-            if let Some(new_idx) = find_right_element(&state) {
-                state.ui.demo.focus_index = Some(new_idx);
-                autoscroll_to_focus(DocumentScrollState {
-                    focus_index: state.ui.demo.focus_index,
-                    focusable_positions: &state.ui.demo.focusable_positions,
-                    viewport_height: state.ui.demo.viewport_height,
-                    scroll_offset: &mut state.ui.demo.scroll_offset,
-                });
+            let new_idx = if is_standings_doc {
+                find_standings_right_element(&state)
+            } else {
+                find_right_element(&state)
+            };
+
+            if let Some(idx) = new_idx {
+                if is_standings_doc {
+                    state.ui.standings_doc.focus_index = Some(idx);
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.standings_doc));
+                } else {
+                    state.ui.demo.focus_index = Some(idx);
+                    autoscroll_to_focus(autoscroll_state_from_doc(&mut state.ui.demo));
+                }
             }
             Some((state, Effect::None))
         }
 
         DocumentAction::ActivateFocused => {
             debug!("Document: activate_focused");
-            if let Some(idx) = state.ui.demo.focus_index {
-                if let Some(id) = state.ui.demo.focusable_ids.get(idx) {
-                    let display_text = id.display_name();
-                    debug!("  Activating: {} (id={:?})", display_text, id);
+            let display_text = if is_standings_doc {
+                doc_activate_focused(&state.ui.standings_doc)
+            } else {
+                doc_activate_focused(&state.ui.demo)
+            };
 
-                    // Set status message to show what was activated
-                    state
-                        .system
-                        .set_status_message(format!("Activated: {}", display_text));
-                }
+            if let Some(text) = display_text {
+                debug!("  Activating: {}", text);
+                state.system.set_status_message(format!("Activated: {}", text));
             }
             Some((state, Effect::None))
         }
 
         DocumentAction::ScrollUp(lines) => {
             debug!("Document: scroll_up {}", lines);
-            state.ui.demo.scroll_offset = state.ui.demo.scroll_offset.saturating_sub(*lines);
+            if is_standings_doc {
+                doc_scroll_up(&mut state.ui.standings_doc, *lines);
+            } else {
+                doc_scroll_up(&mut state.ui.demo, *lines);
+            }
             Some((state, Effect::None))
         }
 
         DocumentAction::ScrollDown(lines) => {
             debug!("Document: scroll_down {}", lines);
-            state.ui.demo.scroll_offset = state.ui.demo.scroll_offset.saturating_add(*lines);
+            if is_standings_doc {
+                doc_scroll_down(&mut state.ui.standings_doc, *lines);
+            } else {
+                doc_scroll_down(&mut state.ui.demo, *lines);
+            }
             Some((state, Effect::None))
         }
 
         DocumentAction::ScrollToTop => {
             debug!("Document: scroll_to_top");
-            state.ui.demo.scroll_offset = 0;
+            if is_standings_doc {
+                state.ui.standings_doc.scroll_offset = 0;
+            } else {
+                state.ui.demo.scroll_offset = 0;
+            }
             Some((state, Effect::None))
         }
 
         DocumentAction::ScrollToBottom => {
             debug!("Document: scroll_to_bottom");
-            // Set to a large value - rendering will clamp it
-            state.ui.demo.scroll_offset = u16::MAX;
+            if is_standings_doc {
+                state.ui.standings_doc.scroll_offset = u16::MAX;
+            } else {
+                state.ui.demo.scroll_offset = u16::MAX;
+            }
             Some((state, Effect::None))
         }
 
         DocumentAction::PageUp => {
             debug!("Document: page_up");
-            let page_size = state.ui.demo.viewport_height.max(MIN_PAGE_SIZE);
-            state.ui.demo.scroll_offset = state.ui.demo.scroll_offset.saturating_sub(page_size);
+            if is_standings_doc {
+                doc_page_up(&mut state.ui.standings_doc);
+            } else {
+                doc_page_up(&mut state.ui.demo);
+            }
             Some((state, Effect::None))
         }
 
         DocumentAction::PageDown => {
             debug!("Document: page_down");
-            let page_size = state.ui.demo.viewport_height.max(MIN_PAGE_SIZE);
-            state.ui.demo.scroll_offset = state.ui.demo.scroll_offset.saturating_add(page_size);
+            if is_standings_doc {
+                doc_page_down(&mut state.ui.standings_doc);
+            } else {
+                doc_page_down(&mut state.ui.demo);
+            }
             Some((state, Effect::None))
         }
 
@@ -440,6 +348,7 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
                 positions.len(),
                 viewport_height
             );
+            // Currently only used by demo tab
             state.ui.demo.focusable_positions = positions.clone();
             state.ui.demo.viewport_height = *viewport_height;
             Some((state, Effect::None))
@@ -457,12 +366,15 @@ enum RowDirection {
 }
 
 /// Find element in adjacent Row child (with wrapping)
-fn find_row_sibling(state: &AppState, direction: RowDirection) -> Option<usize> {
-    let demo = &state.ui.demo;
-    let current_idx = demo.focus_index?;
-    let current_pos = demo.focusable_row_positions.get(current_idx).copied()??;
+///
+/// This function navigates left/right within a Row element, finding the
+/// corresponding element in an adjacent child column while preserving
+/// the row position (idx_within_child).
+fn find_row_sibling_in_doc(doc: &DocumentState, direction: RowDirection) -> Option<usize> {
+    let current_idx = doc.focus_index?;
+    let current_pos = doc.focusable_row_positions.get(current_idx).copied()??;
 
-    let max_child_idx = demo
+    let max_child_idx = doc
         .focusable_row_positions
         .iter()
         .filter_map(|pos| {
@@ -484,59 +396,25 @@ fn find_row_sibling(state: &AppState, direction: RowDirection) -> Option<usize> 
         idx_within_child: current_pos.idx_within_child,
     };
 
-    demo.focusable_row_positions
+    doc.focusable_row_positions
         .iter()
         .position(|pos| *pos == Some(target_pos))
 }
 
 fn find_left_element(state: &AppState) -> Option<usize> {
-    find_row_sibling(state, RowDirection::Left)
+    find_row_sibling_in_doc(&state.ui.demo, RowDirection::Left)
 }
 
 fn find_right_element(state: &AppState) -> Option<usize> {
-    find_row_sibling(state, RowDirection::Right)
-}
-
-/// Find element in adjacent Row child for standings (with wrapping)
-fn find_standings_row_sibling(state: &AppState, direction: RowDirection) -> Option<usize> {
-    let standings = &state.ui.standings;
-    let current_idx = standings.focus_index?;
-    let current_pos = standings.focusable_row_positions.get(current_idx).copied()??;
-
-    let max_child_idx = standings
-        .focusable_row_positions
-        .iter()
-        .filter_map(|pos| {
-            pos.filter(|p| p.row_y == current_pos.row_y)
-                .map(|p| p.child_idx)
-        })
-        .max()?;
-
-    let target_child_idx = match direction {
-        RowDirection::Left if current_pos.child_idx == 0 => max_child_idx,
-        RowDirection::Left => current_pos.child_idx - 1,
-        RowDirection::Right if current_pos.child_idx >= max_child_idx => 0,
-        RowDirection::Right => current_pos.child_idx + 1,
-    };
-
-    let target_pos = RowPosition {
-        row_y: current_pos.row_y,
-        child_idx: target_child_idx,
-        idx_within_child: current_pos.idx_within_child,
-    };
-
-    standings
-        .focusable_row_positions
-        .iter()
-        .position(|pos| *pos == Some(target_pos))
+    find_row_sibling_in_doc(&state.ui.demo, RowDirection::Right)
 }
 
 fn find_standings_left_element(state: &AppState) -> Option<usize> {
-    find_standings_row_sibling(state, RowDirection::Left)
+    find_row_sibling_in_doc(&state.ui.standings_doc, RowDirection::Left)
 }
 
 fn find_standings_right_element(state: &AppState) -> Option<usize> {
-    find_standings_row_sibling(state, RowDirection::Right)
+    find_row_sibling_in_doc(&state.ui.standings_doc, RowDirection::Right)
 }
 
 /// Generic structure holding document scroll state
@@ -660,6 +538,7 @@ mod tests {
     #[test]
     fn test_scroll_up() {
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.scroll_offset = 10;
         let (new_state, _) = handle_document_action(state, &DocumentAction::ScrollUp(3)).unwrap();
         assert_eq!(new_state.ui.demo.scroll_offset, 7);
@@ -668,6 +547,7 @@ mod tests {
     #[test]
     fn test_scroll_up_clamps() {
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.scroll_offset = 2;
         let (new_state, _) = handle_document_action(state, &DocumentAction::ScrollUp(10)).unwrap();
         assert_eq!(new_state.ui.demo.scroll_offset, 0);
@@ -676,6 +556,7 @@ mod tests {
     #[test]
     fn test_scroll_down() {
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.scroll_offset = 10;
         let (new_state, _) = handle_document_action(state, &DocumentAction::ScrollDown(5)).unwrap();
         assert_eq!(new_state.ui.demo.scroll_offset, 15);
@@ -684,6 +565,7 @@ mod tests {
     #[test]
     fn test_scroll_to_top() {
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.scroll_offset = 50;
         let (new_state, _) = handle_document_action(state, &DocumentAction::ScrollToTop).unwrap();
         assert_eq!(new_state.ui.demo.scroll_offset, 0);
@@ -691,7 +573,8 @@ mod tests {
 
     #[test]
     fn test_scroll_to_bottom() {
-        let state = AppState::default();
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         let (new_state, _) = handle_document_action(state, &DocumentAction::ScrollToBottom).unwrap();
         assert_eq!(new_state.ui.demo.scroll_offset, u16::MAX);
     }
@@ -699,6 +582,7 @@ mod tests {
     #[test]
     fn test_page_up() {
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.scroll_offset = 30;
         state.ui.demo.viewport_height = 20;
         let (new_state, _) = handle_document_action(state, &DocumentAction::PageUp).unwrap();
@@ -708,6 +592,7 @@ mod tests {
     #[test]
     fn test_page_down() {
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.scroll_offset = 10;
         state.ui.demo.viewport_height = 20;
         let (new_state, _) = handle_document_action(state, &DocumentAction::PageDown).unwrap();
@@ -789,7 +674,8 @@ mod tests {
 
     #[test]
     fn test_sync_focusable_positions() {
-        let state = AppState::default();
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         let positions = vec![10, 20, 30, 40];
         let viewport_height = 25;
 
@@ -812,6 +698,7 @@ mod tests {
         // Setup: Element at index 3 is in row at y=10, child 1, index_within 0
         // Element at index 0 is in row at y=10, child 0, index_within 0
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.focus_index = Some(3);
         state.ui.demo.focusable_row_positions = vec![
             rp(10, 0, 0), // index 0: row y=10, child 0, idx_within 0
@@ -833,6 +720,7 @@ mod tests {
         // Setup: Element at index 1 is in row at y=10, child 0, index_within 1
         // Element at index 4 is in row at y=10, child 1, index_within 1
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.focus_index = Some(1);
         state.ui.demo.focusable_row_positions = vec![
             rp(10, 0, 0), // index 0
@@ -853,6 +741,7 @@ mod tests {
     fn test_focus_left_at_leftmost_child_wraps_to_rightmost() {
         // Element is at child 0, should wrap to child 1
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.focus_index = Some(1);
         state.ui.demo.focusable_row_positions = vec![
             rp(10, 0, 0),
@@ -871,6 +760,7 @@ mod tests {
     fn test_focus_right_at_rightmost_child_wraps_to_leftmost() {
         // Element is at child 1 (rightmost), should wrap to child 0
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.focus_index = Some(3);
         state.ui.demo.focusable_row_positions = vec![
             rp(10, 0, 0),
@@ -889,6 +779,7 @@ mod tests {
     fn test_focus_left_not_in_row_does_nothing() {
         // Element is not in a row (row_position is None)
         let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
         state.ui.demo.focus_index = Some(0);
         state.ui.demo.focusable_row_positions = vec![
             None, // Not in a row
@@ -927,28 +818,28 @@ mod tests {
     fn test_update_viewport_height() {
         let mut state = AppState::default();
         state.ui.demo.viewport_height = 0;
-        state.ui.standings.viewport_height = 0;
+        state.ui.standings_doc.viewport_height = 0;
 
         let (new_state, _) =
             handle_document_action(state, &DocumentAction::UpdateViewportHeight { demo: 31, standings: 29 }).unwrap();
 
         // Each tab gets its own viewport height
         assert_eq!(new_state.ui.demo.viewport_height, 31);
-        assert_eq!(new_state.ui.standings.viewport_height, 29);
+        assert_eq!(new_state.ui.standings_doc.viewport_height, 29);
     }
 
     #[test]
     fn test_update_viewport_height_no_change_when_same() {
         let mut state = AppState::default();
         state.ui.demo.viewport_height = 31;
-        state.ui.standings.viewport_height = 29;
+        state.ui.standings_doc.viewport_height = 29;
 
         // Same values should still return state (no-op but handled)
         let (new_state, _) =
             handle_document_action(state, &DocumentAction::UpdateViewportHeight { demo: 31, standings: 29 }).unwrap();
 
         assert_eq!(new_state.ui.demo.viewport_height, 31);
-        assert_eq!(new_state.ui.standings.viewport_height, 29);
+        assert_eq!(new_state.ui.standings_doc.viewport_height, 29);
     }
 
     #[test]
@@ -965,7 +856,7 @@ mod tests {
         // Standings viewport: 35 - 6 = 29
         let mut state = AppState::default();
         state.ui.demo.viewport_height = 0;
-        state.ui.standings.viewport_height = 0;
+        state.ui.standings_doc.viewport_height = 0;
 
         // Simulating terminal height of 35
         let terminal_height: u16 = 35;
@@ -981,7 +872,7 @@ mod tests {
         ).unwrap();
 
         assert_eq!(new_state.ui.demo.viewport_height, 31);
-        assert_eq!(new_state.ui.standings.viewport_height, 29);
+        assert_eq!(new_state.ui.standings_doc.viewport_height, 29);
 
         // The 2-line difference is critical for correct down-scroll behavior
         // Without this, autoscroll triggers late because viewport_bottom is too far down
@@ -1049,5 +940,191 @@ mod tests {
         // Condition: element_y < viewport_top => 5 < 10 => TRUE => scroll
         // new_offset = element_y - padding = 5 - 3 = 2
         assert_eq!(new_state.ui.demo.scroll_offset, 2);
+    }
+
+    // =========================================================================
+    // Direct unit tests for helper functions
+    // =========================================================================
+
+    #[test]
+    fn test_doc_focus_next_empty_count() {
+        let mut doc = DocumentState::default();
+        let wrapped = doc_focus_next(&mut doc, 0);
+        assert!(!wrapped);
+        assert_eq!(doc.focus_index, None);
+    }
+
+    #[test]
+    fn test_doc_focus_next_from_none_sets_zero() {
+        let mut doc = DocumentState::default();
+        let wrapped = doc_focus_next(&mut doc, 5);
+        assert!(!wrapped);
+        assert_eq!(doc.focus_index, Some(0));
+    }
+
+    #[test]
+    fn test_doc_focus_next_increments() {
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(2);
+        let wrapped = doc_focus_next(&mut doc, 5);
+        assert!(!wrapped);
+        assert_eq!(doc.focus_index, Some(3));
+    }
+
+    #[test]
+    fn test_doc_focus_next_wraps_at_end() {
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(4);
+        doc.scroll_offset = 100;
+        let wrapped = doc_focus_next(&mut doc, 5);
+        assert!(wrapped);
+        assert_eq!(doc.focus_index, Some(0));
+        assert_eq!(doc.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_doc_focus_prev_empty_count() {
+        let mut doc = DocumentState::default();
+        let wrapped = doc_focus_prev(&mut doc, 0);
+        assert!(!wrapped);
+        assert_eq!(doc.focus_index, None);
+    }
+
+    #[test]
+    fn test_doc_focus_prev_from_none_sets_last() {
+        let mut doc = DocumentState::default();
+        let wrapped = doc_focus_prev(&mut doc, 5);
+        assert!(wrapped);
+        assert_eq!(doc.focus_index, Some(4));
+        assert_eq!(doc.scroll_offset, u16::MAX);
+    }
+
+    #[test]
+    fn test_doc_focus_prev_decrements() {
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(3);
+        let wrapped = doc_focus_prev(&mut doc, 5);
+        assert!(!wrapped);
+        assert_eq!(doc.focus_index, Some(2));
+    }
+
+    #[test]
+    fn test_doc_focus_prev_wraps_at_start() {
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(0);
+        let wrapped = doc_focus_prev(&mut doc, 5);
+        assert!(wrapped);
+        assert_eq!(doc.focus_index, Some(4));
+        assert_eq!(doc.scroll_offset, u16::MAX);
+    }
+
+    #[test]
+    fn test_doc_scroll_up() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 50;
+        doc_scroll_up(&mut doc, 10);
+        assert_eq!(doc.scroll_offset, 40);
+    }
+
+    #[test]
+    fn test_doc_scroll_up_saturates() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 5;
+        doc_scroll_up(&mut doc, 10);
+        assert_eq!(doc.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_doc_scroll_down() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 50;
+        doc_scroll_down(&mut doc, 10);
+        assert_eq!(doc.scroll_offset, 60);
+    }
+
+    #[test]
+    fn test_doc_page_up() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 50;
+        doc.viewport_height = 20;
+        doc_page_up(&mut doc);
+        assert_eq!(doc.scroll_offset, 30);
+    }
+
+    #[test]
+    fn test_doc_page_up_uses_min_page_size() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 50;
+        doc.viewport_height = 5; // Less than MIN_PAGE_SIZE
+        doc_page_up(&mut doc);
+        // Should use MIN_PAGE_SIZE (10) instead of viewport_height
+        assert_eq!(doc.scroll_offset, 40);
+    }
+
+    #[test]
+    fn test_doc_page_down() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 50;
+        doc.viewport_height = 20;
+        doc_page_down(&mut doc);
+        assert_eq!(doc.scroll_offset, 70);
+    }
+
+    #[test]
+    fn test_doc_page_down_uses_min_page_size() {
+        let mut doc = DocumentState::default();
+        doc.scroll_offset = 50;
+        doc.viewport_height = 5; // Less than MIN_PAGE_SIZE
+        doc_page_down(&mut doc);
+        // Should use MIN_PAGE_SIZE (10) instead of viewport_height
+        assert_eq!(doc.scroll_offset, 60);
+    }
+
+    #[test]
+    fn test_doc_activate_focused_none() {
+        let doc = DocumentState::default();
+        assert_eq!(doc_activate_focused(&doc), None);
+    }
+
+    #[test]
+    fn test_doc_activate_focused_out_of_bounds() {
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(5);
+        doc.focusable_ids = vec![]; // Empty
+        assert_eq!(doc_activate_focused(&doc), None);
+    }
+
+    #[test]
+    fn test_doc_activate_focused_returns_display_name() {
+        use crate::tui::document::FocusableId;
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(0);
+        doc.focusable_ids = vec![FocusableId::link("test_link")];
+        let result = doc_activate_focused(&doc);
+        assert!(result.is_some());
+        assert!(result.unwrap().contains("test_link"));
+    }
+
+    #[test]
+    fn test_find_row_sibling_in_doc_no_focus() {
+        let doc = DocumentState::default();
+        assert_eq!(find_row_sibling_in_doc(&doc, RowDirection::Left), None);
+        assert_eq!(find_row_sibling_in_doc(&doc, RowDirection::Right), None);
+    }
+
+    #[test]
+    fn test_find_row_sibling_in_doc_not_in_row() {
+        let mut doc = DocumentState::default();
+        doc.focus_index = Some(0);
+        doc.focusable_row_positions = vec![None]; // Not in a row
+        assert_eq!(find_row_sibling_in_doc(&doc, RowDirection::Left), None);
+    }
+
+    #[test]
+    fn test_document_state_focusable_count() {
+        let mut doc = DocumentState::default();
+        assert_eq!(doc.focusable_count(), 0);
+        doc.focusable_positions = vec![1, 2, 3];
+        assert_eq!(doc.focusable_count(), 3);
     }
 }

@@ -203,8 +203,8 @@ impl App {
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,
             config: state.system.config.clone(),
-            focus_index: state.ui.standings.focus_index,
-            scroll_offset: state.ui.standings.scroll_offset,
+            focus_index: state.ui.standings_doc.focus_index,
+            scroll_offset: state.ui.standings_doc.scroll_offset,
         };
         StandingsTab.view(&props, &())
     }

@@ -87,8 +87,8 @@ fn handle_enter_browse_mode(state: AppState) -> (AppState, Effect) {
     // For document-based views (League/Conference), initialize focus to first team and reset scroll
     if new_state.ui.standings.view == crate::commands::standings::GroupBy::League
         || new_state.ui.standings.view == crate::commands::standings::GroupBy::Conference {
-        new_state.ui.standings.focus_index = Some(0);
-        new_state.ui.standings.scroll_offset = 0;
+        new_state.ui.standings_doc.focus_index = Some(0);
+        new_state.ui.standings_doc.scroll_offset = 0;
     }
 
     (new_state, Effect::None)
@@ -334,24 +334,24 @@ fn rebuild_standings_layout_cache(state: &mut AppState) {
                     Arc::new(standings.clone()),
                     state.system.config.clone(),
                 );
-                state.ui.standings.focusable_positions = conference_doc.focusable_positions();
-                state.ui.standings.focusable_ids = conference_doc.focusable_ids();
-                state.ui.standings.focusable_row_positions = conference_doc.focusable_row_positions();
+                state.ui.standings_doc.focusable_positions = conference_doc.focusable_positions();
+                state.ui.standings_doc.focusable_ids = conference_doc.focusable_ids();
+                state.ui.standings_doc.focusable_row_positions = conference_doc.focusable_row_positions();
             }
             GroupBy::League => {
                 let league_doc = LeagueStandingsDocument::new(
                     Arc::new(standings.clone()),
                     state.system.config.clone(),
                 );
-                state.ui.standings.focusable_positions = league_doc.focusable_positions();
-                state.ui.standings.focusable_ids = league_doc.focusable_ids();
-                state.ui.standings.focusable_row_positions = league_doc.focusable_row_positions();
+                state.ui.standings_doc.focusable_positions = league_doc.focusable_positions();
+                state.ui.standings_doc.focusable_ids = league_doc.focusable_ids();
+                state.ui.standings_doc.focusable_row_positions = league_doc.focusable_row_positions();
             }
             _ => {
                 // Clear for non-document views
-                state.ui.standings.focusable_positions.clear();
-                state.ui.standings.focusable_ids.clear();
-                state.ui.standings.focusable_row_positions.clear();
+                state.ui.standings_doc.focusable_positions.clear();
+                state.ui.standings_doc.focusable_ids.clear();
+                state.ui.standings_doc.focusable_row_positions.clear();
             }
         }
     }

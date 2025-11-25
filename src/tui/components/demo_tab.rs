@@ -116,14 +116,9 @@ pub struct DemoTabProps {
     pub standings: Arc<Option<Vec<Standing>>>,
 }
 
-/// State for the Demo tab
+/// State for the Demo tab (component state, not to be confused with AppState.ui.demo)
 #[derive(Clone, Default)]
-pub struct DemoTabState {
-    /// Focus index within the document (0-based)
-    focus_index: Option<usize>,
-    /// Scroll offset
-    scroll_offset: u16,
-}
+pub struct DemoTabState;
 
 /// Messages that can be sent to the Demo tab
 pub enum DemoTabMessage {

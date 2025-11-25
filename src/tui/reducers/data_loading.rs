@@ -80,24 +80,24 @@ fn handle_standings_loaded(
                         Arc::new(standings),
                         new_state.system.config.clone(),
                     );
-                    new_state.ui.standings.focusable_positions = conference_doc.focusable_positions();
-                    new_state.ui.standings.focusable_ids = conference_doc.focusable_ids();
-                    new_state.ui.standings.focusable_row_positions = conference_doc.focusable_row_positions();
+                    new_state.ui.standings_doc.focusable_positions = conference_doc.focusable_positions();
+                    new_state.ui.standings_doc.focusable_ids = conference_doc.focusable_ids();
+                    new_state.ui.standings_doc.focusable_row_positions = conference_doc.focusable_row_positions();
                 }
                 GroupBy::League => {
                     let league_doc = LeagueStandingsDocument::new(
                         Arc::new(standings),
                         new_state.system.config.clone(),
                     );
-                    new_state.ui.standings.focusable_positions = league_doc.focusable_positions();
-                    new_state.ui.standings.focusable_ids = league_doc.focusable_ids();
-                    new_state.ui.standings.focusable_row_positions = league_doc.focusable_row_positions();
+                    new_state.ui.standings_doc.focusable_positions = league_doc.focusable_positions();
+                    new_state.ui.standings_doc.focusable_ids = league_doc.focusable_ids();
+                    new_state.ui.standings_doc.focusable_row_positions = league_doc.focusable_row_positions();
                 }
                 _ => {
                     // For other views (Division, Wildcard), clear focusable data since they don't use documents yet
-                    new_state.ui.standings.focusable_positions.clear();
-                    new_state.ui.standings.focusable_ids.clear();
-                    new_state.ui.standings.focusable_row_positions.clear();
+                    new_state.ui.standings_doc.focusable_positions.clear();
+                    new_state.ui.standings_doc.focusable_ids.clear();
+                    new_state.ui.standings_doc.focusable_row_positions.clear();
                 }
             }
         }
@@ -116,9 +116,9 @@ fn handle_standings_loaded(
             new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
 
             // Clear league standings focusable data on error
-            new_state.ui.standings.focusable_positions = Vec::new();
-            new_state.ui.standings.focusable_ids = Vec::new();
-            new_state.ui.standings.focusable_row_positions = Vec::new();
+            new_state.ui.standings_doc.focusable_positions = Vec::new();
+            new_state.ui.standings_doc.focusable_ids = Vec::new();
+            new_state.ui.standings_doc.focusable_row_positions = Vec::new();
         }
     }
 

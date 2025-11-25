@@ -243,14 +243,14 @@ impl DocumentElement {
     ///
     /// # Arguments
     /// - `out`: Vector to append IDs to
-    /// - `_y_offset`: Current y offset (unused but kept for consistency)
-    pub fn collect_focusable_ids(&self, out: &mut Vec<FocusableId>, _y_offset: u16) {
+    /// - `y_offset`: Current y offset for tracking position in document
+    pub fn collect_focusable_ids(&self, out: &mut Vec<FocusableId>, y_offset: u16) {
         match self {
             Self::Link { id, .. } => {
                 out.push(FocusableId::link(id));
             }
             Self::Group { children, .. } => {
-                let mut child_offset = _y_offset;
+                let mut child_offset = y_offset;
                 for child in children {
                     child.collect_focusable_ids(out, child_offset);
                     child_offset += child.height();
@@ -263,7 +263,7 @@ impl DocumentElement {
             }
             Self::Row { children, .. } => {
                 for child in children {
-                    child.collect_focusable_ids(out, _y_offset);
+                    child.collect_focusable_ids(out, y_offset);
                 }
             }
             _ => {}

@@ -158,7 +158,7 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
             let standings_viewport = area.height.saturating_sub(BASE_CHROME_LINES + STANDINGS_SUBTAB_LINES);
 
             let current_demo = runtime.state().ui.demo.viewport_height;
-            let current_standings = runtime.state().ui.standings.viewport_height;
+            let current_standings = runtime.state().ui.standings_doc.viewport_height;
             if demo_viewport != current_demo || standings_viewport != current_standings {
                 runtime.dispatch(Action::DocumentAction(DocumentAction::UpdateViewportHeight {
                     demo: demo_viewport,

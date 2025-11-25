@@ -11,6 +11,34 @@ use crate::config::Config;
 use super::document::{FocusableId, RowPosition};
 use super::types::{Panel, SettingsCategory, Tab};
 
+/// Shared state for document-based navigation
+///
+/// This struct contains the common fields needed for document navigation,
+/// scrolling, and focus management. It's embedded in any UI state that
+/// uses the document system (Demo tab, Standings League/Conference views).
+#[derive(Debug, Clone, Default)]
+pub struct DocumentState {
+    /// Current focus index within the document (None = no focus)
+    pub focus_index: Option<usize>,
+    /// Current scroll offset (lines from top)
+    pub scroll_offset: u16,
+    /// Viewport height (updated during render)
+    pub viewport_height: u16,
+    /// Y-positions of focusable elements (populated during render/data load)
+    pub focusable_positions: Vec<u16>,
+    /// IDs of focusable elements (for meaningful display when activating)
+    pub focusable_ids: Vec<FocusableId>,
+    /// Row positions for left/right navigation within Row elements
+    pub focusable_row_positions: Vec<Option<RowPosition>>,
+}
+
+impl DocumentState {
+    /// Get the number of focusable elements
+    pub fn focusable_count(&self) -> usize {
+        self.focusable_positions.len()
+    }
+}
+
 /// Root application state - single source of truth
 ///
 /// This is the entire application state in one place.
@@ -90,26 +118,8 @@ pub struct UiState {
     pub scores: ScoresUiState,
     pub standings: StandingsUiState,
     pub settings: SettingsUiState,
-    pub demo: DemoUiState,
-}
-
-/// UI state for the Demo tab (document system showcase)
-#[derive(Debug, Clone, Default)]
-pub struct DemoUiState {
-    /// Current focus index within the document (None = no focus)
-    pub focus_index: Option<usize>,
-    /// Current scroll offset
-    pub scroll_offset: u16,
-    /// Viewport height (updated during render)
-    pub viewport_height: u16,
-    /// Y-positions of focusable elements (populated by component during render)
-    /// Used by reducer for accurate autoscrolling
-    pub focusable_positions: Vec<u16>,
-    /// IDs of focusable elements (populated by component during render)
-    /// Used for meaningful display when activating elements
-    pub focusable_ids: Vec<FocusableId>,
-    /// Row positions for left/right navigation within Row elements
-    pub focusable_row_positions: Vec<Option<RowPosition>>,
+    pub demo: DocumentState,
+    pub standings_doc: DocumentState,
 }
 
 #[derive(Debug, Clone)]
@@ -142,20 +152,6 @@ pub struct StandingsUiState {
     /// Cached layout: layout[column][row] = team_abbrev
     /// Rebuilt when standings data changes or view changes
     pub layout: Vec<Vec<String>>,
-
-    // Document system state (for League view)
-    /// Current focus index within the document (None = no focus)
-    pub focus_index: Option<usize>,
-    /// Current scroll offset
-    pub scroll_offset: u16,
-    /// Viewport height (updated during render)
-    pub viewport_height: u16,
-    /// Y-positions of focusable elements (populated when standings data loads)
-    pub focusable_positions: Vec<u16>,
-    /// IDs of focusable elements (populated when standings data loads)
-    pub focusable_ids: Vec<FocusableId>,
-    /// Row positions for left/right navigation within Row elements
-    pub focusable_row_positions: Vec<Option<RowPosition>>,
 }
 
 impl Default for StandingsUiState {
@@ -166,12 +162,6 @@ impl Default for StandingsUiState {
             selected_column: 0,
             selected_row: 0,
             layout: Vec::new(),
-            focus_index: None,
-            scroll_offset: 0,
-            viewport_height: 0,
-            focusable_positions: Vec::new(),
-            focusable_ids: Vec::new(),
-            focusable_row_positions: Vec::new(),
         }
     }
 }
