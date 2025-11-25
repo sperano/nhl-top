@@ -173,7 +173,8 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
     // Determine which document state to use based on current tab
     let is_standings_doc = state.navigation.current_tab == Tab::Standings
         && (state.ui.standings.view == crate::commands::standings::GroupBy::League
-            || state.ui.standings.view == crate::commands::standings::GroupBy::Conference);
+            || state.ui.standings.view == crate::commands::standings::GroupBy::Conference
+            || state.ui.standings.view == crate::commands::standings::GroupBy::Division);
 
     let is_demo = state.navigation.current_tab == Tab::Demo;
 

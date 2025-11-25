@@ -4,7 +4,7 @@ use tracing::debug;
 use crate::commands::standings::GroupBy;
 use crate::tui::action::StandingsAction;
 use crate::tui::component::Effect;
-use crate::tui::components::{ConferenceStandingsDocument, LeagueStandingsDocument};
+use crate::tui::components::{ConferenceStandingsDocument, DivisionStandingsDocument, LeagueStandingsDocument};
 use crate::tui::document::Document;
 use crate::tui::state::{AppState, PanelState};
 use crate::tui::types::Panel;
@@ -84,9 +84,11 @@ fn handle_enter_browse_mode(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.ui.standings.browse_mode = true;
 
-    // For document-based views (League/Conference), initialize focus to first team and reset scroll
+    // For document-based views (League/Conference/Division), initialize focus to first team and reset scroll
     if new_state.ui.standings.view == crate::commands::standings::GroupBy::League
-        || new_state.ui.standings.view == crate::commands::standings::GroupBy::Conference {
+        || new_state.ui.standings.view == crate::commands::standings::GroupBy::Conference
+        || new_state.ui.standings.view == crate::commands::standings::GroupBy::Division
+    {
         new_state.ui.standings_doc.focus_index = Some(0);
         new_state.ui.standings_doc.scroll_offset = 0;
     }
@@ -338,6 +340,15 @@ fn rebuild_standings_layout_cache(state: &mut AppState) {
                 state.ui.standings_doc.focusable_ids = conference_doc.focusable_ids();
                 state.ui.standings_doc.focusable_row_positions = conference_doc.focusable_row_positions();
             }
+            GroupBy::Division => {
+                let division_doc = DivisionStandingsDocument::new(
+                    Arc::new(standings.clone()),
+                    state.system.config.clone(),
+                );
+                state.ui.standings_doc.focusable_positions = division_doc.focusable_positions();
+                state.ui.standings_doc.focusable_ids = division_doc.focusable_ids();
+                state.ui.standings_doc.focusable_row_positions = division_doc.focusable_row_positions();
+            }
             GroupBy::League => {
                 let league_doc = LeagueStandingsDocument::new(
                     Arc::new(standings.clone()),
@@ -348,7 +359,7 @@ fn rebuild_standings_layout_cache(state: &mut AppState) {
                 state.ui.standings_doc.focusable_row_positions = league_doc.focusable_row_positions();
             }
             _ => {
-                // Clear for non-document views
+                // Clear for non-document views (Wildcard)
                 state.ui.standings_doc.focusable_positions.clear();
                 state.ui.standings_doc.focusable_ids.clear();
                 state.ui.standings_doc.focusable_row_positions.clear();

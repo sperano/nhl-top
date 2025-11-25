@@ -135,10 +135,125 @@ impl Document for ConferenceStandingsDocument {
     }
 }
 
+/// Division standings document - two columns with two divisions each
+///
+/// Layout (with western_first=true):
+/// ```text
+/// +-------------------+-------------------+
+/// |   Central         |   Atlantic        |
+/// |   (8 teams)       |   (8 teams)       |
+/// |                   |                   |
+/// |   Pacific         |   Metropolitan    |
+/// |   (8 teams)       |   (8 teams)       |
+/// +-------------------+-------------------+
+/// ```
+///
+/// Navigation order: Central -> Pacific -> Atlantic -> Metropolitan (down through
+/// left column first, then down through right column).
+pub struct DivisionStandingsDocument {
+    standings: Arc<Vec<Standing>>,
+    config: Config,
+}
+
+impl DivisionStandingsDocument {
+    pub fn new(standings: Arc<Vec<Standing>>, config: Config) -> Self {
+        Self { standings, config }
+    }
+
+    /// Group standings by division and return maps for each conference
+    fn group_by_division(&self) -> (Vec<(&'static str, Vec<Standing>)>, Vec<(&'static str, Vec<Standing>)>) {
+        let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
+        for standing in self.standings.as_ref() {
+            grouped
+                .entry(standing.division_name.clone())
+                .or_default()
+                .push(standing.clone());
+        }
+
+        // Sort teams within each division by points
+        for teams in grouped.values_mut() {
+            teams.sort_by_points_desc();
+        }
+
+        // Eastern divisions (alphabetically: Atlantic, Metropolitan)
+        let atlantic = grouped.get("Atlantic").cloned().unwrap_or_default();
+        let metropolitan = grouped.get("Metropolitan").cloned().unwrap_or_default();
+
+        // Western divisions (alphabetically: Central, Pacific)
+        let central = grouped.get("Central").cloned().unwrap_or_default();
+        let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
+
+        // Return as ordered tuples for each conference
+        let eastern = vec![("Atlantic", atlantic), ("Metropolitan", metropolitan)];
+        let western = vec![("Central", central), ("Pacific", pacific)];
+
+        (eastern, western)
+    }
+
+    /// Build a vertical group of division tables
+    fn build_division_group(
+        divisions: &[(&str, Vec<Standing>)],
+        table_prefix: &str,
+        focus: &FocusContext,
+    ) -> DocumentElement {
+        let mut children = Vec::new();
+
+        for (idx, (div_name, teams)) in divisions.iter().enumerate() {
+            let table_name = format!("{}_{}", table_prefix, div_name.to_lowercase());
+            let table = TableWidget::from_data(standings_columns(), teams.clone())
+                .with_header(*div_name)
+                .with_focused_row(focus.focused_table_row(&table_name))
+                .with_margin(0);
+
+            children.push(DocumentElement::table(table_name, table));
+
+            // Add spacer between divisions (not after the last one)
+            if idx < divisions.len() - 1 {
+                children.push(DocumentElement::spacer(1));
+            }
+        }
+
+        DocumentElement::group(children)
+    }
+}
+
+impl Document for DivisionStandingsDocument {
+    fn build(&self, focus: &FocusContext) -> Vec<DocumentElement> {
+        let (eastern, western) = self.group_by_division();
+
+        // Determine column order based on western_first config
+        let (left_divs, right_divs, left_prefix, right_prefix) =
+            if self.config.display_standings_western_first {
+                (western, eastern, "division_left", "division_right")
+            } else {
+                (eastern, western, "division_left", "division_right")
+            };
+
+        // Build left column (Group with 2 division tables)
+        let left_group = Self::build_division_group(&left_divs, left_prefix, focus);
+
+        // Build right column (Group with 2 division tables)
+        let right_group = Self::build_division_group(&right_divs, right_prefix, focus);
+
+        // Use Row element to place columns side-by-side
+        DocumentBuilder::new()
+            .row(vec![left_group, right_group])
+            .build()
+    }
+
+    fn title(&self) -> String {
+        "Division Standings".to_string()
+    }
+
+    fn id(&self) -> String {
+        "division_standings".to_string()
+    }
+}
+
 /// Widget that renders a standings document with DocumentView
 ///
 /// This widget wraps DocumentView and applies focus/scroll state from AppState.
-/// It can render either League or Conference standings based on the document type.
+/// It can render League, Conference, or Division standings based on the document type.
 pub struct StandingsDocumentWidget {
     doc: Arc<dyn Document>,
     focus_index: Option<usize>,
@@ -163,11 +278,19 @@ impl StandingsDocumentWidget {
             scroll_offset,
         }
     }
+
+    /// Create widget for Division standings
+    pub fn division(standings: Arc<Vec<Standing>>, config: Config, focus_index: Option<usize>, scroll_offset: u16) -> Self {
+        Self {
+            doc: Arc::new(DivisionStandingsDocument::new(standings, config)),
+            focus_index,
+            scroll_offset,
+        }
+    }
 }
 
 impl ElementWidget for StandingsDocumentWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, display_config: &DisplayConfig) {
-        tracing::debug!("StandingsDocumentWidget: area.height={}, area.y={}", area.height, area.y);
         // Create DocumentView with viewport height
         let mut view = DocumentView::new(self.doc.clone(), area.height);
 
@@ -454,6 +577,130 @@ mod tests {
                 assert_eq!(children.len(), 2);
                 assert!(matches!(children[0], DocumentElement::Table { .. }));
                 assert!(matches!(children[1], DocumentElement::Table { .. }));
+            }
+            _ => panic!("Expected Row element"),
+        }
+    }
+
+    // === Division Standings Tests ===
+
+    #[test]
+    fn test_division_standings_document_renders() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = DivisionStandingsDocument::new(standings, config);
+
+        // Build with no focus
+        let elements = doc.build(&FocusContext::default());
+
+        // Should have one element: a Row containing two Groups
+        assert_eq!(elements.len(), 1);
+
+        // Check that it's a Row element with Group children
+        match &elements[0] {
+            DocumentElement::Row { children, .. } => {
+                // Should have 2 children (left and right columns)
+                assert_eq!(children.len(), 2);
+
+                // Each child should be a Group containing tables
+                for child in children {
+                    match child {
+                        DocumentElement::Group { children: group_children, .. } => {
+                            // Each group should have 3 children: table, spacer, table
+                            assert_eq!(group_children.len(), 3);
+                            assert!(matches!(group_children[0], DocumentElement::Table { .. }));
+                            assert!(matches!(group_children[1], DocumentElement::Spacer { .. }));
+                            assert!(matches!(group_children[2], DocumentElement::Table { .. }));
+                        }
+                        _ => panic!("Expected Group element in Row"),
+                    }
+                }
+            }
+            _ => panic!("Expected Row element"),
+        }
+    }
+
+    #[test]
+    fn test_division_standings_document_metadata() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = DivisionStandingsDocument::new(standings, config);
+
+        assert_eq!(doc.title(), "Division Standings");
+        assert_eq!(doc.id(), "division_standings");
+    }
+
+    #[test]
+    fn test_division_standings_focusable_positions() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = DivisionStandingsDocument::new(standings, config);
+
+        let positions = doc.focusable_positions();
+
+        // Should have 32 focusable positions (32 teams across 4 divisions)
+        assert_eq!(positions.len(), 32);
+    }
+
+    #[test]
+    fn test_division_standings_row_positions() {
+        let standings = Arc::new(create_test_standings());
+        let config = Config::default();
+        let doc = DivisionStandingsDocument::new(standings, config);
+
+        let row_positions = doc.focusable_row_positions();
+
+        // Should have 32 row positions
+        assert_eq!(row_positions.len(), 32);
+
+        // All should be Some (within a Row)
+        assert!(row_positions.iter().all(|rp| rp.is_some()));
+
+        // Check that we have elements from both columns (0 and 1)
+        let column_0_count = row_positions.iter().filter(|rp| {
+            rp.as_ref().map_or(false, |p| p.child_idx == 0)
+        }).count();
+        let column_1_count = row_positions.iter().filter(|rp| {
+            rp.as_ref().map_or(false, |p| p.child_idx == 1)
+        }).count();
+
+        // Should have 16 teams in each column (2 divisions x 8 teams)
+        assert_eq!(column_0_count, 16);
+        assert_eq!(column_1_count, 16);
+    }
+
+    #[test]
+    fn test_division_standings_respects_western_first_config() {
+        let standings = Arc::new(create_test_standings());
+
+        // Test with western_first = false (Eastern divisions left, Western divisions right)
+        let mut config = Config::default();
+        config.display_standings_western_first = false;
+        let doc = DivisionStandingsDocument::new(standings.clone(), config);
+        let elements = doc.build(&FocusContext::default());
+
+        // Verify Row structure with Groups
+        match &elements[0] {
+            DocumentElement::Row { children, .. } => {
+                assert_eq!(children.len(), 2);
+                assert!(matches!(children[0], DocumentElement::Group { .. }));
+                assert!(matches!(children[1], DocumentElement::Group { .. }));
+            }
+            _ => panic!("Expected Row element"),
+        }
+
+        // Test with western_first = true (Western divisions left, Eastern divisions right)
+        let mut config = Config::default();
+        config.display_standings_western_first = true;
+        let doc = DivisionStandingsDocument::new(standings, config);
+        let elements = doc.build(&FocusContext::default());
+
+        // Verify Row structure (same structure, different internal ordering)
+        match &elements[0] {
+            DocumentElement::Row { children, .. } => {
+                assert_eq!(children.len(), 2);
+                assert!(matches!(children[0], DocumentElement::Group { .. }));
+                assert!(matches!(children[1], DocumentElement::Group { .. }));
             }
             _ => panic!("Expected Row element"),
         }

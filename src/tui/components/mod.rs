@@ -27,7 +27,7 @@ pub use player_detail_panel::{PlayerDetailPanel, PlayerDetailPanelProps};
 pub use scores_tab::{ScoresTab, ScoresTabProps};
 pub use settings_tab::SettingsTab;
 pub use skater_stats_table::SkaterStatsTableWidget;
-pub use standings_documents::{ConferenceStandingsDocument, LeagueStandingsDocument, StandingsDocumentWidget};
+pub use standings_documents::{ConferenceStandingsDocument, DivisionStandingsDocument, LeagueStandingsDocument, StandingsDocumentWidget};
 pub use standings_panels::{
     ConferenceStandingsPanel, DivisionStandingsPanel, LeagueStandingsPanel, StandingsPanelProps,
     WildcardStandingsPanel,

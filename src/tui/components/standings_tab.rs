@@ -205,168 +205,16 @@ impl StandingsTab {
         )))
     }
 
-    /// Render a column of divisions with tables and spacing
-    ///
-    /// # Arguments
-    /// * `divisions` - List of (division_name, teams) pairs
-    /// * `focused_row` - Which row in this column is focused (None = no focus)
-    fn render_division_column(
-        divisions: &[(String, Vec<Standing>)],
-        focused_row: Option<usize>,
-    ) -> Vec<Element> {
-        let mut elements = Vec::new();
-        let mut team_offset = 0;
-
-        for (idx, (div_name, teams)) in divisions.iter().enumerate() {
-            let teams_count = teams.len();
-
-            // Calculate focused row within this division
-            let row_in_division = focused_row.and_then(|row| {
-                if row >= team_offset && row < team_offset + teams_count {
-                    Some(row - team_offset)
-                } else {
-                    None
-                }
-            });
-
-            let table = TableWidget::from_data(standings_columns(), teams.clone())
-                .with_header(div_name)
-                .with_focused_row(row_in_division)
-                .with_margin(0);
-
-            elements.push(Element::Widget(Box::new(table)));
-            team_offset += teams_count;
-
-            // Add spacing between divisions (except after the last one)
-            if idx < divisions.len() - 1 {
-                elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
-            }
-        }
-
-        elements
-    }
-
     fn render_division_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
-        use std::collections::BTreeMap;
+        // Use the document system for Division view
+        use super::StandingsDocumentWidget;
 
-        // Group standings by division
-        let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
-        for standing in standings {
-            grouped
-                .entry(standing.division_name.clone())
-                .or_default()
-                .push(standing.clone());
-        }
-
-        // Separate Eastern and Western divisions
-        let mut eastern_divs = Vec::new();
-        let mut western_divs = Vec::new();
-
-        for (div_name, teams) in grouped {
-            if div_name == "Atlantic" || div_name == "Metropolitan" {
-                eastern_divs.push((div_name, teams));
-            } else if div_name == "Central" || div_name == "Pacific" {
-                western_divs.push((div_name, teams));
-            }
-        }
-
-        // Sort divisions alphabetically within each conference
-        eastern_divs.sort_by(|a, b| a.0.cmp(&b.0));
-        western_divs.sort_by(|a, b| a.0.cmp(&b.0));
-
-        // Build column 1 and column 2 based on western_first
-        let (col1_divs, col2_divs) = if props.config.display_standings_western_first {
-            (western_divs, eastern_divs)
-        } else {
-            (eastern_divs, western_divs)
-        };
-
-        // Convert selection state to focused_row for each column
-        let left_focused = if props.browse_mode && props.selected_column == 0 {
-            Some(props.selected_row)
-        } else {
-            None
-        };
-        let right_focused = if props.browse_mode && props.selected_column == 1 {
-            Some(props.selected_row)
-        } else {
-            None
-        };
-
-        // Create tables for left column divisions
-        let left_elements = Self::render_division_column(&col1_divs, left_focused);
-
-        // Create tables for right column divisions
-        let right_elements = Self::render_division_column(&col2_divs, right_focused);
-
-        // Create vertical layouts for each column
-        // Each column has 2 divisions + 1 spacer = 3 elements
-        // Each division table: header(1) + underline(1) + blank(1) + col_headers(1) + separator(1) + 8 teams = 13 lines
-        // Use Length constraints to keep content top-aligned
-        const DIVISION_TABLE_HEIGHT: u16 = 13;
-        const SPACER_HEIGHT: u16 = 1;
-
-        let left_column = if left_elements.len() == 3 {
-            vertical(
-                [
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                ],
-                left_elements,
-            )
-        } else if left_elements.len() == 2 {
-            // No spacer (shouldn't happen with 2 divisions, but handle gracefully)
-            vertical(
-                [
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                ],
-                left_elements,
-            )
-        } else {
-            // Fallback for unexpected number of divisions
-            vertical(
-                [Constraint::Length(
-                    DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT,
-                )],
-                left_elements,
-            )
-        };
-
-        let right_column = if right_elements.len() == 3 {
-            vertical(
-                [
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                ],
-                right_elements,
-            )
-        } else if right_elements.len() == 2 {
-            // No spacer
-            vertical(
-                [
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                    Constraint::Length(DIVISION_TABLE_HEIGHT),
-                ],
-                right_elements,
-            )
-        } else {
-            // Fallback for unexpected number of divisions
-            vertical(
-                [Constraint::Length(
-                    DIVISION_TABLE_HEIGHT * 2 + SPACER_HEIGHT,
-                )],
-                right_elements,
-            )
-        };
-
-        // Return horizontal layout with both columns
-        horizontal(
-            [Constraint::Percentage(50), Constraint::Percentage(50)],
-            vec![left_column, right_column],
-        )
+        Element::Widget(Box::new(StandingsDocumentWidget::division(
+            Arc::new(standings.to_vec()),
+            props.config.clone(),
+            props.focus_index,
+            props.scroll_offset,
+        )))
     }
 
     fn render_wildcard_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
@@ -863,36 +711,39 @@ mod tests {
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
+        // Division view now uses document system with two Groups in a Row
+        // Layout: Atlantic + Metropolitan on left, Central + Pacific on right
+        // (when western_first = false, which is the default)
         assert_buffer(&buf, &[
             "Wildcard │ Division │ Conference │ League",
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
-            "  Atlantic                                                    Central",
-            "  ════════                                                    ═══════",
+            "  Atlantic                                                     Central",
+            "  ════════                                                     ═══════",
             "",
-            "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
-            "  Panthers                      19    14    3    2     30     Avalanche                     19    16    2    1     33",
-            "  Bruins                        18    13    4    1     27     Stars                         20    14    4    2     30",
-            "  Maple Leafs                   19    12    5    2     26     Jets                          19    13    5    1     27",
-            "  Lightning                     18    11    6    1     23     Wild                          19    11    6    2     24",
-            "  Canadiens                     18    10    5    3     23     Predators                     19    10    7    2     22",
-            "  Senators                      18     9    7    2     20     Blues                         19     8    8    3     19",
-            "  Red Wings                     18     8    8    2     18     Blackhawks                    18     7   10    1     15",
-            "  Sabres                        18     6   10    2     14     Coyotes                       18     4   13    1      9",
+            "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
+            "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
+            "  Panthers                      19    14    3    2     30      Avalanche                     19    16    2    1     33",
+            "  Bruins                        18    13    4    1     27      Stars                         20    14    4    2     30",
+            "  Maple Leafs                   19    12    5    2     26      Jets                          19    13    5    1     27",
+            "  Lightning                     18    11    6    1     23      Wild                          19    11    6    2     24",
+            "  Canadiens                     18    10    5    3     23      Predators                     19    10    7    2     22",
+            "  Senators                      18     9    7    2     20      Blues                         19     8    8    3     19",
+            "  Red Wings                     18     8    8    2     18      Blackhawks                    18     7   10    1     15",
+            "  Sabres                        18     6   10    2     14      Coyotes                       18     4   13    1      9",
             "",
-            "  Metropolitan                                                Pacific",
-            "  ════════════                                                ═══════",
+            "  Metropolitan                                                 Pacific",
+            "  ════════════                                                 ═══════",
             "",
-            "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
-            "  Devils                        18    15    2    1     31     Golden Knights                19    15    3    1     31",
-            "  Hurricanes                    19    14    3    2     30     Oilers                        20    14    4    2     30",
-            "  Rangers                       18    12    5    1     25     Kings                         19    12    6    1     25",
-            "  Penguins                      19    11    6    2     24     Kraken                        19    11    6    2     24",
-            "  Capitals                      18    10    7    1     21     Canucks                       19    10    7    2     22",
-            "  Islanders                     18     9    7    2     20     Flames                        19     9    8    2     20",
-            "  Flyers                        18     8    9    1     17     Ducks                         19     7   10    2     16",
-            "  Blue Jackets                  18     5   11    2     12     Sharks                        18     5   12    1     11",
+            "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
+            "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
+            "  Devils                        18    15    2    1     31      Golden Knights                19    15    3    1     31",
+            "  Hurricanes                    19    14    3    2     30      Oilers                        20    14    4    2     30",
+            "  Rangers                       18    12    5    1     25      Kings                         19    12    6    1     25",
+            "  Penguins                      19    11    6    2     24      Kraken                        19    11    6    2     24",
+            "  Capitals                      18    10    7    1     21      Canucks                       19    10    7    2     22",
+            "  Islanders                     18     9    7    2     20      Flames                        19     9    8    2     20",
+            "  Flyers                        18     8    9    1     17      Ducks                         19     7   10    2     16",
+            "  Blue Jackets                  18     5   11    2     12      Sharks                        18     5   12    1     11",
             "",
             "",
             "",

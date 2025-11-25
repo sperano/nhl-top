@@ -164,6 +164,16 @@ pub fn buffer_lines(buf: &Buffer) -> Vec<String> {
         .collect()
 }
 
+/// Helper to print buffer contents for debugging tests
+#[allow(dead_code)]
+pub fn print_buffer(buf: &Buffer) {
+    let lines = buffer_lines(buf);
+    eprintln!("Buffer contents ({} lines):", lines.len());
+    for (i, line) in lines.iter().enumerate() {
+        eprintln!("{:02}: \"{}\"", i, line.trim_end());
+    }
+}
+
 /// Helper for buffer assertions
 pub fn assert_buffer(buf: &Buffer, expected: &[&str]) {
     let actual = buffer_lines(buf);
