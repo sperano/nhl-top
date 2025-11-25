@@ -468,12 +468,15 @@ fn autoscroll_to_focus(scroll_state: DocumentScrollState) {
     // Use actual viewport height, with reasonable fallback
     let viewport_height = scroll_state.viewport_height.max(DEFAULT_VIEWPORT_HEIGHT);
 
-    // Calculate new scroll offset
-    let new_offset = if element_y < scroll_state.scroll_offset.saturating_add(AUTOSCROLL_PADDING) {
-        // If element is above viewport (with padding), scroll up
+    let viewport_top = *scroll_state.scroll_offset;
+    let viewport_bottom = viewport_top.saturating_add(viewport_height);
+
+    // Calculate new scroll offset - only scroll if element is outside viewport
+    let new_offset = if element_y < viewport_top {
+        // Element is above viewport - scroll up with padding
         Some(element_y.saturating_sub(AUTOSCROLL_PADDING))
-    } else if element_y >= *scroll_state.scroll_offset + viewport_height.saturating_sub(AUTOSCROLL_PADDING) {
-        // If element is below viewport (with padding), scroll down
+    } else if element_y >= viewport_bottom {
+        // Element is below viewport - scroll down with padding
         Some(element_y.saturating_sub(viewport_height - AUTOSCROLL_PADDING - 1))
     } else {
         // Element is visible - no scroll needed
@@ -640,6 +643,27 @@ mod tests {
         // Focus moves to index 1 (y=12), which is visible - no scroll needed
         assert_eq!(new_state.ui.demo.focus_index, Some(1));
         assert_eq!(new_state.ui.demo.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_element_at_edge_no_scroll() {
+        // When element is at the very edge but still visible, no scroll needed
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.scroll_offset = 10;
+        state.ui.demo.viewport_height = 20;
+        // Viewport shows lines 10-30
+        // Elements at lines 10 (top edge) and 29 (bottom edge) are both visible
+        state.ui.demo.focusable_positions = vec![10, 15, 29];
+
+        // Navigate to element at line 29 (bottom edge)
+        let (state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+
+        // Element at y=29 is visible (viewport is 10-30), no scroll needed
+        assert_eq!(new_state.ui.demo.focus_index, Some(2));
+        assert_eq!(new_state.ui.demo.scroll_offset, 10);
     }
 
     #[test]
