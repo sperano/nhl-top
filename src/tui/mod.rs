@@ -148,6 +148,17 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
                 )));
             }
 
+            // Update viewport height for document-based tabs (Demo, Standings League view)
+            // Chrome = tab bar (2 lines) + status bar (2 lines) = 4 lines
+            const CHROME_LINES: u16 = 4;
+            let viewport_height = area.height.saturating_sub(CHROME_LINES);
+            let current_viewport_height = runtime.state().ui.demo.viewport_height;
+            if viewport_height != current_viewport_height {
+                runtime.dispatch(Action::DocumentAction(DocumentAction::UpdateViewportHeight(
+                    viewport_height,
+                )));
+            }
+
             // Build virtual tree from current state
             let element = runtime.build();
 

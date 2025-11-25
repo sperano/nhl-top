@@ -389,6 +389,17 @@ fn handle_document_action(mut state: AppState, action: &DocumentAction) -> Optio
             Some((state, Effect::None))
         }
 
+        DocumentAction::UpdateViewportHeight(height) => {
+            // Update viewport height for all document-based tabs
+            // This is critical for correct autoscroll calculations
+            if state.ui.demo.viewport_height != *height {
+                debug!("Document: update_viewport_height {} -> {}", state.ui.demo.viewport_height, height);
+                state.ui.demo.viewport_height = *height;
+                state.ui.standings.viewport_height = *height;
+            }
+            Some((state, Effect::None))
+        }
+
         DocumentAction::SyncFocusablePositions(positions, viewport_height) => {
             debug!(
                 "Document: sync_focusable_positions (count={}, viewport={})",
@@ -818,5 +829,96 @@ mod tests {
 
         // Should stay at index 0 (no change)
         assert_eq!(new_state.ui.demo.focus_index, Some(0));
+    }
+
+    #[test]
+    fn test_update_viewport_height() {
+        let mut state = AppState::default();
+        state.ui.demo.viewport_height = 0;
+        state.ui.standings.viewport_height = 0;
+
+        let (new_state, _) =
+            handle_document_action(state, &DocumentAction::UpdateViewportHeight(31)).unwrap();
+
+        // Both demo and standings viewport heights should be updated
+        assert_eq!(new_state.ui.demo.viewport_height, 31);
+        assert_eq!(new_state.ui.standings.viewport_height, 31);
+    }
+
+    #[test]
+    fn test_update_viewport_height_no_change_when_same() {
+        let mut state = AppState::default();
+        state.ui.demo.viewport_height = 31;
+        state.ui.standings.viewport_height = 31;
+
+        // Same value should still return state (no-op but handled)
+        let (new_state, _) =
+            handle_document_action(state, &DocumentAction::UpdateViewportHeight(31)).unwrap();
+
+        assert_eq!(new_state.ui.demo.viewport_height, 31);
+    }
+
+    #[test]
+    fn test_autoscroll_down_with_correct_viewport_height() {
+        // This test verifies the fix for the autoscroll asymmetry bug.
+        // With viewport_height=31, an element at y=20 should be visible
+        // and NOT trigger scrolling when navigating to it.
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.scroll_offset = 0;
+        state.ui.demo.viewport_height = 31; // Realistic viewport (not default 20)
+        // Element at y=5 (first), element at y=20 (second)
+        // With viewport [0, 31), element at y=20 is visible - no scroll needed
+        state.ui.demo.focusable_positions = vec![5, 20];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+
+        // Focus moves to index 1 (y=20)
+        assert_eq!(new_state.ui.demo.focus_index, Some(1));
+        // Element at y=20 is within viewport [0, 31), so NO scroll
+        assert_eq!(new_state.ui.demo.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_down_with_wrong_viewport_height_would_scroll() {
+        // This demonstrates the bug: with viewport_height=20 (the wrong value),
+        // an element at y=20 triggers scrolling because 20 >= 20.
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(0);
+        state.ui.demo.scroll_offset = 0;
+        state.ui.demo.viewport_height = 20; // Wrong/default value
+        state.ui.demo.focusable_positions = vec![5, 20];
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusNext).unwrap();
+
+        // Focus moves to index 1 (y=20)
+        assert_eq!(new_state.ui.demo.focus_index, Some(1));
+        // With wrong viewport_height=20, element at y=20 is AT the boundary
+        // viewport_bottom = 0 + 20 = 20, and 20 >= 20 triggers scroll
+        // new_offset = element_y - (viewport_height - padding - 1) = 20 - (20 - 2 - 1) = 20 - 17 = 3
+        assert_eq!(new_state.ui.demo.scroll_offset, 3);
+    }
+
+    #[test]
+    fn test_autoscroll_up_works_regardless_of_viewport_height() {
+        // UP navigation doesn't use viewport_height in its condition,
+        // so it works correctly even with the wrong viewport_height value.
+        // This explains the asymmetry observed in the bug.
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Demo;
+        state.ui.demo.focus_index = Some(1);
+        state.ui.demo.scroll_offset = 10; // Viewing lines 10-30 (with height 20) or 10-41 (with height 31)
+        state.ui.demo.viewport_height = 20; // Wrong value, but doesn't matter for UP
+        state.ui.demo.focusable_positions = vec![5, 15]; // y=5 is above viewport, y=15 is visible
+
+        let (new_state, _) = handle_document_action(state, &DocumentAction::FocusPrev).unwrap();
+
+        // Focus moves to index 0 (y=5), which is above viewport
+        assert_eq!(new_state.ui.demo.focus_index, Some(0));
+        // Condition: element_y < viewport_top => 5 < 10 => TRUE => scroll
+        // new_offset = element_y - padding = 5 - 2 = 3
+        assert_eq!(new_state.ui.demo.scroll_offset, 3);
     }
 }
