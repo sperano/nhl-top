@@ -180,29 +180,15 @@ fn handle_standings_league_keys(key: KeyEvent, _state: &AppState) -> Option<Acti
     }
 }
 
-/// Handle Standings tab navigation (browse mode vs view selection mode)
-fn handle_standings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Action> {
-    if state.ui.standings.browse_mode {
-        // Browse mode - navigate teams and columns (for non-League views)
-        match key_code {
-            KeyCode::Down => Some(Action::StandingsAction(StandingsAction::MoveSelectionDown)),
-            KeyCode::Left => Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft)),
-            KeyCode::Right => Some(Action::StandingsAction(StandingsAction::MoveSelectionRight)),
-            KeyCode::Enter => Some(Action::StandingsAction(StandingsAction::SelectTeam)),
-            KeyCode::PageDown => Some(Action::StandingsAction(StandingsAction::PageDown)),
-            KeyCode::PageUp => Some(Action::StandingsAction(StandingsAction::PageUp)),
-            KeyCode::Home => Some(Action::StandingsAction(StandingsAction::GoToTop)),
-            KeyCode::End => Some(Action::StandingsAction(StandingsAction::GoToBottom)),
-            _ => None,
-        }
-    } else {
-        // View selection mode - arrows navigate views (Division/Conference/League)
-        match key_code {
-            KeyCode::Left => Some(Action::StandingsAction(StandingsAction::CycleViewLeft)),
-            KeyCode::Right => Some(Action::StandingsAction(StandingsAction::CycleViewRight)),
-            KeyCode::Down => Some(Action::StandingsAction(StandingsAction::EnterBrowseMode)),
-            _ => None,
-        }
+/// Handle Standings tab view selection mode (cycling between Division/Conference/League/Wildcard)
+/// Note: Browse mode is handled by handle_standings_league_keys via document navigation
+fn handle_standings_tab_keys(key_code: KeyCode, _state: &AppState) -> Option<Action> {
+    // View selection mode - arrows navigate views
+    match key_code {
+        KeyCode::Left => Some(Action::StandingsAction(StandingsAction::CycleViewLeft)),
+        KeyCode::Right => Some(Action::StandingsAction(StandingsAction::CycleViewRight)),
+        KeyCode::Down => Some(Action::StandingsAction(StandingsAction::EnterBrowseMode)),
+        _ => None,
     }
 }
 
@@ -378,12 +364,6 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
         if state.ui.scores.box_selection_active {
             // In box selection - Up navigates within grid
             return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp));
-        } else if state.ui.standings.browse_mode
-                   && state.ui.standings.view != crate::commands::standings::GroupBy::League
-                   && state.ui.standings.view != crate::commands::standings::GroupBy::Conference
-                   && state.ui.standings.view != crate::commands::standings::GroupBy::Division {
-            // In browse mode (non-document views) - Up navigates teams
-            return Some(Action::StandingsAction(StandingsAction::MoveSelectionUp));
         } else if state.ui.settings.modal_open || state.ui.settings.editing {
             // Modal or editing active - let tab-specific handler deal with it
             // Fall through to tab-specific handling below
@@ -406,19 +386,12 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
             // Shift+Up in Demo tab - fall through to tab-specific handler for scrolling
         } else if current_tab == Tab::Standings
                    && state.ui.standings.browse_mode
-                   && (state.ui.standings.view == crate::commands::standings::GroupBy::League
-                       || state.ui.standings.view == crate::commands::standings::GroupBy::Conference
-                       || state.ui.standings.view == crate::commands::standings::GroupBy::Division)
                    && !key.modifiers.contains(KeyModifiers::SHIFT) {
-            // Document-based standings (League/Conference/Division) in browse mode - Up focuses previous element (like Demo)
+            // All standings views use document navigation - Up focuses previous element
             // Shift+Up scrolls, handled in handle_standings_league_keys
             debug!("KEY: Up pressed in document standings - focus previous");
             return Some(Action::DocumentAction(DocumentAction::FocusPrev));
-        } else if current_tab == Tab::Standings
-                   && state.ui.standings.browse_mode
-                   && (state.ui.standings.view == crate::commands::standings::GroupBy::League
-                       || state.ui.standings.view == crate::commands::standings::GroupBy::Conference
-                       || state.ui.standings.view == crate::commands::standings::GroupBy::Division) {
+        } else if current_tab == Tab::Standings && state.ui.standings.browse_mode {
             // Shift+Up in document standings - fall through to tab-specific handler for scrolling
         } else {
             // Not in nested mode - Up returns to tab bar
@@ -436,13 +409,10 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
         return Some(Action::DocumentAction(DocumentAction::FocusNext));
     }
 
-    // 6c. Handle Down key for document-based standings in browse mode (focus next) - but not Shift+Down (which scrolls)
+    // 6c. Handle Down key for standings in browse mode (focus next) - but not Shift+Down (which scrolls)
     if key.code == KeyCode::Down
         && current_tab == Tab::Standings
         && state.ui.standings.browse_mode
-        && (state.ui.standings.view == crate::commands::standings::GroupBy::League
-            || state.ui.standings.view == crate::commands::standings::GroupBy::Conference
-            || state.ui.standings.view == crate::commands::standings::GroupBy::Division)
         && !key.modifiers.contains(KeyModifiers::SHIFT)
     {
         debug!("KEY: Down pressed in document standings - focus next");
@@ -453,12 +423,8 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
     match current_tab {
         Tab::Scores => handle_scores_tab_keys(key.code, state),
         Tab::Standings => {
-            // For document-based views (League/Conference/Division) in browse mode, use document navigation (needs full KeyEvent)
-            if state.ui.standings.browse_mode
-                && (state.ui.standings.view == crate::commands::standings::GroupBy::League
-                    || state.ui.standings.view == crate::commands::standings::GroupBy::Conference
-                    || state.ui.standings.view == crate::commands::standings::GroupBy::Division)
-            {
+            // All standings views use document navigation in browse mode
+            if state.ui.standings.browse_mode {
                 handle_standings_league_keys(key, state)
             } else {
                 handle_standings_tab_keys(key.code, state)
@@ -621,9 +587,10 @@ mod tests {
         state.ui.standings.browse_mode = true;
 
         let action = key_to_action(make_key(KeyCode::Down), &state);
+        // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::StandingsAction(StandingsAction::MoveSelectionDown))
+            Some(Action::DocumentAction(DocumentAction::FocusNext))
         ));
     }
 
@@ -635,41 +602,42 @@ mod tests {
         state.ui.standings.browse_mode = true;
 
         let action = key_to_action(make_key(KeyCode::Up), &state);
+        // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::StandingsAction(StandingsAction::MoveSelectionUp))
+            Some(Action::DocumentAction(DocumentAction::FocusPrev))
         ));
     }
 
     #[test]
-    fn test_standings_browse_mode_left_arrow_moves_selection() {
+    fn test_standings_browse_mode_left_arrow_focuses_left() {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
         state.ui.standings.browse_mode = true;
-        state.ui.standings.view = GroupBy::Wildcard; // Wildcard view uses old navigation
+        state.ui.standings.view = GroupBy::Wildcard;
 
         let action = key_to_action(make_key(KeyCode::Left), &state);
-        // Left arrow should move selection in Wildcard view
+        // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::StandingsAction(StandingsAction::MoveSelectionLeft))
+            Some(Action::DocumentAction(DocumentAction::FocusLeft))
         ));
     }
 
     #[test]
-    fn test_standings_browse_mode_right_arrow_moves_selection() {
+    fn test_standings_browse_mode_right_arrow_focuses_right() {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
         state.ui.standings.browse_mode = true;
-        state.ui.standings.view = GroupBy::Wildcard; // Wildcard view uses old navigation
+        state.ui.standings.view = GroupBy::Wildcard;
 
         let action = key_to_action(make_key(KeyCode::Right), &state);
-        // Right arrow should move selection in Wildcard view
+        // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::StandingsAction(StandingsAction::MoveSelectionRight))
+            Some(Action::DocumentAction(DocumentAction::FocusRight))
         ));
     }
 
@@ -1055,9 +1023,10 @@ mod tests {
         state.ui.standings.browse_mode = true;
 
         let action = key_to_action(make_key(KeyCode::Enter), &state);
+        // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::StandingsAction(StandingsAction::SelectTeam))
+            Some(Action::DocumentAction(DocumentAction::ActivateFocused))
         ));
     }
 

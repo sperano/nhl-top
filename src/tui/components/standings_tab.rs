@@ -10,16 +10,12 @@ use nhl_api::Standing;
 use crate::commands::standings::GroupBy;
 use crate::config::Config;
 use crate::config::DisplayConfig;
-use crate::tui::helpers::StandingsSorting;
 use crate::tui::{
-    component::{horizontal, vertical, Component, Constraint, Element, ElementWidget},
+    component::{Component, Element, ElementWidget},
     state::PanelState,
 };
 
-use super::{
-    create_standings_table_with_selection, standings_columns, TabItem, TabbedPanel,
-    TabbedPanelProps, TableWidget,
-};
+use super::{TabItem, TabbedPanel, TabbedPanelProps};
 
 /// Props for StandingsTab component
 #[derive(Clone)]
@@ -161,36 +157,19 @@ impl StandingsTab {
             GroupBy::Conference => self.render_conference_view(props, standings),
             GroupBy::Division => self.render_division_view(props, standings),
             GroupBy::Wildcard => self.render_wildcard_view(props, standings),
-            _ => self.render_single_column_view(props, standings),
+            GroupBy::League => self.render_league_view(props, standings),
         }
     }
 
-    fn render_single_column_view(
-        &self,
-        props: &StandingsTabProps,
-        standings: &[Standing],
-    ) -> Element {
-        // For League view, use the document system
-        if props.view == GroupBy::League {
-            use super::StandingsDocumentWidget;
+    fn render_league_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
+        use super::StandingsDocumentWidget;
 
-            return Element::Widget(Box::new(StandingsDocumentWidget::league(
-                Arc::new(standings.to_vec()),
-                props.config.clone(),
-                props.focus_index,
-                props.scroll_offset,
-            )));
-        }
-
-        // For other single-column views (if any), use the old rendering
-        // Convert old selection state to new focused_row
-        let focused_row = if props.browse_mode {
-            Some(props.selected_row)
-        } else {
-            None
-        };
-        let table = create_standings_table_with_selection(standings.to_vec(), None, focused_row);
-        Element::Widget(Box::new(table))
+        Element::Widget(Box::new(StandingsDocumentWidget::league(
+            Arc::new(standings.to_vec()),
+            props.config.clone(),
+            props.focus_index,
+            props.scroll_offset,
+        )))
     }
 
     fn render_conference_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
@@ -218,244 +197,15 @@ impl StandingsTab {
     }
 
     fn render_wildcard_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
-        use std::collections::BTreeMap;
+        // Use the document system for Wildcard view
+        use super::StandingsDocumentWidget;
 
-        // Group teams by division and sort by points
-        let mut grouped: BTreeMap<String, Vec<Standing>> = BTreeMap::new();
-        for standing in standings {
-            grouped
-                .entry(standing.division_name.clone())
-                .or_default()
-                .push(standing.clone());
-        }
-
-        // Sort teams within each division by points
-        for teams in grouped.values_mut() {
-            teams.sort_by_points_desc();
-        }
-
-        // Extract divisions
-        let atlantic = grouped.get("Atlantic").cloned().unwrap_or_default();
-        let metropolitan = grouped.get("Metropolitan").cloned().unwrap_or_default();
-        let central = grouped.get("Central").cloned().unwrap_or_default();
-        let pacific = grouped.get("Pacific").cloned().unwrap_or_default();
-
-        // Convert selection state to focused_row for each column
-        // The column assignment depends on western_first config
-        let (eastern_focused, western_focused) = if props.config.display_standings_western_first {
-            // Western is column 0, Eastern is column 1
-            let western = if props.browse_mode && props.selected_column == 0 {
-                Some(props.selected_row)
-            } else {
-                None
-            };
-            let eastern = if props.browse_mode && props.selected_column == 1 {
-                Some(props.selected_row)
-            } else {
-                None
-            };
-            (eastern, western)
-        } else {
-            // Eastern is column 0, Western is column 1
-            let eastern = if props.browse_mode && props.selected_column == 0 {
-                Some(props.selected_row)
-            } else {
-                None
-            };
-            let western = if props.browse_mode && props.selected_column == 1 {
-                Some(props.selected_row)
-            } else {
-                None
-            };
-            (eastern, western)
-        };
-
-        // Build Eastern Conference column (Atlantic top 3 + Metropolitan top 3 + wildcards)
-        let eastern_elements = self.build_wildcard_conference_column(
-            "Atlantic",
-            &atlantic,
-            "Metropolitan",
-            &metropolitan,
-            eastern_focused,
-        );
-
-        // Build Western Conference column (Central top 3 + Pacific top 3 + wildcards)
-        let western_elements =
-            self.build_wildcard_conference_column("Central", &central, "Pacific", &pacific, western_focused);
-
-        // Determine column order based on western_first config
-        let (left_elements, right_elements) = if props.config.display_standings_western_first {
-            (western_elements, eastern_elements)
-        } else {
-            (eastern_elements, western_elements)
-        };
-
-        // Create vertical layouts for each column
-        let left_column = self.create_wildcard_column_layout(left_elements);
-        let right_column = self.create_wildcard_column_layout(right_elements);
-
-        // Return horizontal layout with both columns
-        horizontal(
-            [Constraint::Percentage(50), Constraint::Percentage(50)],
-            vec![left_column, right_column],
-        )
-    }
-
-    /// Build a wildcard conference column (2 division top-3s + wildcard section)
-    ///
-    /// # Arguments
-    /// * `div1_name`, `div1_teams` - First division
-    /// * `div2_name`, `div2_teams` - Second division
-    /// * `focused_row` - Which row in this column is focused (None = no focus)
-    fn build_wildcard_conference_column(
-        &self,
-        div1_name: &str,
-        div1_teams: &[Standing],
-        div2_name: &str,
-        div2_teams: &[Standing],
-        focused_row: Option<usize>,
-    ) -> Vec<Element> {
-        let mut elements = Vec::new();
-        let mut team_offset = 0;
-
-        // Division 1 - top 3 teams
-        let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
-        if !div1_top3.is_empty() {
-            let table = self.create_wildcard_table(div1_name, &div1_top3, team_offset, focused_row);
-            elements.push(Element::Widget(Box::new(table)));
-            elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
-            team_offset += div1_top3.len();
-        }
-
-        // Division 2 - top 3 teams
-        let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
-        if !div2_top3.is_empty() {
-            let table = self.create_wildcard_table(div2_name, &div2_top3, team_offset, focused_row);
-            elements.push(Element::Widget(Box::new(table)));
-            elements.push(Element::Widget(Box::new(SpacerWidget { height: 1 })));
-            team_offset += div2_top3.len();
-        }
-
-        // Wildcard section - remaining teams from both divisions, sorted by points
-        let div1_remaining: Vec<_> = div1_teams.iter().skip(3).cloned().collect();
-        let div2_remaining: Vec<_> = div2_teams.iter().skip(3).cloned().collect();
-
-        let mut wildcard_teams: Vec<_> = div1_remaining.into_iter().chain(div2_remaining).collect();
-        wildcard_teams.sort_by_points_desc();
-
-        if !wildcard_teams.is_empty() {
-            let table =
-                self.create_wildcard_table("Wildcard", &wildcard_teams, team_offset, focused_row);
-            // TODO: Add playoff cutoff line after 2nd wildcard team
-            elements.push(Element::Widget(Box::new(table)));
-        }
-
-        elements
-    }
-
-    /// Create a table for wildcard view with proper selection
-    ///
-    /// # Arguments
-    /// * `header` - Table header text
-    /// * `teams` - Teams to display
-    /// * `team_offset` - Offset of first team in this table within the column's total teams
-    /// * `focused_row` - Which row in the column is focused (None = no focus)
-    fn create_wildcard_table(
-        &self,
-        header: &str,
-        teams: &[Standing],
-        team_offset: usize,
-        focused_row: Option<usize>,
-    ) -> TableWidget {
-        let teams_count = teams.len();
-
-        // Calculate focused row within this table
-        let row_in_table = focused_row.and_then(|row| {
-            if row >= team_offset && row < team_offset + teams_count {
-                Some(row - team_offset)
-            } else {
-                None
-            }
-        });
-
-        TableWidget::from_data(standings_columns(), teams.to_vec())
-            .with_header(header)
-            .with_focused_row(row_in_table)
-            .with_margin(0)
-    }
-
-    /// Create vertical layout for wildcard column elements
-    fn create_wildcard_column_layout(&self, elements: Vec<Element>) -> Element {
-        // Each division top-3 table needs exactly: header (1) + separator (1) + blank (1) + column headers (1) + separator (1) + 3 rows = 8 lines
-        // Spacers are 1 line
-        // Use Length for fixed-size elements to prevent ratatui from expanding them
-        const TABLE_HEIGHT: u16 = 8;
-        const SPACER_HEIGHT: u16 = 1;
-        match elements.len() {
-            0 => Element::None,
-            1 => vertical([Constraint::Min(0)], elements),
-            2 => vertical(
-                [
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                ],
-                elements,
-            ),
-            3 => vertical(
-                [
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(TABLE_HEIGHT),
-                ],
-                elements,
-            ),
-            4 => vertical(
-                [
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                ],
-                elements,
-            ),
-            5 => vertical(
-                [
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Min(1),
-                ],
-                elements,
-            ),
-            6 => vertical(
-                [
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Min(1),
-                    Constraint::Length(SPACER_HEIGHT),
-                ],
-                elements,
-            ),
-            7 => vertical(
-                [
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Length(TABLE_HEIGHT),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Min(1),
-                    Constraint::Length(SPACER_HEIGHT),
-                    Constraint::Min(1),
-                ],
-                elements,
-            ),
-            _ => {
-                // Fallback for more elements
-                vertical([Constraint::Min(0)], elements)
-            }
-        }
+        Element::Widget(Box::new(StandingsDocumentWidget::wildcard(
+            Arc::new(standings.to_vec()),
+            props.config.clone(),
+            props.focus_index,
+            props.scroll_offset,
+        )))
     }
 
     fn render_panel(&self, props: &StandingsTabProps) -> Element {
@@ -520,27 +270,6 @@ impl ElementWidget for PanelWidget {
         Box::new(PanelWidget {
             message: self.message.clone(),
         })
-    }
-}
-
-/// Spacer widget - renders empty lines for vertical spacing
-struct SpacerWidget {
-    height: u16,
-}
-
-impl ElementWidget for SpacerWidget {
-    fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
-        // Intentionally empty - just takes up space
-    }
-
-    fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(SpacerWidget {
-            height: self.height,
-        })
-    }
-
-    fn preferred_height(&self) -> Option<u16> {
-        Some(self.height)
     }
 }
 
@@ -849,59 +578,44 @@ mod tests {
         assert_buffer(&buf, &[
             "Wildcard │ Division │ Conference │ League",
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
-            "  Atlantic                                                    Central",
-            "  ════════                                                    ═══════",
+            "  Atlantic                                                     Central",
+            "  ════════                                                     ═══════",
             "",
-            "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
-            "  Panthers                      19    14    3    2     30     Avalanche                     19    16    2    1     33",
-            "  Bruins                        18    13    4    1     27     Stars                         20    14    4    2     30",
-            "  Maple Leafs                   19    12    5    2     26     Jets                          19    13    5    1     27",
+            "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
+            "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
+            "  Panthers                      19    14    3    2     30      Avalanche                     19    16    2    1     33",
+            "  Bruins                        18    13    4    1     27      Stars                         20    14    4    2     30",
+            "  Maple Leafs                   19    12    5    2     26      Jets                          19    13    5    1     27",
             "",
-            "  Metropolitan                                                Pacific",
-            "  ════════════                                                ═══════",
+            "  Metropolitan                                                 Pacific",
+            "  ════════════                                                 ═══════",
             "",
-            "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
-            "  Devils                        18    15    2    1     31     Golden Knights                19    15    3    1     31",
-            "  Hurricanes                    19    14    3    2     30     Oilers                        20    14    4    2     30",
-            "  Rangers                       18    12    5    1     25     Kings                         19    12    6    1     25",
+            "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
+            "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
+            "  Devils                        18    15    2    1     31      Golden Knights                19    15    3    1     31",
+            "  Hurricanes                    19    14    3    2     30      Oilers                        20    14    4    2     30",
+            "  Rangers                       18    12    5    1     25      Kings                         19    12    6    1     25",
             "",
-            "  Wildcard                                                    Wildcard",
-            "  ════════                                                    ════════",
+            "  Wildcard                                                     Wildcard",
+            "  ════════                                                     ════════",
             "",
-            "  Team                        GP    W     L    OT   PTS       Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────     ───────────────────────────────────────────────────────",
-            "  Penguins                      19    11    6    2     24     Wild                          19    11    6    2     24",
-            "  Lightning                     18    11    6    1     23     Kraken                        19    11    6    2     24",
-            "  Canadiens                     18    10    5    3     23     Predators                     19    10    7    2     22",
-            "  Capitals                      18    10    7    1     21     Canucks                       19    10    7    2     22",
-            "  Senators                      18     9    7    2     20     Flames                        19     9    8    2     20",
-            "  Islanders                     18     9    7    2     20     Blues                         19     8    8    3     19",
-            "  Red Wings                     18     8    8    2     18     Ducks                         19     7   10    2     16",
-            "  Flyers                        18     8    9    1     17     Blackhawks                    18     7   10    1     15",
-            "  Sabres                        18     6   10    2     14     Sharks                        18     5   12    1     11",
-            "  Blue Jackets                  18     5   11    2     12     Coyotes                       18     4   13    1      9",
+            "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
+            "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
+            "  Penguins                      19    11    6    2     24      Wild                          19    11    6    2     24",
+            "  Lightning                     18    11    6    1     23      Kraken                        19    11    6    2     24",
+            "  Canadiens                     18    10    5    3     23      Predators                     19    10    7    2     22",
+            "  Capitals                      18    10    7    1     21      Canucks                       19    10    7    2     22",
+            "  Senators                      18     9    7    2     20      Flames                        19     9    8    2     20",
+            "  Islanders                     18     9    7    2     20      Blues                         19     8    8    3     19",
+            "  Red Wings                     18     8    8    2     18      Ducks                         19     7   10    2     16",
+            "  Flyers                        18     8    9    1     17      Blackhawks                    18     7   10    1     15",
+            "  Sabres                        18     6   10    2     14      Sharks                        18     5   12    1     11",
+            "  Blue Jackets                  18     5   11    2     12      Coyotes                       18     4   13    1      9",
             "",
             "",
             "",
             "",
             "",
         ]);
-    }
-
-    // Helper function for creating test standings
-    fn create_test_standing(name: &str, points: i32) -> Standing {
-        use crate::tui::testing::create_division_team;
-        create_division_team(
-            name,
-            &name.replace("Team ", "T"),
-            "Division",
-            "Conference",
-            0, // wins
-            0, // losses
-            0, // ot
-            points,
-        )
     }
 }
