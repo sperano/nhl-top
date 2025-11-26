@@ -81,52 +81,6 @@ impl StandingsTab {
             })
             .collect();
 
-        // let tabs = vec![
-        //     TabItem::new(
-        //         GroupBy::Wildcard.name(),
-        //         GroupBy::Wildcard.name(),
-        //         if props.view == GroupBy::Wildcard {
-        //             self.render_standings_table(props, &GroupBy::Wildcard)
-        //         } else {
-        //             Element::None
-        //         },
-        //     ),
-        //     TabItem::new(
-        //         GroupBy::Division.name(),
-        //         GroupBy::Division.name(),
-        //         if props.view == GroupBy::Division {
-        //             self.render_standings_table(props, &GroupBy::Division)
-        //         } else {
-        //             Element::None
-        //         },
-        //     ),
-        //     TabItem::new(
-        //         GroupBy::Conference.name(),
-        //         GroupBy::Conference.name(),
-        //         if props.view == GroupBy::Conference {
-        //             self.render_standings_table(props, &GroupBy::Conference)
-        //         } else {
-        //             Element::None
-        //         },
-        //     ),
-        //     TabItem::new(
-        //         GroupBy::League.name(),
-        //         GroupBy::League.name(),
-        //         if props.view == GroupBy::League {
-        //             self.render_standings_table(props, &GroupBy::League)
-        //         } else {
-        //             Element::None
-        //         },
-        //     ),
-        // ];
-
-        // Determine active tab key
-        // let active_key = match props.view {
-        //     GroupBy::Wildcard => "wildcard",
-        //     GroupBy::Division => "division",
-        //     GroupBy::Conference => "conference",
-        //     GroupBy::League => "league",
-        // };
         TabbedPanel.view(
             &TabbedPanelProps {
                 active_key: props.view.name().to_string(),
