@@ -75,22 +75,10 @@ pub enum ScoresAction {
 /// Tab-specific actions for Standings
 #[derive(Debug, Clone)]
 pub enum StandingsAction {
-    CycleView,
     CycleViewLeft,
     CycleViewRight,
-    SelectTeam,
-    SelectTeamByPosition(usize, usize), // column, row
     EnterBrowseMode,
     ExitBrowseMode,
-    MoveSelectionUp,
-    MoveSelectionDown,
-    MoveSelectionLeft,
-    MoveSelectionRight,
-    PageDown,
-    PageUp,
-    GoToTop,
-    GoToBottom,
-    UpdateViewportHeight(usize), // Update actual visible height from renderer
 }
 
 /// Tab-specific actions for Settings

@@ -147,11 +147,6 @@ impl Default for ScoresUiState {
 pub struct StandingsUiState {
     pub view: GroupBy,
     pub browse_mode: bool,
-    pub selected_column: usize,
-    pub selected_row: usize,
-    /// Cached layout: layout[column][row] = team_abbrev
-    /// Rebuilt when standings data changes or view changes
-    pub layout: Vec<Vec<String>>,
 }
 
 impl Default for StandingsUiState {
@@ -159,9 +154,6 @@ impl Default for StandingsUiState {
         Self {
             view: GroupBy::Wildcard,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
-            layout: Vec::new(),
         }
     }
 }

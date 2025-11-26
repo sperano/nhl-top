@@ -440,7 +440,7 @@ mod tests {
         let mut state = AppState::default();
         state.ui.standings.view = GroupBy::Division;
 
-        let action = Action::StandingsAction(StandingsAction::CycleView);
+        let action = Action::StandingsAction(StandingsAction::CycleViewRight);
         let (new_state, _) = reduce(state, action);
 
         assert_eq!(new_state.ui.standings.view, GroupBy::Conference);

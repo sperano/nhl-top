@@ -22,14 +22,12 @@ use super::{TabItem, TabbedPanel, TabbedPanelProps};
 pub struct StandingsTabProps {
     pub view: GroupBy,
     pub browse_mode: bool,
-    pub selected_column: usize,
-    pub selected_row: usize,
     pub standings: Arc<Option<Vec<Standing>>>,
     pub panel_stack: Vec<PanelState>,
     pub focused: bool,
     pub config: Config,
 
-    // Document system state (for League view)
+    // Document system state
     pub focus_index: Option<usize>,
     pub scroll_offset: u16,
 }
@@ -288,8 +286,6 @@ mod tests {
         let props = StandingsTabProps {
             view: GroupBy::Division,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
             standings: Arc::new(None),
             panel_stack: Vec::new(),
             focused: false,
@@ -316,8 +312,6 @@ mod tests {
         let props = StandingsTabProps {
             view: GroupBy::League,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -360,8 +354,6 @@ mod tests {
         let props = StandingsTabProps {
             view: GroupBy::League,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -426,8 +418,6 @@ mod tests {
         let props = StandingsTabProps {
             view: GroupBy::Division,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -495,8 +485,6 @@ mod tests {
         let props = StandingsTabProps {
             view: GroupBy::Conference,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -561,8 +549,6 @@ mod tests {
         let props = StandingsTabProps {
             view: GroupBy::Wildcard,
             browse_mode: false,
-            selected_column: 0,
-            selected_row: 0,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
