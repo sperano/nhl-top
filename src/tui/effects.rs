@@ -48,6 +48,11 @@ impl DataEffects {
         Effect::Batch(effects)
     }
 
+    /// Handle a schedule refresh for a specific date
+    pub fn handle_refresh_schedule(&self, date: nhl_api::GameDate) -> Effect {
+        self.fetch_schedule(date)
+    }
+
     /// Fetch current league standings (with caching)
     pub fn fetch_standings(&self) -> Effect {
         let client = self.client.clone();

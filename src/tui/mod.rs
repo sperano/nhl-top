@@ -27,7 +27,7 @@ pub mod testing;
 #[cfg(test)]
 mod integration_tests;
 
-pub use action::{Action, DocumentAction, ScoresAction, StandingsAction};
+pub use action::{Action, ScoresAction, StandingsAction};
 pub use component::{Component, Effect, Element, ElementWidget};
 pub use effects::DataEffects;
 pub use keys::key_to_action;
@@ -40,7 +40,6 @@ pub use types::{Panel, SettingsCategory, Tab};
 
 use crate::config::Config;
 use crate::data_provider::NHLDataProvider;
-use crate::layout_constants::GAME_BOX_WITH_MARGIN;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event},
     execute,
@@ -50,11 +49,6 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
-
-/// Calculate how many game boxes fit per row based on terminal width
-fn calculate_boxes_per_row(terminal_width: u16) -> u16 {
-    (terminal_width / GAME_BOX_WITH_MARGIN).max(1)
-}
 
 /// Check if an action is a quit action
 fn is_quit_action(action: &Action) -> bool {
@@ -131,29 +125,11 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
         #[cfg(feature = "development")]
         let mut screenshot_buffer: Option<ratatui::buffer::Buffer> = None;
 
+        let mut terminal_width = 80u16; // Default
+
         terminal.draw(|f| {
             let area = f.area();
-
-            // Update boxes_per_row for game grid navigation
-            let boxes_per_row = calculate_boxes_per_row(area.width);
-
-            // Dispatch action to update boxes_per_row if it changed
-            // Phase 7: Read from component state instead of global state
-            use crate::tui::components::scores_tab::ScoresTabState;
-            let current_boxes_per_row = runtime.component_states()
-                .get::<ScoresTabState>("app/scores_tab")
-                .map(|s| s.boxes_per_row)
-                .unwrap_or(2);
-            if boxes_per_row != current_boxes_per_row {
-                tracing::debug!(
-                    "DRAW: boxes_per_row changed: {} -> {}",
-                    current_boxes_per_row,
-                    boxes_per_row
-                );
-                runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(
-                    boxes_per_row,
-                )));
-            }
+            terminal_width = area.width; // Capture width for key handling
 
             // Build virtual tree from current state
             let element = runtime.build();
@@ -190,6 +166,11 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
                     is_error: false,
                 });
             }
+        }
+
+        // Update terminal width in state if it changed
+        if runtime.state().system.terminal_width != terminal_width {
+            runtime.dispatch(Action::UpdateTerminalWidth(terminal_width));
         }
 
         // If actions were processed, continue loop immediately to check for more
@@ -256,42 +237,6 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_calculate_boxes_per_row_with_wide_terminal() {
-        // Terminal width = 200, box width = 39
-        // 200 / 39 = 5.128... = 5 boxes
-        assert_eq!(calculate_boxes_per_row(200), 5);
-    }
-
-    #[test]
-    fn test_calculate_boxes_per_row_with_narrow_terminal() {
-        // Terminal width = 80, box width = 39
-        // 80 / 39 = 2.051... = 2 boxes
-        assert_eq!(calculate_boxes_per_row(80), 2);
-    }
-
-    #[test]
-    fn test_calculate_boxes_per_row_with_very_narrow_terminal() {
-        // Terminal width = 30, box width = 39
-        // 30 / 39 = 0.769... = 0, but max(1) = 1
-        assert_eq!(calculate_boxes_per_row(30), 1);
-    }
-
-    #[test]
-    fn test_calculate_boxes_per_row_with_exact_fit() {
-        // Terminal width = 39 * 3 = 117
-        // 117 / 39 = 3 boxes exactly
-        assert_eq!(calculate_boxes_per_row(117), 3);
-    }
-
-    #[test]
-    fn test_calculate_boxes_per_row_minimum_is_one() {
-        // Even with width 0, should return 1
-        assert_eq!(calculate_boxes_per_row(0), 1);
-        assert_eq!(calculate_boxes_per_row(1), 1);
-        assert_eq!(calculate_boxes_per_row(10), 1);
-    }
 
     #[test]
     fn test_is_quit_action_with_quit() {

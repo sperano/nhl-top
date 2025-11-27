@@ -167,6 +167,7 @@ mod tests {
             config: Config::default(),
             status_message: None,
             status_is_error: false,
+            terminal_width: 80,
         };
 
         let element = status_bar.view(&system_state, &());
@@ -196,6 +197,7 @@ mod tests {
             config: Config::default(),
             status_message: None,
             status_is_error: false,
+            terminal_width: 80,
         };
 
         let element = status_bar.view(&system_state, &());

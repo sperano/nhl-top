@@ -71,7 +71,7 @@ impl Runtime {
     pub fn dispatch(&mut self, action: Action) {
         trace!("ACTION: Dispatching {:?}", action);
 
-        // Handle RefreshData action specially - generate data fetch effects
+        // Handle RefreshData and RefreshSchedule actions specially - generate data fetch effects
         let effect = if matches!(action, Action::RefreshData) {
             debug!("ACTION: RefreshData - generating fetch effects");
 
@@ -82,6 +82,19 @@ impl Runtime {
 
             // Then generate data fetch effects
             self.data_effects.handle_refresh(&self.state)
+        } else if let Action::RefreshSchedule(date) = &action {
+            debug!("ACTION: RefreshSchedule({:?}) - generating fetch effects", date);
+
+            // Clear old schedule data and update global game_date before fetching new data
+            let mut new_state = self.state.clone();
+            new_state.ui.scores.game_date = date.clone();
+            new_state.data.schedule = Arc::new(None);
+            Arc::make_mut(&mut new_state.data.game_info).clear();
+            Arc::make_mut(&mut new_state.data.period_scores).clear();
+            self.state = new_state;
+
+            // Then generate schedule fetch effect for the specific date
+            self.data_effects.handle_refresh_schedule(date.clone())
         } else {
             // Run the reducer to get new state and any effects
             let (new_state, reducer_effect) =

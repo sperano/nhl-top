@@ -25,7 +25,6 @@ pub struct ScoresTabState {
     pub game_date: GameDate,
     pub box_selection_active: bool,
     pub selected_game_index: Option<usize>,
-    pub boxes_per_row: u16,
 }
 
 impl Default for ScoresTabState {
@@ -35,7 +34,6 @@ impl Default for ScoresTabState {
             game_date: GameDate::today(),
             box_selection_active: false,
             selected_game_index: None,
-            boxes_per_row: 2,
         }
     }
 }
@@ -47,12 +45,10 @@ pub enum ScoresTabMsg {
     NavigateRight,
     EnterBoxSelection,
     ExitBoxSelection,
-    SelectGame,
-    MoveGameSelectionUp,
-    MoveGameSelectionDown,
+    MoveGameSelectionUp(u16),    // boxes_per_row
+    MoveGameSelectionDown(u16),  // boxes_per_row
     MoveGameSelectionLeft,
     MoveGameSelectionRight,
-    UpdateBoxesPerRow(u16),
 }
 
 impl ComponentMessageTrait for ScoresTabMsg {
@@ -111,7 +107,8 @@ impl Component for ScoresTab {
                     state.game_date = state.game_date.add_days(-1);
                     // selected_date_index stays at 0
                 }
-                Effect::Action(Action::RefreshData)
+                // Refresh schedule for new date (also updates global state and clears old data)
+                Effect::Action(Action::RefreshSchedule(state.game_date.clone()))
             }
             ScoresTabMsg::NavigateRight => {
                 // Navigate right in the date window
@@ -125,7 +122,8 @@ impl Component for ScoresTab {
                     state.game_date = state.game_date.add_days(1);
                     // selected_date_index stays at 4
                 }
-                Effect::Action(Action::RefreshData)
+                // Refresh schedule for new date (also updates global state and clears old data)
+                Effect::Action(Action::RefreshSchedule(state.game_date.clone()))
             }
             ScoresTabMsg::EnterBoxSelection => {
                 state.box_selection_active = true;
@@ -137,22 +135,18 @@ impl Component for ScoresTab {
                 state.selected_game_index = None;
                 Effect::None
             }
-            ScoresTabMsg::SelectGame => {
-                // TODO: Open boxscore panel for selected game
-                Effect::None
-            }
-            ScoresTabMsg::MoveGameSelectionUp => {
+            ScoresTabMsg::MoveGameSelectionUp(boxes_per_row) => {
                 if let Some(idx) = state.selected_game_index {
-                    if idx >= state.boxes_per_row as usize {
-                        state.selected_game_index = Some(idx - state.boxes_per_row as usize);
+                    if idx >= boxes_per_row as usize {
+                        state.selected_game_index = Some(idx - boxes_per_row as usize);
                     }
                 }
                 Effect::None
             }
-            ScoresTabMsg::MoveGameSelectionDown => {
+            ScoresTabMsg::MoveGameSelectionDown(boxes_per_row) => {
                 // TODO: Get game count from schedule and bounds check
                 if let Some(idx) = state.selected_game_index {
-                    state.selected_game_index = Some(idx + state.boxes_per_row as usize);
+                    state.selected_game_index = Some(idx + boxes_per_row as usize);
                 }
                 Effect::None
             }
@@ -168,10 +162,6 @@ impl Component for ScoresTab {
                 if let Some(idx) = state.selected_game_index {
                     state.selected_game_index = Some(idx + 1);
                 }
-                Effect::None
-            }
-            ScoresTabMsg::UpdateBoxesPerRow(boxes_per_row) => {
-                state.boxes_per_row = boxes_per_row;
                 Effect::None
             }
         }

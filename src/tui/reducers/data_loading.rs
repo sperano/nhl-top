@@ -43,7 +43,6 @@ pub fn reduce_data_loading(
             result.clone(),
         )),
         Action::RefreshData => Some(handle_refresh_data(state.clone())),
-        Action::SetGameDate(date) => Some(handle_set_game_date(state.clone(), date.clone())),
         _ => None,
     }
 }
@@ -270,18 +269,6 @@ fn handle_player_stats_loaded(
 fn handle_refresh_data(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.system.last_refresh = Some(SystemTime::now());
-    (new_state, Effect::None)
-}
-
-fn handle_set_game_date(state: AppState, date: nhl_api::GameDate) -> (AppState, Effect) {
-    let mut new_state = state;
-    new_state.ui.scores.game_date = date;
-
-    // Clear schedule data when date changes
-    new_state.data.schedule = Arc::new(None);
-    Arc::make_mut(&mut new_state.data.game_info).clear();
-    Arc::make_mut(&mut new_state.data.period_scores).clear();
-
     (new_state, Effect::None)
 }
 

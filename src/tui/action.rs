@@ -37,10 +37,10 @@ pub enum Action {
     ToggleCommandPalette,
 
     // Data actions
-    SetGameDate(GameDate),
     // SelectTeam(String),
     // SelectPlayer(i64),
     RefreshData,
+    RefreshSchedule(GameDate),  // Refresh schedule for specific date
 
     // Data loaded (from effects)
     StandingsLoaded(Result<Vec<Standing>, String>),
@@ -63,7 +63,6 @@ pub enum Action {
     ScoresAction(ScoresAction),
     StandingsAction(StandingsAction),
     SettingsAction(SettingsAction),
-    DocumentAction(DocumentAction),
 
     /// Dispatch a message to a specific component
     ///
@@ -81,6 +80,7 @@ pub enum Action {
     Quit,
     Error(String),
     SetStatusMessage { message: String, is_error: bool },
+    UpdateTerminalWidth(u16),
 }
 
 /// Tab-specific actions for Scores
@@ -90,13 +90,11 @@ pub enum ScoresAction {
     DateRight,
     EnterBoxSelection,
     ExitBoxSelection,
-    SelectGame,
-    SelectGameById(i64),
-    MoveGameSelectionUp,
-    MoveGameSelectionDown,
+    SelectGame(i64),             // game_id
+    MoveGameSelectionUp(u16),    // boxes_per_row
+    MoveGameSelectionDown(u16),  // boxes_per_row
     MoveGameSelectionLeft,
     MoveGameSelectionRight,
-    UpdateBoxesPerRow(u16), // Update grid layout for navigation
 }
 
 /// Tab-specific actions for Standings
@@ -131,39 +129,8 @@ pub enum SettingsAction {
     UpdateConfig(Box<crate::config::Config>),
 }
 
-/// Document-related actions for viewport scrolling and focus navigation
-#[derive(Debug, Clone)]
-pub enum DocumentAction {
-    /// Navigate to next focusable element (Tab/Down key)
-    FocusNext,
-    /// Navigate to previous focusable element (Shift-Tab/Up key)
-    FocusPrev,
-    /// Navigate to corresponding element in left sibling within a Row (Left key)
-    FocusLeft,
-    /// Navigate to corresponding element in right sibling within a Row (Right key)
-    FocusRight,
-    /// Activate the currently focused element (Enter key)
-    ActivateFocused,
-    /// Scroll viewport up by N lines
-    ScrollUp(u16),
-    /// Scroll viewport down by N lines
-    ScrollDown(u16),
-    /// Scroll to top of document
-    ScrollToTop,
-    /// Scroll to bottom of document
-    ScrollToBottom,
-    /// Page up (scroll by viewport height)
-    PageUp,
-    /// Page down (scroll by viewport height)
-    PageDown,
-    /// Update viewport heights from terminal (dispatched on resize/render)
-    /// This is critical for correct autoscroll calculations
-    /// Parameters: (demo_viewport_height, standings_viewport_height)
-    UpdateViewportHeight { demo: u16, standings: u16 },
-    /// Sync focusable element positions from component (for accurate autoscrolling)
-    /// Parameters: (positions, viewport_height)
-    SyncFocusablePositions(Vec<u16>, u16),
-}
+// DocumentAction removed in Phase 10 - now handled by component messages
+// (StandingsTabMsg::DocNav, DemoTabMessage::DocNav)
 
 impl Clone for Action {
     fn clone(&self) -> Self {
@@ -176,8 +143,8 @@ impl Clone for Action {
             Self::PushPanel(panel) => Self::PushPanel(panel.clone()),
             Self::PopPanel => Self::PopPanel,
             Self::ToggleCommandPalette => Self::ToggleCommandPalette,
-            Self::SetGameDate(date) => Self::SetGameDate(date.clone()),
             Self::RefreshData => Self::RefreshData,
+            Self::RefreshSchedule(date) => Self::RefreshSchedule(date.clone()),
             Self::StandingsLoaded(result) => Self::StandingsLoaded(result.clone()),
             Self::ScheduleLoaded(result) => Self::ScheduleLoaded(result.clone()),
             Self::GameDetailsLoaded(id, result) => Self::GameDetailsLoaded(*id, result.clone()),
@@ -194,7 +161,6 @@ impl Clone for Action {
             Self::ScoresAction(action) => Self::ScoresAction(action.clone()),
             Self::StandingsAction(action) => Self::StandingsAction(action.clone()),
             Self::SettingsAction(action) => Self::SettingsAction(action.clone()),
-            Self::DocumentAction(action) => Self::DocumentAction(action.clone()),
             Self::ComponentMessage { path, message } => Self::ComponentMessage {
                 path: path.clone(),
                 message: message.clone_box(),
@@ -205,6 +171,7 @@ impl Clone for Action {
                 message: message.clone(),
                 is_error: *is_error,
             },
+            Self::UpdateTerminalWidth(width) => Self::UpdateTerminalWidth(*width),
         }
     }
 }

@@ -141,7 +141,7 @@ pub struct ScoresUiState {
     pub game_date: GameDate,
     pub box_selection_active: bool,
     pub selected_game_index: Option<usize>,
-    pub boxes_per_row: u16, // Calculated grid columns for game navigation
+    // boxes_per_row removed - calculated on-demand from terminal_width
 }
 
 impl Default for ScoresUiState {
@@ -151,7 +151,6 @@ impl Default for ScoresUiState {
             game_date: GameDate::today(),
             box_selection_active: false,
             selected_game_index: None,
-            boxes_per_row: 2, // Default to 2 columns
         }
     }
 }
@@ -198,6 +197,9 @@ pub struct SystemState {
     pub config: Config,
     pub status_message: Option<String>,
     pub status_is_error: bool,
+    /// Cached terminal width for calculating game grid layout
+    /// Updated during render, used by key handlers
+    pub terminal_width: u16,
 }
 
 impl SystemState {

@@ -135,16 +135,35 @@ fn handle_tab_bar_navigation(key_code: KeyCode) -> Option<Action> {
 
 /// Handle Scores tab navigation (box selection mode vs date mode)
 fn handle_scores_tab_keys(
+    state: &AppState,
     key_code: KeyCode,
     component_states: &ComponentStateStore,
 ) -> Option<Action> {
     if is_box_selection_active(component_states) {
         // Box selection mode - arrows navigate within game grid
+        // Calculate boxes_per_row from cached terminal width
+        use crate::layout_constants::GAME_BOX_WITH_MARGIN;
+        let boxes_per_row = (state.system.terminal_width / GAME_BOX_WITH_MARGIN).max(1);
+
         match key_code {
-            KeyCode::Down => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown)),
+            KeyCode::Down => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown(boxes_per_row))),
             KeyCode::Left => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft)),
             KeyCode::Right => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight)),
-            KeyCode::Enter => Some(Action::ScoresAction(ScoresAction::SelectGame)),
+            KeyCode::Enter => {
+                // Look up game_id from component state and schedule
+                use crate::tui::components::scores_tab::ScoresTabState;
+
+                if let Some(scores_state) = component_states.get::<ScoresTabState>("app/scores_tab") {
+                    if let Some(selected_index) = scores_state.selected_game_index {
+                        if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
+                            if let Some(game) = schedule.games.get(selected_index) {
+                                return Some(Action::ScoresAction(ScoresAction::SelectGame(game.id)));
+                            }
+                        }
+                    }
+                }
+                None
+            }
             _ => None,
         }
     } else {
@@ -153,7 +172,19 @@ fn handle_scores_tab_keys(
             KeyCode::Left => Some(Action::ScoresAction(ScoresAction::DateLeft)),
             KeyCode::Right => Some(Action::ScoresAction(ScoresAction::DateRight)),
             KeyCode::Down => Some(Action::ScoresAction(ScoresAction::EnterBoxSelection)),
-            KeyCode::Enter => Some(Action::ScoresAction(ScoresAction::SelectGame)),
+            KeyCode::Enter => {
+                // Look up game_id from component state and schedule (first game)
+                use crate::tui::components::scores_tab::ScoresTabState;
+
+                if let Some(_scores_state) = component_states.get::<ScoresTabState>("app/scores_tab") {
+                    if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
+                        if let Some(game) = schedule.games.first() {
+                            return Some(Action::ScoresAction(ScoresAction::SelectGame(game.id)));
+                        }
+                    }
+                }
+                None
+            }
             _ => None,
         }
     }
@@ -406,7 +437,9 @@ pub fn key_to_action(
         // Check if we're in a nested mode first
         if is_box_selection_active(component_states) {
             // In box selection - Up navigates within grid
-            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp));
+            use crate::layout_constants::GAME_BOX_WITH_MARGIN;
+            let boxes_per_row = (state.system.terminal_width / GAME_BOX_WITH_MARGIN).max(1);
+            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp(boxes_per_row)));
         } else if state.ui.settings.modal_open || state.ui.settings.editing {
             // Modal or editing active - let tab-specific handler deal with it
             // Fall through to tab-specific handling below
@@ -439,7 +472,7 @@ pub fn key_to_action(
 
     // 7. Delegate to tab-specific handlers
     match current_tab {
-        Tab::Scores => handle_scores_tab_keys(key.code, component_states),
+        Tab::Scores => handle_scores_tab_keys(state, key.code, component_states),
         Tab::Standings => {
             // All standings views use document navigation in browse mode
             if is_browse_mode_active(component_states) {
@@ -522,6 +555,7 @@ mod tests {
         let mut store = ComponentStateStore::new();
         let mut scores_state = ScoresTabState::default();
         scores_state.box_selection_active = true;
+        scores_state.selected_game_index = Some(0); // Select first game
         store.insert("app/scores_tab".to_string(), scores_state);
         store
     }
@@ -941,7 +975,7 @@ mod tests {
         let action = key_to_action(make_key(KeyCode::Up), &state, &component_states);
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp))
+            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp(_)))
         ));
     }
 
@@ -955,7 +989,7 @@ mod tests {
         let action = key_to_action(make_key(KeyCode::Down), &state, &component_states);
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown))
+            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown(_)))
         ));
     }
 
@@ -988,16 +1022,63 @@ mod tests {
     }
 
     #[test]
-    fn test_scores_box_selection_enter() {
+    fn test_scores_box_selection_enter_with_no_schedule() {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
         let component_states = make_component_states_with_box_selection();
 
+        // With no schedule data, Enter should return None
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &component_states);
+        assert!(action.is_none());
+    }
+
+    #[test]
+    fn test_scores_box_selection_enter_with_schedule() {
+        use nhl_api::{DailySchedule, GameState, GameType, ScheduleGame, ScheduleTeam};
+        use std::sync::Arc;
+
+        let mut state = AppState::default();
+        state.navigation.current_tab = Tab::Scores;
+        state.navigation.content_focused = true;
+
+        // Add schedule data with a test game
+        let game = ScheduleGame {
+            id: 12345,
+            game_type: GameType::RegularSeason,
+            game_date: None,
+            start_time_utc: "2024-11-26T00:00:00Z".to_string(),
+            away_team: ScheduleTeam {
+                id: 10,
+                abbrev: "TOR".to_string(),
+                place_name: None,
+                logo: String::new(),
+                score: None,
+            },
+            home_team: ScheduleTeam {
+                id: 8,
+                abbrev: "MTL".to_string(),
+                place_name: None,
+                logo: String::new(),
+                score: None,
+            },
+            game_state: GameState::Live,
+        };
+        let schedule = DailySchedule {
+            next_start_date: None,
+            previous_start_date: None,
+            date: "2024-11-26".to_string(),
+            games: vec![game],
+            number_of_games: 1,
+        };
+        state.data.schedule = Arc::new(Some(schedule));
+
+        let component_states = make_component_states_with_box_selection();
+
         let action = key_to_action(make_key(KeyCode::Enter), &state, &component_states);
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::SelectGame))
+            Some(Action::ScoresAction(ScoresAction::SelectGame(12345)))
         ));
     }
 
@@ -1045,17 +1126,15 @@ mod tests {
     }
 
     #[test]
-    fn test_scores_date_mode_enter() {
+    fn test_scores_date_mode_enter_no_schedule() {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
         let component_states = make_component_states(); // box_selection_active = false (default)
 
+        // With no schedule, Enter should return None
         let action = key_to_action(make_key(KeyCode::Enter), &state, &component_states);
-        assert!(matches!(
-            action,
-            Some(Action::ScoresAction(ScoresAction::SelectGame))
-        ));
+        assert!(action.is_none());
     }
 
     // Standings tab

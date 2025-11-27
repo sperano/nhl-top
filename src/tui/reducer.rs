@@ -10,8 +10,7 @@ use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
 use crate::tui::reducers::{
-    reduce_data_loading, reduce_document, reduce_navigation, reduce_panels, reduce_scores,
-    reduce_standings,
+    reduce_data_loading, reduce_navigation, reduce_panels, reduce_scores, reduce_standings,
 };
 
 /// Create an effect to save config to disk asynchronously
@@ -79,10 +78,7 @@ pub fn reduce(
         return result;
     }
 
-    // Document actions (Phase 7: Pass component_states)
-    if let Some(result) = reduce_document(&state, &action, component_states) {
-        return result;
-    }
+    // Document actions removed in Phase 10 - now handled by component messages
 
     // Tab-specific action delegation
     match action {
@@ -135,6 +131,12 @@ pub fn reduce(
             } else {
                 new_state.system.set_status_message(message);
             }
+            (new_state, Effect::None)
+        }
+
+        Action::UpdateTerminalWidth(width) => {
+            let mut new_state = state;
+            new_state.system.terminal_width = width;
             (new_state, Effect::None)
         }
 

@@ -40,18 +40,18 @@ pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect
                 message: Box::new(ScoresTabMsg::ExitBoxSelection),
             }),
         ),
-        ScoresAction::MoveGameSelectionUp => (
+        ScoresAction::MoveGameSelectionUp(boxes_per_row) => (
             state,
             Effect::Action(Action::ComponentMessage {
                 path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::MoveGameSelectionUp),
+                message: Box::new(ScoresTabMsg::MoveGameSelectionUp(boxes_per_row)),
             }),
         ),
-        ScoresAction::MoveGameSelectionDown => (
+        ScoresAction::MoveGameSelectionDown(boxes_per_row) => (
             state,
             Effect::Action(Action::ComponentMessage {
                 path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::MoveGameSelectionDown),
+                message: Box::new(ScoresTabMsg::MoveGameSelectionDown(boxes_per_row)),
             }),
         ),
         ScoresAction::MoveGameSelectionLeft => (
@@ -68,43 +68,13 @@ pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect
                 message: Box::new(ScoresTabMsg::MoveGameSelectionRight),
             }),
         ),
-        ScoresAction::UpdateBoxesPerRow(boxes_per_row) => (
-            state,
-            Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::UpdateBoxesPerRow(boxes_per_row)),
-            }),
-        ),
 
-        // Keep these in reducer - they modify global navigation state
-        ScoresAction::SelectGame => handle_select_game(state),
-        ScoresAction::SelectGameById(game_id) => handle_select_game_by_id(state, game_id),
+        // Keep this in reducer - it modifies global navigation state
+        ScoresAction::SelectGame(game_id) => handle_select_game(state, game_id),
     }
 }
 
-fn handle_select_game(state: AppState) -> (AppState, Effect) {
-    let mut new_state = state;
-
-    if let Some(selected_index) = new_state.ui.scores.selected_game_index {
-        if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
-            if let Some(game) = schedule.games.get(selected_index) {
-                let game_id = game.id;
-
-                // Push boxscore panel onto stack
-                new_state.navigation.panel_stack.push(PanelState {
-                    panel: Panel::Boxscore { game_id },
-                    selected_index: Some(0), // Start with first player selected
-                });
-
-                return (new_state, Effect::None);
-            }
-        }
-    }
-
-    (new_state, Effect::None)
-}
-
-fn handle_select_game_by_id(state: AppState, game_id: i64) -> (AppState, Effect) {
+fn handle_select_game(state: AppState, game_id: i64) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Push boxscore panel onto stack
@@ -192,20 +162,10 @@ mod tests {
     // Test actions that still modify global state (panel stack)
 
     #[test]
-    fn test_select_game_with_no_selection() {
+    fn test_select_game() {
         let state = AppState::default();
 
-        let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGame);
-
-        assert_eq!(new_state.navigation.panel_stack.len(), 0);
-        assert!(matches!(effect, Effect::None));
-    }
-
-    #[test]
-    fn test_select_game_by_id() {
-        let state = AppState::default();
-
-        let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGameById(98765));
+        let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGame(98765));
 
         assert_eq!(new_state.navigation.panel_stack.len(), 1);
         match &new_state.navigation.panel_stack[0].panel {
