@@ -8,7 +8,7 @@
 ///
 /// There are two widget traits in this codebase:
 ///
-/// - **`SimpleWidget`** (this module): For standalone widgets that render directly
+/// - **`StandaloneWidget`** (this module): For standalone widgets that render directly
 ///   to a buffer. These don't need Send + Sync or clone_box(). Used for small,
 ///   reusable rendering components like `GameBox`, `ScoreTable`.
 ///
@@ -36,7 +36,7 @@ pub use settings_list::SettingsListWidget;
 use crate::config::DisplayConfig;
 use ratatui::{buffer::Buffer, layout::Rect};
 
-/// Core trait for simple, standalone renderable widgets
+/// Core trait for standalone renderable widgets
 ///
 /// This trait is for widgets that render directly to a buffer but don't need
 /// to participate in the Element tree (no Send + Sync or clone_box required).
@@ -55,7 +55,7 @@ use ratatui::{buffer::Buffer, layout::Rect};
 ///
 /// This trait is object-safe, meaning you can use trait objects to store
 /// different widget types in collections.
-pub trait SimpleWidget {
+pub trait StandaloneWidget {
     /// Render this widget into the provided buffer
     ///
     /// # Arguments
@@ -89,7 +89,7 @@ mod tests {
     #[derive(Debug)]
     struct TestWidget;
 
-    impl SimpleWidget for TestWidget {
+    impl StandaloneWidget for TestWidget {
         fn render(&self, _area: Rect, _buf: &mut Buffer, _config: &DisplayConfig) {
             // Minimal implementation for testing
         }

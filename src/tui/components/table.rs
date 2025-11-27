@@ -9,7 +9,7 @@
 /// # Architecture
 ///
 /// The table follows the current (React-like) framework pattern:
-/// - **TableWidget**: Implements `SimpleWidget` for actual rendering
+/// - **TableWidget**: Implements `StandaloneWidget` for actual rendering
 /// - **CellValue**: Type-safe enum for Text, PlayerLink, or TeamLink
 /// - **ColumnDef**: Defines column header, width, alignment, and cell extraction
 /// - **Navigation helpers**: Methods to find next/previous link columns
@@ -562,7 +562,7 @@ mod tests {
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
 
-    // Helper to render framework SimpleWidget for testing
+    // Helper to render ElementWidget for testing
     fn render_framework_widget(
         widget: &impl crate::tui::component::ElementWidget,
         width: u16,

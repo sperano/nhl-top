@@ -104,7 +104,7 @@ pub enum Effect {
 
 /// Trait for widgets that can be wrapped in the Element tree
 ///
-/// This is distinct from `widgets::SimpleWidget` which is a simpler trait
+/// This is distinct from `widgets::StandaloneWidget` which is a simpler trait
 /// for standalone widgets. ElementWidget adds `Send + Sync` bounds and `clone_box()`
 /// for use with the component framework's `Element::Widget` variant.
 pub trait ElementWidget: Send + Sync {
