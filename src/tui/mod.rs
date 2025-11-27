@@ -5,6 +5,7 @@ pub mod widgets;
 // Core modules
 pub mod action;
 pub mod component;
+pub mod component_store;
 pub mod document;
 pub mod effects;
 pub mod focus_helpers;
@@ -322,8 +323,7 @@ mod tests {
     #[test]
     fn test_is_quit_action_with_panel_actions() {
         assert!(!is_quit_action(&Action::PopPanel));
-        assert!(!is_quit_action(&Action::SelectPlayer(123456)));
-        assert!(!is_quit_action(&Action::SelectTeam("BOS".to_string())));
+        assert!(!is_quit_action(&Action::RefreshData));
     }
 
     #[test]

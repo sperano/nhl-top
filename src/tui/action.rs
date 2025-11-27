@@ -23,8 +23,8 @@ pub enum Action {
 
     // Data actions
     SetGameDate(GameDate),
-    SelectTeam(String),
-    SelectPlayer(i64),
+    // SelectTeam(String),
+    // SelectPlayer(i64),
     RefreshData,
 
     // Data loaded (from effects)

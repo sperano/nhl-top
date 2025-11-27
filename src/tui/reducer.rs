@@ -4,7 +4,7 @@ use super::action::{Action, SettingsAction};
 use super::component::Effect;
 use super::settings_helpers::find_initial_modal_index;
 use super::state::AppState;
-use super::types::{Panel, SettingsCategory};
+use super::types::{SettingsCategory};
 use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
@@ -70,43 +70,43 @@ pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
         Action::StandingsAction(standings_action) => reduce_standings(state, standings_action),
         Action::SettingsAction(settings_action) => reduce_settings(state, settings_action),
 
-        // Special cases that don't fit cleanly into sub-modules
-        Action::SelectPlayer(player_id) => {
-            debug!(
-                "PLAYER: Opening player detail panel for player_id={}",
-                player_id
-            );
-            let mut new_state = state;
+        // // Special cases that don't fit cleanly into sub-modules
+        // Action::SelectPlayer(player_id) => {
+        //     debug!(
+        //         "PLAYER: Opening player detail panel for player_id={}",
+        //         player_id
+        //     );
+        //     let mut new_state = state;
+        //
+        //     // Push PlayerDetail panel onto stack
+        //     new_state
+        //         .navigation
+        //         .panel_stack
+        //         .push(super::state::PanelState {
+        //             panel: Panel::PlayerDetail { player_id },
+        //             selected_index: Some(0), // Start with first season selected
+        //         });
+        //
+        //     (new_state, Effect::None)
+        // }
 
-            // Push PlayerDetail panel onto stack
-            new_state
-                .navigation
-                .panel_stack
-                .push(super::state::PanelState {
-                    panel: Panel::PlayerDetail { player_id },
-                    selected_index: Some(0), // Start with first season selected
-                });
-
-            (new_state, Effect::None)
-        }
-
-        Action::SelectTeam(team_abbrev) => {
-            debug!("TEAM: Opening team detail panel for team={}", team_abbrev);
-            let mut new_state = state;
-
-            // Push TeamDetail panel onto stack
-            new_state
-                .navigation
-                .panel_stack
-                .push(super::state::PanelState {
-                    panel: Panel::TeamDetail {
-                        abbrev: team_abbrev,
-                    },
-                    selected_index: Some(0), // Start with first player selected
-                });
-
-            (new_state, Effect::None)
-        }
+        // Action::SelectTeam(team_abbrev) => {
+        //     debug!("TEAM: Opening team detail panel for team={}", team_abbrev);
+        //     let mut new_state = state;
+        //
+        //     // Push TeamDetail panel onto stack
+        //     new_state
+        //         .navigation
+        //         .panel_stack
+        //         .push(super::state::PanelState {
+        //             panel: Panel::TeamDetail {
+        //                 abbrev: team_abbrev,
+        //             },
+        //             selected_index: Some(0), // Start with first player selected
+        //         });
+        //
+        //     (new_state, Effect::None)
+        // }
 
         Action::SetStatusMessage { message, is_error } => {
             let mut new_state = state;
@@ -456,41 +456,41 @@ mod tests {
         assert!(new_state.system.last_refresh.is_some());
     }
 
-    #[test]
-    fn test_select_player_opens_panel() {
-        let state = AppState::default();
-        let action = Action::SelectPlayer(8471214);
-
-        let (new_state, effect) = reduce(state, action);
-
-        assert_eq!(new_state.navigation.panel_stack.len(), 1);
-        match &new_state.navigation.panel_stack[0].panel {
-            Panel::PlayerDetail { player_id } => {
-                assert_eq!(*player_id, 8471214);
-            }
-            _ => panic!("Expected PlayerDetail panel"),
-        }
-        assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
-        assert!(matches!(effect, Effect::None));
-    }
-
-    #[test]
-    fn test_select_team_opens_panel() {
-        let state = AppState::default();
-        let action = Action::SelectTeam("BOS".to_string());
-
-        let (new_state, effect) = reduce(state, action);
-
-        assert_eq!(new_state.navigation.panel_stack.len(), 1);
-        match &new_state.navigation.panel_stack[0].panel {
-            Panel::TeamDetail { abbrev } => {
-                assert_eq!(abbrev, "BOS");
-            }
-            _ => panic!("Expected TeamDetail panel"),
-        }
-        assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
-        assert!(matches!(effect, Effect::None));
-    }
+    // #[test]
+    // fn test_select_player_opens_panel() {
+    //     let state = AppState::default();
+    //     let action = Action::SelectPlayer(8471214);
+    //
+    //     let (new_state, effect) = reduce(state, action);
+    //
+    //     assert_eq!(new_state.navigation.panel_stack.len(), 1);
+    //     match &new_state.navigation.panel_stack[0].panel {
+    //         Panel::PlayerDetail { player_id } => {
+    //             assert_eq!(*player_id, 8471214);
+    //         }
+    //         _ => panic!("Expected PlayerDetail panel"),
+    //     }
+    //     assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+    //     assert!(matches!(effect, Effect::None));
+    // }
+    //
+    // #[test]
+    // fn test_select_team_opens_panel() {
+    //     let state = AppState::default();
+    //     let action = Action::SelectTeam("BOS".to_string());
+    //
+    //     let (new_state, effect) = reduce(state, action);
+    //
+    //     assert_eq!(new_state.navigation.panel_stack.len(), 1);
+    //     match &new_state.navigation.panel_stack[0].panel {
+    //         Panel::TeamDetail { abbrev } => {
+    //             assert_eq!(abbrev, "BOS");
+    //         }
+    //         _ => panic!("Expected TeamDetail panel"),
+    //     }
+    //     assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+    //     assert!(matches!(effect, Effect::None));
+    // }
 
     #[test]
     fn test_quit_action_does_nothing_to_state() {

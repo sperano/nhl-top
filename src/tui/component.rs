@@ -17,7 +17,7 @@ pub trait Component: Send {
     type Props: Clone;
 
     /// Local state type (if any)
-    type State: Default + Clone;
+    type State: Default + Clone + Send + Sync + 'static;
 
     /// Message type for internal events
     type Message;

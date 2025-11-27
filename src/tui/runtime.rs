@@ -4,6 +4,7 @@ use tracing::{debug, trace};
 
 use super::action::Action;
 use super::component::{Effect, Element};
+use super::component_store::ComponentStateStore;
 use super::effects::DataEffects;
 use super::reducer::reduce;
 use super::state::AppState;
@@ -12,12 +13,16 @@ use super::state::AppState;
 ///
 /// The Runtime is responsible for:
 /// - Managing the application state
+/// - Managing component state instances (React-like lifecycle)
 /// - Dispatching actions through the reducer
 /// - Executing side effects asynchronously
 /// - Building the virtual component tree
 pub struct Runtime {
     /// Current application state
     state: AppState,
+
+    /// Component state storage for lifecycle management
+    component_states: ComponentStateStore,
 
     /// Channel for dispatching actions
     action_tx: mpsc::UnboundedSender<Action>,
@@ -44,6 +49,7 @@ impl Runtime {
 
         Self {
             state: initial_state,
+            component_states: ComponentStateStore::new(),
             action_tx,
             action_rx,
             effect_tx,
@@ -254,12 +260,17 @@ impl Runtime {
     /// This will be used by the Renderer to produce the actual terminal output.
     /// It builds the component tree by calling the root App component's view() method
     /// with the current state as props.
-    pub fn build(&self) -> Element {
+    ///
+    /// Note: Currently needs &mut self to manage component states, but the build itself
+    /// is logically a read operation. In the future, we might use RefCell or similar
+    /// for interior mutability if needed.
+    pub fn build(&mut self) -> Element {
         use crate::tui::component::Component;
         use crate::tui::components::App;
 
         let app = App;
-        app.view(&self.state, &())
+        let app_state = self.component_states.get_or_init::<App>("app", &self.state);
+        app.view(&self.state, app_state)
     }
 
     /// Get a sender for dispatching actions from external sources
@@ -425,18 +436,18 @@ mod tests {
     async fn test_build_returns_component_tree() {
         let state = AppState::default();
         let data_effects = create_test_data_effects();
-        Runtime::new(state, data_effects);
+        let mut runtime = Runtime::new(state, data_effects);
 
         // build() should return the App component tree
-        //let element = runtime.build();
+        let element = runtime.build();
 
         // Should be a container with 2 children (TabbedPanel, StatusBar)
-        // match element {
-        //     Element::Container { children, .. } => {
-        //         assert_eq!(children.len(), 2);
-        //     }
-        //     _ => panic!("Expected container element from App component"),
-        // }
+        match element {
+            Element::Container { children, .. } => {
+                assert_eq!(children.len(), 2);
+            }
+            _ => panic!("Expected container element from App component"),
+        }
     }
 
     #[tokio::test]
