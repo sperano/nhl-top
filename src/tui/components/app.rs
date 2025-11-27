@@ -1,4 +1,5 @@
 use crate::tui::component::{vertical, Component, Constraint, Element};
+use crate::tui::component_store::ComponentStateStore;
 use crate::tui::state::{AppState, LoadingKey};
 //
 use super::{
@@ -25,13 +26,15 @@ impl Component for App {
     type Message = ();
     //
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
+        // Note: This is kept for backward compatibility with the Component trait,
+        // but Runtime now calls build_with_component_states() directly
         vertical(
             [
                 Constraint::Min(0),    // TabbedPanel (tabs + content)
                 Constraint::Length(2), // StatusBar (2 lines: separator + content)
             ],
             vec![
-                self.render_main_tabs(props),
+                self.render_main_tabs_without_states(props),
                 StatusBar.view(&props.system, &()),
             ],
         )
@@ -39,8 +42,103 @@ impl Component for App {
 }
 //
 impl App {
-    /// Render main navigation tabs using TabbedPanel
-    fn render_main_tabs(&self, state: &AppState) -> Element {
+    /// Build the app element tree with access to component states
+    ///
+    /// This is called by Runtime instead of the normal view() method,
+    /// allowing App to access component_states for child components.
+    pub fn build_with_component_states(
+        &self,
+        state: &AppState,
+        component_states: &mut ComponentStateStore,
+    ) -> Element {
+        vertical(
+            [
+                Constraint::Min(0),    // TabbedPanel (tabs + content)
+                Constraint::Length(2), // StatusBar (2 lines: separator + content)
+            ],
+            vec![
+                self.render_main_tabs_with_states(state, component_states),
+                StatusBar.view(&state.system, &()),
+            ],
+        )
+    }
+
+    /// Render main navigation tabs using TabbedPanel (without component states - for tests)
+    fn render_main_tabs_without_states(&self, state: &AppState) -> Element {
+        use crate::tui::Tab;
+
+        let active_key = match state.navigation.current_tab {
+            Tab::Scores => "scores",
+            Tab::Standings => "standings",
+            Tab::Stats => "stats",
+            Tab::Players => "players",
+            Tab::Settings => "settings",
+            Tab::Demo => "demo",
+        };
+
+        let (scores_content, standings_content, settings_content) =
+            if let Some(panel_state) = state.navigation.panel_stack.last() {
+                let panel_element = self.render_panel(state, panel_state);
+                let breadcrumb_element = self.render_breadcrumb(state);
+
+                let content_with_breadcrumb = vertical(
+                    [
+                        Constraint::Length(1),
+                        Constraint::Min(0),
+                    ],
+                    vec![breadcrumb_element, panel_element],
+                );
+
+                match state.navigation.current_tab {
+                    Tab::Scores => (content_with_breadcrumb, Element::None, Element::None),
+                    Tab::Standings => (Element::None, content_with_breadcrumb, Element::None),
+                    Tab::Settings => (Element::None, Element::None, content_with_breadcrumb),
+                    _ => (Element::None, Element::None, Element::None),
+                }
+            } else {
+                (
+                    self.render_scores_tab(state),
+                    self.render_standings_tab(state),
+                    self.render_settings_tab(state),
+                )
+            };
+
+        let demo_content = DemoTab.view(
+            &DemoTabProps {
+                content_focused: state.navigation.content_focused,
+                focus_index: state.ui.demo.focus_index,
+                scroll_offset: state.ui.demo.scroll_offset,
+                standings: state.data.standings.clone(),
+            },
+            &Default::default(),
+        );
+
+        let tabs = vec![
+            TabItem::new("scores", "Scores", scores_content),
+            TabItem::new("standings", "Standings", standings_content),
+            TabItem::new("stats", "Stats", Element::None),
+            TabItem::new("players", "Players", Element::None),
+            TabItem::new("settings", "Settings", settings_content),
+            TabItem::new("demo", "Demo", demo_content),
+        ];
+
+        TabbedPanel.view(
+            &TabbedPanelProps {
+                active_key: active_key.into(),
+                tabs,
+                focused: !state.navigation.content_focused
+                    && state.navigation.panel_stack.is_empty(),
+            },
+            &(),
+        )
+    }
+
+    /// Render main navigation tabs using TabbedPanel (with component states)
+    fn render_main_tabs_with_states(
+        &self,
+        state: &AppState,
+        component_states: &mut ComponentStateStore,
+    ) -> Element {
         use crate::tui::Tab;
         //
         // Convert Tab enum to string key
@@ -78,7 +176,7 @@ impl App {
             } else {
                 // No panel - render normal tab content
                 (
-                    self.render_scores_tab(state),
+                    self.render_scores_tab_with_states(state, component_states),
                     self.render_standings_tab(state),
                     self.render_settings_tab(state),
                 )
@@ -177,8 +275,37 @@ impl App {
         }
     }
     //
-    /// Render Scores tab content
+    /// Render Scores tab content (with component states - Phase 3.5)
+    fn render_scores_tab_with_states(
+        &self,
+        state: &AppState,
+        component_states: &mut ComponentStateStore,
+    ) -> Element {
+        use crate::tui::components::scores_tab::ScoresTab;
+
+        let props = ScoresTabProps {
+            schedule: state.data.schedule.clone(),
+            game_info: state.data.game_info.clone(),
+            period_scores: state.data.period_scores.clone(),
+            // UI state fields (temporary - still needed for initialization from global state)
+            game_date: state.ui.scores.game_date.clone(),
+            selected_index: state.ui.scores.selected_date_index,
+            box_selection_active: state.ui.scores.box_selection_active,
+            selected_game_index: state.ui.scores.selected_game_index,
+            focused: state.navigation.content_focused,
+        };
+
+        // Get or initialize component state from the component store
+        let scores_state =
+            component_states.get_or_init::<ScoresTab>("app/scores_tab", &props);
+        ScoresTab.view(&props, scores_state)
+    }
+
+    /// Render Scores tab content (old method - kept for compatibility during migration)
+    #[allow(dead_code)]
     fn render_scores_tab(&self, state: &AppState) -> Element {
+        use crate::tui::components::scores_tab::ScoresTabState;
+
         let props = ScoresTabProps {
             game_date: state.ui.scores.game_date.clone(),
             selected_index: state.ui.scores.selected_date_index,
@@ -189,7 +316,8 @@ impl App {
             selected_game_index: state.ui.scores.selected_game_index,
             focused: state.navigation.content_focused,
         };
-        ScoresTab.view(&props, &())
+        let component_state = ScoresTabState::default();
+        ScoresTab.view(&props, &component_state)
     }
     //
     /// Render Standings tab content

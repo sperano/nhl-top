@@ -71,14 +71,16 @@ impl Runtime {
             debug!("ACTION: RefreshData - generating fetch effects");
 
             // First, run the reducer to update last_refresh timestamp
-            let (new_state, _reducer_effect) = reduce(self.state.clone(), action.clone());
+            let (new_state, _reducer_effect) =
+                reduce(self.state.clone(), action.clone(), &mut self.component_states);
             self.state = new_state;
 
             // Then generate data fetch effects
             self.data_effects.handle_refresh(&self.state)
         } else {
             // Run the reducer to get new state and any effects
-            let (new_state, reducer_effect) = reduce(self.state.clone(), action);
+            let (new_state, reducer_effect) =
+                reduce(self.state.clone(), action, &mut self.component_states);
 
             // Check if a boxscore panel was just pushed and trigger fetch
             let boxscore_effect = self.check_for_boxscore_fetch(&self.state, &new_state);
@@ -265,12 +267,12 @@ impl Runtime {
     /// is logically a read operation. In the future, we might use RefCell or similar
     /// for interior mutability if needed.
     pub fn build(&mut self) -> Element {
-        use crate::tui::component::Component;
         use crate::tui::components::App;
 
         let app = App;
-        let app_state = self.component_states.get_or_init::<App>("app", &self.state);
-        app.view(&self.state, app_state)
+        // App needs access to component_states to get child component states,
+        // so we call a special method instead of the normal view()
+        app.build_with_component_states(&self.state, &mut self.component_states)
     }
 
     /// Get a sender for dispatching actions from external sources

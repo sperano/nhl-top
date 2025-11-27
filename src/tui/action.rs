@@ -1,6 +1,21 @@
 use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
+use std::any::Any;
 
+use super::component::Effect;
 use super::types::{Panel, Tab};
+
+/// Trait for type-erased component messages
+///
+/// This allows messages to be dispatched to components without knowing
+/// their concrete type at the call site. The message carries its own
+/// logic for updating component state.
+pub trait ComponentMessageTrait: Send + Sync + std::fmt::Debug {
+    /// Apply this message to a component state, returning an effect
+    fn apply(&self, state: &mut dyn Any) -> Effect;
+
+    /// Clone this message into a Box (for cloning Action enum)
+    fn clone_box(&self) -> Box<dyn ComponentMessageTrait>;
+}
 
 /// Global actions - like Redux actions
 ///
@@ -9,7 +24,7 @@ use super::types::{Panel, Tab};
 /// - User input (key events)
 /// - Effects (async data loading)
 /// - Middleware (logging, side effects)
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Action {
     // Navigation actions
     NavigateTab(Tab),
@@ -49,6 +64,18 @@ pub enum Action {
     StandingsAction(StandingsAction),
     SettingsAction(SettingsAction),
     DocumentAction(DocumentAction),
+
+    /// Dispatch a message to a specific component
+    ///
+    /// This is part of the React-like component system refactor.
+    /// Instead of global actions for every UI interaction, components
+    /// can handle their own messages for local state updates.
+    ComponentMessage {
+        /// Component path (e.g., "app/scores_tab")
+        path: String,
+        /// Type-erased message to dispatch
+        message: Box<dyn ComponentMessageTrait>,
+    },
 
     // System actions
     Quit,
@@ -136,6 +163,50 @@ pub enum DocumentAction {
     /// Sync focusable element positions from component (for accurate autoscrolling)
     /// Parameters: (positions, viewport_height)
     SyncFocusablePositions(Vec<u16>, u16),
+}
+
+impl Clone for Action {
+    fn clone(&self) -> Self {
+        match self {
+            Self::NavigateTab(tab) => Self::NavigateTab(*tab),
+            Self::NavigateTabLeft => Self::NavigateTabLeft,
+            Self::NavigateTabRight => Self::NavigateTabRight,
+            Self::EnterContentFocus => Self::EnterContentFocus,
+            Self::ExitContentFocus => Self::ExitContentFocus,
+            Self::PushPanel(panel) => Self::PushPanel(panel.clone()),
+            Self::PopPanel => Self::PopPanel,
+            Self::ToggleCommandPalette => Self::ToggleCommandPalette,
+            Self::SetGameDate(date) => Self::SetGameDate(date.clone()),
+            Self::RefreshData => Self::RefreshData,
+            Self::StandingsLoaded(result) => Self::StandingsLoaded(result.clone()),
+            Self::ScheduleLoaded(result) => Self::ScheduleLoaded(result.clone()),
+            Self::GameDetailsLoaded(id, result) => Self::GameDetailsLoaded(*id, result.clone()),
+            Self::BoxscoreLoaded(id, result) => Self::BoxscoreLoaded(*id, result.clone()),
+            Self::TeamRosterStatsLoaded(abbrev, result) => {
+                Self::TeamRosterStatsLoaded(abbrev.clone(), result.clone())
+            }
+            Self::PlayerStatsLoaded(id, result) => Self::PlayerStatsLoaded(*id, result.clone()),
+            Self::FocusNext => Self::FocusNext,
+            Self::FocusPrevious => Self::FocusPrevious,
+            Self::PanelSelectNext => Self::PanelSelectNext,
+            Self::PanelSelectPrevious => Self::PanelSelectPrevious,
+            Self::PanelSelectItem => Self::PanelSelectItem,
+            Self::ScoresAction(action) => Self::ScoresAction(action.clone()),
+            Self::StandingsAction(action) => Self::StandingsAction(action.clone()),
+            Self::SettingsAction(action) => Self::SettingsAction(action.clone()),
+            Self::DocumentAction(action) => Self::DocumentAction(action.clone()),
+            Self::ComponentMessage { path, message } => Self::ComponentMessage {
+                path: path.clone(),
+                message: message.clone_box(),
+            },
+            Self::Quit => Self::Quit,
+            Self::Error(msg) => Self::Error(msg.clone()),
+            Self::SetStatusMessage { message, is_error } => Self::SetStatusMessage {
+                message: message.clone(),
+                is_error: *is_error,
+            },
+        }
+    }
 }
 
 impl Action {

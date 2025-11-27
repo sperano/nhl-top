@@ -3,6 +3,7 @@ use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, Paragraph},
 };
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 //
@@ -11,19 +12,79 @@ use nhl_api::{DailySchedule, GameDate, GameMatchup};
 use crate::commands::scores_format::{format_period_text, PeriodScores};
 use crate::config::DisplayConfig;
 use crate::layout_constants::SCORE_BOX_WIDTH;
-use crate::tui::component::{Component, Element, ElementWidget};
+use crate::tui::action::{Action, ComponentMessageTrait};
+use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
 //
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 //
-/// Props for ScoresTab component
+/// Component state for ScoresTab - managed by the component itself
+#[derive(Clone, Debug)]
+pub struct ScoresTabState {
+    pub selected_date_index: usize,
+    pub game_date: GameDate,
+    pub box_selection_active: bool,
+    pub selected_game_index: Option<usize>,
+    pub boxes_per_row: u16,
+}
+
+impl Default for ScoresTabState {
+    fn default() -> Self {
+        Self {
+            selected_date_index: 2, // Middle of 5-date window
+            game_date: GameDate::today(),
+            box_selection_active: false,
+            selected_game_index: None,
+            boxes_per_row: 2,
+        }
+    }
+}
+
+/// Messages handled by ScoresTab component
+#[derive(Clone, Debug)]
+pub enum ScoresTabMsg {
+    NavigateLeft,
+    NavigateRight,
+    EnterBoxSelection,
+    ExitBoxSelection,
+    SelectGame,
+    MoveGameSelectionUp,
+    MoveGameSelectionDown,
+    MoveGameSelectionLeft,
+    MoveGameSelectionRight,
+    UpdateBoxesPerRow(u16),
+}
+
+impl ComponentMessageTrait for ScoresTabMsg {
+    fn apply(&self, state: &mut dyn Any) -> Effect {
+        if let Some(scores_state) = state.downcast_mut::<ScoresTabState>() {
+            let mut component = ScoresTab;
+            component.update(self.clone(), scores_state)
+        } else {
+            Effect::None
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
+        Box::new(self.clone())
+    }
+}
+
+/// Props for ScoresTab component (data from parent)
+///
+/// NOTE: During migration, this still contains UI state fields that should
+/// eventually come from ScoresTabState. For Phase 3, we're demonstrating
+/// the component can manage its own state, but not fully integrating yet.
 #[derive(Clone)]
 pub struct ScoresTabProps {
-    pub game_date: GameDate,
-    pub selected_index: usize,
+    // API data
     pub schedule: Arc<Option<DailySchedule>>,
     pub game_info: Arc<HashMap<i64, GameMatchup>>,
     pub period_scores: Arc<HashMap<i64, PeriodScores>>,
+
+    // UI state (temporary - will move to component state in later phase)
+    pub game_date: GameDate,
+    pub selected_index: usize,
     pub box_selection_active: bool,
     pub selected_game_index: Option<usize>,
     pub focused: bool,
@@ -34,18 +95,102 @@ pub struct ScoresTab;
 //
 impl Component for ScoresTab {
     type Props = ScoresTabProps;
-    type State = ();
-    type Message = ();
-    //
+    type State = ScoresTabState;
+    type Message = ScoresTabMsg;
+
+    fn init(_props: &Self::Props) -> Self::State {
+        ScoresTabState::default()
+    }
+
+    fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
+        match msg {
+            ScoresTabMsg::NavigateLeft => {
+                // Navigate left in the date window
+                if state.selected_date_index > 0 {
+                    // Move within the window
+                    state.selected_date_index -= 1;
+                    state.game_date = state.game_date.add_days(-1);
+                } else {
+                    // At left edge - shift window left
+                    state.game_date = state.game_date.add_days(-1);
+                    // selected_date_index stays at 0
+                }
+                Effect::Action(Action::RefreshData)
+            }
+            ScoresTabMsg::NavigateRight => {
+                // Navigate right in the date window
+                const DATE_WINDOW_SIZE: usize = 5;
+                if state.selected_date_index < DATE_WINDOW_SIZE - 1 {
+                    // Move within the window
+                    state.selected_date_index += 1;
+                    state.game_date = state.game_date.add_days(1);
+                } else {
+                    // At right edge - shift window right
+                    state.game_date = state.game_date.add_days(1);
+                    // selected_date_index stays at 4
+                }
+                Effect::Action(Action::RefreshData)
+            }
+            ScoresTabMsg::EnterBoxSelection => {
+                state.box_selection_active = true;
+                state.selected_game_index = Some(0);
+                Effect::None
+            }
+            ScoresTabMsg::ExitBoxSelection => {
+                state.box_selection_active = false;
+                state.selected_game_index = None;
+                Effect::None
+            }
+            ScoresTabMsg::SelectGame => {
+                // TODO: Open boxscore panel for selected game
+                Effect::None
+            }
+            ScoresTabMsg::MoveGameSelectionUp => {
+                if let Some(idx) = state.selected_game_index {
+                    if idx >= state.boxes_per_row as usize {
+                        state.selected_game_index = Some(idx - state.boxes_per_row as usize);
+                    }
+                }
+                Effect::None
+            }
+            ScoresTabMsg::MoveGameSelectionDown => {
+                // TODO: Get game count from schedule and bounds check
+                if let Some(idx) = state.selected_game_index {
+                    state.selected_game_index = Some(idx + state.boxes_per_row as usize);
+                }
+                Effect::None
+            }
+            ScoresTabMsg::MoveGameSelectionLeft => {
+                if let Some(idx) = state.selected_game_index {
+                    if idx > 0 {
+                        state.selected_game_index = Some(idx - 1);
+                    }
+                }
+                Effect::None
+            }
+            ScoresTabMsg::MoveGameSelectionRight => {
+                if let Some(idx) = state.selected_game_index {
+                    state.selected_game_index = Some(idx + 1);
+                }
+                Effect::None
+            }
+            ScoresTabMsg::UpdateBoxesPerRow(boxes_per_row) => {
+                state.boxes_per_row = boxes_per_row;
+                Effect::None
+            }
+        }
+    }
+
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        // Use TabbedPanel for date navigation
-        self.render_date_tabs(props)
+        // NOTE: For Phase 3, we're still using props for rendering
+        // In a future phase, we'll switch to using state from the component store
+        self.render_date_tabs_from_props(props)
     }
 }
 //
 impl ScoresTab {
-    /// Render date tabs using TabbedPanel
-    fn render_date_tabs(&self, props: &ScoresTabProps) -> Element {
+    /// Render date tabs using TabbedPanel (from props - Phase 3 temporary)
+    fn render_date_tabs_from_props(&self, props: &ScoresTabProps) -> Element {
         const DATE_WINDOW_SIZE: usize = 5;
         //
         // Calculate the 5-date window
@@ -60,7 +205,7 @@ impl ScoresTab {
             .map(|date| {
                 let key = self.date_to_key(date);
                 let title = self.format_date_label(date);
-                let content = self.render_game_list(props);
+                let content = self.render_game_list_from_props(props);
                 //
                 TabItem::new(key, title, content)
             })
@@ -98,7 +243,7 @@ impl ScoresTab {
         }
     }
     //
-    fn render_game_list(&self, props: &ScoresTabProps) -> Element {
+    fn render_game_list_from_props(&self, props: &ScoresTabProps) -> Element {
         Element::Widget(Box::new(GameListWidget {
             schedule: props.schedule.clone(),
             period_scores: props.period_scores.clone(),
@@ -291,7 +436,8 @@ mod tests {
             focused: false,
         };
         //
-        let element = scores_tab.view(&props, &());
+        let state = ScoresTabState::default();
+        let element = scores_tab.view(&props, &state);
         //
         match element {
             Element::Container { children, .. } => {

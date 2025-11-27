@@ -2,9 +2,10 @@ use tracing::debug;
 
 use super::action::{Action, SettingsAction};
 use super::component::Effect;
+use super::component_store::ComponentStateStore;
 use super::settings_helpers::find_initial_modal_index;
 use super::state::AppState;
-use super::types::{SettingsCategory};
+use super::types::SettingsCategory;
 use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
@@ -37,12 +38,47 @@ fn save_config_effect(config: Config) -> Effect {
 
 /// Pure state reducer - like Redux reducer
 ///
-/// Takes current state and an action, returns new state and optional effect.
-/// This function is PURE - no side effects, no I/O, no async.
+/// Takes current state, component state store, and an action, returns new state and optional effect.
+/// This function is PURE - no side effects, no I/O, no async (except for component state updates).
 /// All side effects are returned as `Effect` to be executed separately.
-pub fn reduce(state: AppState, action: Action) -> (AppState, Effect) {
+///
+/// Note: component_states is passed as &mut to allow ComponentMessage actions to update
+/// component-local state, but the reducer itself doesn't create side effects through this.
+pub fn reduce(
+    state: AppState,
+    action: Action,
+    component_states: &mut ComponentStateStore,
+) -> (AppState, Effect) {
     // Try each sub-reducer in order
     // Each returns Option<(AppState, Effect)> - None means it didn't handle the action
+
+    // Component message dispatch (React-like component system)
+    if let Action::ComponentMessage { path, message } = &action {
+        if let Some(component_state) = component_states.get_mut_any(path) {
+            debug!("COMPONENT: Dispatching message to {}: {:?}", path, message);
+            let effect = message.apply(component_state);
+
+            // PHASE 3.5: Sync component state back to global state for ScoresTab
+            // This is temporary until Phase 7 when we migrate key routing
+            if path == "app/scores_tab" {
+                use crate::tui::components::scores_tab::ScoresTabState;
+                if let Some(scores_state) = component_states.get_mut::<ScoresTabState>(path) {
+                    let mut new_state = state.clone();
+                    new_state.ui.scores.box_selection_active = scores_state.box_selection_active;
+                    new_state.ui.scores.selected_game_index = scores_state.selected_game_index;
+                    new_state.ui.scores.selected_date_index = scores_state.selected_date_index;
+                    new_state.ui.scores.game_date = scores_state.game_date.clone();
+                    new_state.ui.scores.boxes_per_row = scores_state.boxes_per_row;
+                    return (new_state, effect);
+                }
+            }
+
+            return (state, effect);
+        } else {
+            debug!("COMPONENT: No state found for path: {}", path);
+            return (state, Effect::None);
+        }
+    }
 
     // Navigation actions
     if let Some(result) = reduce_navigation(&state, &action) {
@@ -394,12 +430,18 @@ mod tests {
     use crate::tui::action::{ScoresAction, StandingsAction};
     use crate::tui::types::Tab;
 
+    // Test helper that creates a ComponentStateStore for each test
+    fn test_reduce(state: AppState, action: Action) -> (AppState, Effect) {
+        let mut component_states = ComponentStateStore::new();
+        reduce(state, action, &mut component_states)
+    }
+
     #[test]
     fn test_navigation_actions_are_handled() {
         let state = AppState::default();
         let action = Action::NavigateTab(Tab::Settings);
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(new_state.navigation.current_tab, Tab::Settings);
         assert!(new_state.navigation.panel_stack.is_empty());
@@ -414,23 +456,28 @@ mod tests {
         };
         let action = Action::PushPanel(panel.clone());
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(new_state.navigation.panel_stack.len(), 1);
     }
 
     #[test]
     fn test_scores_actions_are_delegated() {
-        use nhl_api::GameDate;
-
-        let mut state = AppState::default();
-        state.ui.scores.game_date = GameDate::from_ymd(2024, 11, 15).unwrap();
-        state.ui.scores.selected_date_index = 2;
-
+        // Phase 3.5: ScoresAction now routes to ComponentMessage
+        let state = AppState::default();
         let action = Action::ScoresAction(ScoresAction::DateLeft);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
-        assert_eq!(new_state.ui.scores.selected_date_index, 1);
+        // State should not be modified by the reducer
+        assert_eq!(new_state.ui.scores.selected_date_index, state.ui.scores.selected_date_index);
+
+        // Should dispatch ComponentMessage
+        match effect {
+            Effect::Action(Action::ComponentMessage { path, .. }) => {
+                assert_eq!(path, "app/scores_tab");
+            }
+            _ => panic!("Expected ComponentMessage effect"),
+        }
     }
 
     #[test]
@@ -441,7 +488,7 @@ mod tests {
         state.ui.standings.view = GroupBy::Division;
 
         let action = Action::StandingsAction(StandingsAction::CycleViewRight);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
     }
@@ -451,7 +498,7 @@ mod tests {
         let state = AppState::default();
         let action = Action::RefreshData;
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert!(new_state.system.last_refresh.is_some());
     }
@@ -461,7 +508,7 @@ mod tests {
     //     let state = AppState::default();
     //     let action = Action::SelectPlayer(8471214);
     //
-    //     let (new_state, effect) = reduce(state, action);
+    //     let (new_state, effect) = test_reduce(state, action);
     //
     //     assert_eq!(new_state.navigation.panel_stack.len(), 1);
     //     match &new_state.navigation.panel_stack[0].panel {
@@ -479,7 +526,7 @@ mod tests {
     //     let state = AppState::default();
     //     let action = Action::SelectTeam("BOS".to_string());
     //
-    //     let (new_state, effect) = reduce(state, action);
+    //     let (new_state, effect) = test_reduce(state, action);
     //
     //     assert_eq!(new_state.navigation.panel_stack.len(), 1);
     //     match &new_state.navigation.panel_stack[0].panel {
@@ -497,7 +544,7 @@ mod tests {
         let state = AppState::default();
         let action = Action::Quit;
 
-        let (new_state, effect) = reduce(state.clone(), action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
         // State should remain unchanged
         assert_eq!(
@@ -512,7 +559,7 @@ mod tests {
         let state = AppState::default();
         let action = Action::Error("test error".to_string());
 
-        let (new_state, effect) = reduce(state.clone(), action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
         // State should remain unchanged
         assert_eq!(
@@ -527,7 +574,7 @@ mod tests {
         let state = AppState::default();
         let action = Action::ToggleCommandPalette;
 
-        let (new_state, effect) = reduce(state.clone(), action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
         // State should remain unchanged
         assert_eq!(
@@ -545,7 +592,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 2;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
@@ -562,7 +609,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 1;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
@@ -578,7 +625,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 1;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
@@ -594,7 +641,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 2;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
@@ -610,7 +657,7 @@ mod tests {
         state.ui.settings.selected_category = SettingsCategory::Display;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
@@ -625,7 +672,7 @@ mod tests {
         state.ui.settings.selected_category = SettingsCategory::Data;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
@@ -640,7 +687,7 @@ mod tests {
         state.ui.settings.settings_mode = false;
 
         let action = Action::SettingsAction(SettingsAction::EnterSettingsMode);
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert!(new_state.ui.settings.settings_mode);
         assert!(matches!(effect, Effect::None));
@@ -652,7 +699,7 @@ mod tests {
         state.ui.settings.settings_mode = true;
 
         let action = Action::SettingsAction(SettingsAction::ExitSettingsMode);
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert!(!new_state.ui.settings.settings_mode);
         assert!(matches!(effect, Effect::None));
@@ -664,7 +711,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 2;
 
         let action = Action::SettingsAction(SettingsAction::MoveSelectionUp);
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert_eq!(new_state.ui.settings.selected_setting_index, 1);
         assert!(matches!(effect, Effect::None));
@@ -676,7 +723,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 0;
 
         let action = Action::SettingsAction(SettingsAction::MoveSelectionUp);
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         // Should stay at 0
         assert_eq!(new_state.ui.settings.selected_setting_index, 0);
@@ -688,7 +735,7 @@ mod tests {
         state.ui.settings.selected_setting_index = 1;
 
         let action = Action::SettingsAction(SettingsAction::MoveSelectionDown);
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert_eq!(new_state.ui.settings.selected_setting_index, 2);
         assert!(matches!(effect, Effect::None));
@@ -699,7 +746,7 @@ mod tests {
         let state = AppState::default();
         let action = Action::SettingsAction(SettingsAction::ModalMoveUp);
 
-        let (new_state, effect) = reduce(state.clone(), action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
         // State should remain unchanged
         assert_eq!(
@@ -721,7 +768,7 @@ mod tests {
             is_error: true,
         };
 
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert_eq!(
             new_state.system.status_message,
@@ -739,7 +786,7 @@ mod tests {
             is_error: false,
         };
 
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         assert_eq!(
             new_state.system.status_message,
@@ -755,7 +802,7 @@ mod tests {
         let action =
             Action::SettingsAction(SettingsAction::ToggleBoolean("use_unicode".to_string()));
 
-        let (new_state, effect) = reduce(state.clone(), action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
         // Config should be toggled
         assert_eq!(
@@ -775,7 +822,7 @@ mod tests {
         let action =
             Action::SettingsAction(SettingsAction::ToggleBoolean("use_unicode".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         // Should toggle to false
         assert!(!new_state.system.config.display.use_unicode);
@@ -793,7 +840,7 @@ mod tests {
             "western_teams_first".to_string(),
         ));
 
-        let (new_state, _) = reduce(state.clone(), action);
+        let (new_state, _) = test_reduce(state.clone(), action);
 
         assert_eq!(
             new_state.system.config.display_standings_western_first,
@@ -807,7 +854,7 @@ mod tests {
         let action =
             Action::SettingsAction(SettingsAction::ToggleBoolean("unknown_setting".to_string()));
 
-        let (new_state, _) = reduce(state.clone(), action);
+        let (new_state, _) = test_reduce(state.clone(), action);
 
         // State should not change for unknown settings
         assert_eq!(
@@ -828,7 +875,7 @@ mod tests {
         let action =
             Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
 
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         // Config should be updated
         assert_eq!(new_state.system.config.refresh_interval, 120);
@@ -847,7 +894,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::CommitEdit("log_file".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(new_state.system.config.log_file, "/tmp/test.log");
     }
@@ -859,7 +906,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::CommitEdit("time_format".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(new_state.system.config.time_format, "%Y-%m-%d");
     }
@@ -873,7 +920,7 @@ mod tests {
         let action =
             Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         // Should not change on invalid value
         assert_eq!(new_state.system.config.refresh_interval, 60);
@@ -889,7 +936,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::ModalConfirm);
 
-        let (new_state, effect) = reduce(state, action);
+        let (new_state, effect) = test_reduce(state, action);
 
         // Config should be updated
         assert_eq!(new_state.system.config.log_level, "info");
@@ -911,7 +958,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::ModalConfirm);
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(
             new_state.system.config.display.theme_name,
@@ -928,7 +975,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::StartEditing("theme".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         // Modal should be open
         assert!(new_state.ui.settings.modal_open);
@@ -946,7 +993,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::StartEditing("log_level".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         // Modal should be open
         assert!(new_state.ui.settings.modal_open);
@@ -964,7 +1011,7 @@ mod tests {
 
         let action = Action::SettingsAction(SettingsAction::StartEditing("theme".to_string()));
 
-        let (new_state, _) = reduce(state, action);
+        let (new_state, _) = test_reduce(state, action);
 
         // Modal should be open
         assert!(new_state.ui.settings.modal_open);

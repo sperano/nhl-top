@@ -122,7 +122,20 @@ pub struct UiState {
     pub standings_doc: DocumentState,
 }
 
-#[derive(Debug, Clone)]
+/// UI state for Scores tab
+///
+/// PHASE 3.5 TRANSITION: This state is being migrated to component-local state.
+/// Some fields are still needed in global state temporarily:
+/// - `box_selection_active`: Used by key routing to determine navigation context
+/// - `selected_game_index`: Used by SelectGame action to push boxscore panel
+/// - `game_date`: Used by data loading effects to fetch correct schedule
+///
+/// Component-local state (ScoresTabState) now manages:
+/// - Date navigation within the 5-date window
+/// - Game selection UI (which game box is highlighted)
+///
+/// TODO (Phase 7): Move remaining fields to component state when key routing is migrated
+#[derive(Debug, Clone, PartialEq)]
 pub struct ScoresUiState {
     pub selected_date_index: usize,
     pub game_date: GameDate,
