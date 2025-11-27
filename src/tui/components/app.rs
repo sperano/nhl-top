@@ -106,8 +106,6 @@ impl App {
         let demo_content = DemoTab.view(
             &DemoTabProps {
                 content_focused: state.navigation.content_focused,
-                focus_index: state.ui.demo.focus_index,
-                scroll_offset: state.ui.demo.scroll_offset,
                 standings: state.data.standings.clone(),
             },
             &Default::default(),
@@ -183,15 +181,12 @@ impl App {
             };
         //
         // Build Demo tab content
-        let demo_content = DemoTab.view(
-            &DemoTabProps {
-                content_focused: state.navigation.content_focused,
-                focus_index: state.ui.demo.focus_index,
-                scroll_offset: state.ui.demo.scroll_offset,
-                standings: state.data.standings.clone(),
-            },
-            &Default::default(),
-        );
+        let demo_props = DemoTabProps {
+            content_focused: state.navigation.content_focused,
+            standings: state.data.standings.clone(),
+        };
+        let demo_state = component_states.get_or_init::<DemoTab>("app/demo_tab", &demo_props);
+        let demo_content = DemoTab.view(&demo_props, demo_state);
 
         // Build tabs with their content
         let tabs = vec![
@@ -287,11 +282,6 @@ impl App {
             schedule: state.data.schedule.clone(),
             game_info: state.data.game_info.clone(),
             period_scores: state.data.period_scores.clone(),
-            // UI state fields (temporary - still needed for initialization from global state)
-            game_date: state.ui.scores.game_date.clone(),
-            selected_index: state.ui.scores.selected_date_index,
-            box_selection_active: state.ui.scores.box_selection_active,
-            selected_game_index: state.ui.scores.selected_game_index,
             focused: state.navigation.content_focused,
         };
 
@@ -307,13 +297,9 @@ impl App {
         use crate::tui::components::scores_tab::ScoresTabState;
 
         let props = ScoresTabProps {
-            game_date: state.ui.scores.game_date.clone(),
-            selected_index: state.ui.scores.selected_date_index,
             schedule: state.data.schedule.clone(),
             game_info: state.data.game_info.clone(),
             period_scores: state.data.period_scores.clone(),
-            box_selection_active: state.ui.scores.box_selection_active,
-            selected_game_index: state.ui.scores.selected_game_index,
             focused: state.navigation.content_focused,
         };
         let component_state = ScoresTabState::default();

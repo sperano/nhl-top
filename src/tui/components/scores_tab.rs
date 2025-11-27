@@ -82,11 +82,7 @@ pub struct ScoresTabProps {
     pub game_info: Arc<HashMap<i64, GameMatchup>>,
     pub period_scores: Arc<HashMap<i64, PeriodScores>>,
 
-    // UI state (temporary - will move to component state in later phase)
-    pub game_date: GameDate,
-    pub selected_index: usize,
-    pub box_selection_active: bool,
-    pub selected_game_index: Option<usize>,
+    // Navigation state
     pub focused: bool,
 }
 //
@@ -223,41 +219,6 @@ impl ScoresTab {
         )
     }
 
-    /// Render date tabs using TabbedPanel (from props - Phase 3 temporary)
-    #[allow(dead_code)]
-    fn render_date_tabs_from_props(&self, props: &ScoresTabProps) -> Element {
-        const DATE_WINDOW_SIZE: usize = 5;
-        //
-        // Calculate the 5-date window
-        let window_base_date = props.game_date.add_days(-(props.selected_index as i64));
-        let dates: Vec<GameDate> = (0..DATE_WINDOW_SIZE)
-            .map(|i| window_base_date.add_days(i as i64))
-            .collect();
-        //
-        // Create TabItems for each date
-        let tabs: Vec<TabItem> = dates
-            .iter()
-            .map(|date| {
-                let key = self.date_to_key(date);
-                let title = self.format_date_label(date);
-                let content = self.render_game_list_from_props(props);
-                //
-                TabItem::new(key, title, content)
-            })
-            .collect();
-        //
-        // Active key is the current game_date
-        let active_key = self.date_to_key(&props.game_date);
-        //
-        TabbedPanel.view(
-            &TabbedPanelProps {
-                active_key,
-                tabs,
-                focused: props.focused && !props.box_selection_active,
-            },
-            &(),
-        )
-    }
     //
     /// Convert GameDate to string key
     fn date_to_key(&self, date: &GameDate) -> String {
@@ -291,18 +252,6 @@ impl ScoresTab {
         }))
     }
 
-    fn render_game_list_from_props(&self, props: &ScoresTabProps) -> Element {
-        Element::Widget(Box::new(GameListWidget {
-            schedule: props.schedule.clone(),
-            period_scores: props.period_scores.clone(),
-            game_info: props.game_info.clone(),
-            selected_game_index: if props.box_selection_active {
-                props.selected_game_index
-            } else {
-                None
-            },
-        }))
-    }
 }
 //
 //
@@ -474,13 +423,9 @@ mod tests {
     fn test_scores_tab_renders_with_no_schedule() {
         let scores_tab = ScoresTab;
         let props = ScoresTabProps {
-            game_date: GameDate::today(),
-            selected_index: 2,
             schedule: Arc::new(None),
             game_info: Arc::new(HashMap::new()),
             period_scores: Arc::new(HashMap::new()),
-            box_selection_active: false,
-            selected_game_index: None,
             focused: false,
         };
         //

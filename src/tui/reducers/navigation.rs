@@ -72,10 +72,8 @@ fn enter_content_focus(state: AppState) -> (AppState, Effect) {
             .system
             .set_status_message("↑↓: move selection  Shift+↑↓: scroll  Esc: go back".to_string());
 
-        // Initialize focus to first element if not already focused
-        if new_state.ui.demo.focus_index.is_none() {
-            new_state.ui.demo.focus_index = Some(0);
-        }
+        // Demo tab focus is now managed by component state (Phase 8)
+        // Component will initialize focus to first element when needed
     }
 
     (new_state, Effect::None)
@@ -153,27 +151,5 @@ mod tests {
         assert!(!new_state.navigation.content_focused);
     }
 
-    #[test]
-    fn test_enter_content_focus_demo_tab_initializes_focus() {
-        let mut state = AppState::default();
-        state.navigation.current_tab = Tab::Demo;
-        state.ui.demo.focus_index = None;
-
-        let (new_state, _) = enter_content_focus(state);
-
-        assert!(new_state.navigation.content_focused);
-        assert_eq!(new_state.ui.demo.focus_index, Some(0));
-    }
-
-    #[test]
-    fn test_enter_content_focus_demo_tab_preserves_existing_focus() {
-        let mut state = AppState::default();
-        state.navigation.current_tab = Tab::Demo;
-        state.ui.demo.focus_index = Some(5);
-
-        let (new_state, _) = enter_content_focus(state);
-
-        assert!(new_state.navigation.content_focused);
-        assert_eq!(new_state.ui.demo.focus_index, Some(5));
-    }
+    // Phase 8: Demo tab focus tests removed - now managed by component state
 }

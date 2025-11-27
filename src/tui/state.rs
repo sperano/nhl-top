@@ -118,7 +118,7 @@ pub struct UiState {
     pub scores: ScoresUiState,
     pub standings: StandingsUiState,
     pub settings: SettingsUiState,
-    pub demo: DocumentState,
+    // demo: DocumentState removed in Phase 8 - now in DemoTab component state
     // standings_doc removed in Phase 7 - now in StandingsTabState component state
 }
 

@@ -109,10 +109,6 @@ fn create_player_table(players: Vec<DemoPlayer>, focused_row: Option<usize>) -> 
 pub struct DemoTabProps {
     /// Whether the tab content is focused
     pub content_focused: bool,
-    /// Current focus index from AppState (None = no focus)
-    pub focus_index: Option<usize>,
-    /// Current scroll offset from AppState
-    pub scroll_offset: u16,
     /// Standings data for demonstrating embedded tables
     pub standings: Arc<Option<Vec<Standing>>>,
 }
@@ -167,11 +163,11 @@ impl Component for DemoTab {
         }
     }
 
-    fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
+    fn view(&self, props: &Self::Props, state: &Self::State) -> Element {
         Element::Widget(Box::new(DemoTabWidget {
             content_focused: props.content_focused,
-            focus_index: props.focus_index,
-            scroll_offset: props.scroll_offset,
+            focus_index: state.focus_index,
+            scroll_offset: state.scroll_offset,
             standings: props.standings.clone(),
         }))
     }
@@ -386,8 +382,6 @@ mod tests {
     fn test_demo_tab_renders() {
         let props = DemoTabProps {
             content_focused: false,
-            focus_index: None,
-            scroll_offset: 0,
             standings: Arc::new(None),
         };
         let state = crate::tui::document_nav::DocumentNavState::default();
