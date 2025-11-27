@@ -315,8 +315,6 @@ impl App {
         use crate::tui::components::standings_tab::StandingsTab;
 
         let props = StandingsTabProps {
-            view: state.ui.standings.view,
-            browse_mode: state.ui.standings.browse_mode,
             standings: state.data.standings.clone(),
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,
@@ -334,8 +332,6 @@ impl App {
         use crate::tui::components::standings_tab::StandingsTabState;
 
         let props = StandingsTabProps {
-            view: state.ui.standings.view,
-            browse_mode: state.ui.standings.browse_mode,
             standings: state.data.standings.clone(),
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,

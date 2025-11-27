@@ -91,8 +91,6 @@ fn exit_content_focus(state: AppState) -> (AppState, Effect) {
     new_state.navigation.content_focused = false;
 
     // Also exit any tab-specific modes when returning to tab bar
-    new_state.ui.scores.box_selection_active = false;
-    new_state.ui.standings.browse_mode = false;
     new_state.ui.settings.settings_mode = false;
 
     (new_state, Effect::None)
@@ -139,14 +137,10 @@ mod tests {
     #[test]
     fn test_content_focus_resets_tab_modes() {
         let mut state = AppState::default();
-        state.ui.scores.box_selection_active = true;
-        state.ui.standings.browse_mode = true;
         state.ui.settings.settings_mode = true;
 
         let (new_state, _) = exit_content_focus(state);
 
-        assert!(!new_state.ui.scores.box_selection_active);
-        assert!(!new_state.ui.standings.browse_mode);
         assert!(!new_state.ui.settings.settings_mode);
         assert!(!new_state.navigation.content_focused);
     }

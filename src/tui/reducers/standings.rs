@@ -132,8 +132,8 @@ mod tests {
         let state = AppState::default();
         let (new_state, effect) = reduce_standings(state.clone(), StandingsAction::CycleViewLeft);
 
-        // State should not be modified - action is routed to component
-        assert_eq!(new_state.ui.standings, state.ui.standings);
+        // State should not be modified - action is routed to component (StandingsUiState removed in Phase 7)
+        assert_eq!(new_state.data.standings, state.data.standings);
 
         // Should dispatch ComponentMessage
         match effect {
@@ -149,8 +149,8 @@ mod tests {
         let state = AppState::default();
         let (new_state, effect) = reduce_standings(state.clone(), StandingsAction::CycleViewRight);
 
-        // State should not be modified
-        assert_eq!(new_state.ui.standings, state.ui.standings);
+        // State should not be modified (StandingsUiState removed in Phase 7)
+        assert_eq!(new_state.data.standings, state.data.standings);
 
         // Should dispatch ComponentMessage
         match effect {
@@ -166,8 +166,8 @@ mod tests {
         let state = AppState::default();
         let (new_state, effect) = reduce_standings(state.clone(), StandingsAction::EnterBrowseMode);
 
-        // State should not be modified
-        assert_eq!(new_state.ui.standings, state.ui.standings);
+        // State should not be modified (StandingsUiState removed in Phase 7)
+        assert_eq!(new_state.data.standings, state.data.standings);
 
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
@@ -182,8 +182,8 @@ mod tests {
         let state = AppState::default();
         let (new_state, effect) = reduce_standings(state.clone(), StandingsAction::ExitBrowseMode);
 
-        // State should not be modified
-        assert_eq!(new_state.ui.standings, state.ui.standings);
+        // State should not be modified (StandingsUiState removed in Phase 7)
+        assert_eq!(new_state.data.standings, state.data.standings);
 
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {

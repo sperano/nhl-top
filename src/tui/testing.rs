@@ -365,11 +365,9 @@ mod tests {
 
         let (state, _config, area, _buf) = setup_test_render_with!(|state: &mut AppState| {
             state.navigation.current_tab = Tab::Standings;
-            state.ui.standings.view = GroupBy::Conference;
         });
 
         assert_eq!(state.navigation.current_tab, Tab::Standings);
-        assert_eq!(state.ui.standings.view, GroupBy::Conference);
         assert_eq!(area.width, 80);
         assert_eq!(area.height, 24);
     }

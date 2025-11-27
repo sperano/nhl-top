@@ -77,11 +77,12 @@ impl ComponentMessageTrait for StandingsTabMsg {
 /// Props for StandingsTab component
 #[derive(Clone)]
 pub struct StandingsTabProps {
-    pub view: GroupBy,
-    pub browse_mode: bool,
+    // API data
     pub standings: Arc<Option<Vec<Standing>>>,
+    // Navigation state
     pub panel_stack: Vec<PanelState>,
     pub focused: bool,
+    // Config
     pub config: Config,
 }
 
@@ -348,8 +349,6 @@ mod tests {
     fn test_standings_tab_renders_with_no_standings() {
         let standings_tab = StandingsTab;
         let props = StandingsTabProps {
-            view: GroupBy::Division,
-            browse_mode: false,
             standings: Arc::new(None),
             panel_stack: Vec::new(),
             focused: false,
@@ -372,8 +371,6 @@ mod tests {
         let standings = create_test_standings();
 
         let props = StandingsTabProps {
-            view: GroupBy::League,
-            browse_mode: false,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -412,8 +409,6 @@ mod tests {
         let standings = create_test_standings();
 
         let props = StandingsTabProps {
-            view: GroupBy::League,
-            browse_mode: false,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -479,8 +474,6 @@ mod tests {
         let standings = create_test_standings();
 
         let props = StandingsTabProps {
-            view: GroupBy::Division,
-            browse_mode: false,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -549,8 +542,6 @@ mod tests {
         let standings = create_test_standings();
 
         let props = StandingsTabProps {
-            view: GroupBy::Conference,
-            browse_mode: false,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,
@@ -616,8 +607,6 @@ mod tests {
         let standings_tab = StandingsTab;
         let standings = create_test_standings();
         let props = StandingsTabProps {
-            view: GroupBy::Wildcard,
-            browse_mode: false,
             standings: Arc::new(Some(standings)),
             panel_stack: Vec::new(),
             focused: false,

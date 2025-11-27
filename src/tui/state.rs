@@ -5,7 +5,6 @@ use std::time::SystemTime;
 use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
 
 use crate::commands::scores_format::PeriodScores;
-use crate::commands::standings::GroupBy;
 use crate::config::Config;
 
 use super::document::{FocusableId, RowPosition};
@@ -116,62 +115,34 @@ pub enum LoadingKey {
 #[derive(Debug, Clone, Default)]
 pub struct UiState {
     pub scores: ScoresUiState,
-    pub standings: StandingsUiState,
     pub settings: SettingsUiState,
-    // demo: DocumentState removed in Phase 8 - now in DemoTab component state
-    // standings_doc removed in Phase 7 - now in StandingsTabState component state
 }
 
 /// UI state for Scores tab
 ///
-/// PHASE 3.5 TRANSITION: This state is being migrated to component-local state.
-/// Some fields are still needed in global state temporarily:
-/// - `box_selection_active`: Used by key routing to determine navigation context
-/// - `selected_game_index`: Used by SelectGame action to push boxscore panel
-/// - `game_date`: Used by data loading effects to fetch correct schedule
+/// PHASE 7 COMPLETE: Most state migrated to component-local state (ScoresTabState).
 ///
-/// Component-local state (ScoresTabState) now manages:
-/// - Date navigation within the 5-date window
-/// - Game selection UI (which game box is highlighted)
+/// Remaining field needed for effects system:
+/// - `game_date`: Maintained by RefreshSchedule action, read by RefreshData for timer-based refreshes
 ///
-/// TODO (Phase 7): Move remaining fields to component state when key routing is migrated
+/// Component-local state (ScoresTabState) manages all UI state:
+/// - Date navigation within the 5-date window (selected_date_index, game_date)
+/// - Game selection UI (selected_game_index)
+/// - Browse mode (whether user is navigating game boxes vs dates)
+///
+/// Note: game_date is duplicated between global and component state by design:
+/// - Global: What schedule data is loaded (for effects system)
+/// - Component: What date UI is viewing (for rendering)
+/// These are kept in sync via RefreshSchedule action.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScoresUiState {
-    pub selected_date_index: usize,
     pub game_date: GameDate,
-    pub box_selection_active: bool,
-    pub selected_game_index: Option<usize>,
-    // boxes_per_row removed - calculated on-demand from terminal_width
 }
 
 impl Default for ScoresUiState {
     fn default() -> Self {
         Self {
-            selected_date_index: 2, // Middle of 5-date window
             game_date: GameDate::today(),
-            box_selection_active: false,
-            selected_game_index: None,
-        }
-    }
-}
-
-/// UI state for Standings tab
-///
-/// PHASE 4 TRANSITION: This state is being migrated to component-local state.
-/// Some fields are still needed in global state temporarily for key routing and data effects.
-///
-/// TODO (Phase 7): Move remaining fields to component state when key routing is migrated
-#[derive(Debug, Clone, PartialEq)]
-pub struct StandingsUiState {
-    pub view: GroupBy,
-    pub browse_mode: bool,
-}
-
-impl Default for StandingsUiState {
-    fn default() -> Self {
-        Self {
-            view: GroupBy::Wildcard,
-            browse_mode: false,
         }
     }
 }

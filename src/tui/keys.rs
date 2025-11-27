@@ -14,16 +14,16 @@ use super::components::standings_tab::StandingsTabState;
 use super::state::AppState;
 use super::types::{SettingsCategory, Tab};
 
-/// Helper to check if scores tab is in box selection mode
-fn is_box_selection_active(component_states: &ComponentStateStore) -> bool {
+/// Helper to check if scores tab is in browse mode (box selection)
+fn is_scores_browse_mode_active(component_states: &ComponentStateStore) -> bool {
     component_states
         .get::<ScoresTabState>("app/scores_tab")
-        .map(|s| s.box_selection_active)
+        .map(|s| s.browse_mode)
         .unwrap_or(false)
 }
 
 /// Helper to check if standings tab is in browse mode
-fn is_browse_mode_active(component_states: &ComponentStateStore) -> bool {
+fn is_standings_browse_mode_active(component_states: &ComponentStateStore) -> bool {
     component_states
         .get::<StandingsTabState>("app/standings_tab")
         .map(|s| s.browse_mode)
@@ -60,13 +60,13 @@ fn handle_esc_key(state: &AppState, component_states: &ComponentStateStore) -> O
     }
 
     // Priority 3: If in box selection mode on Scores tab, exit to date subtabs
-    if is_box_selection_active(component_states) {
+    if is_scores_browse_mode_active(component_states) {
         debug!("KEY: ESC pressed in box selection - exiting to date subtabs");
         return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
     }
 
     // Priority 4: If in browse mode on Standings tab, exit to view subtabs
-    if is_browse_mode_active(component_states) {
+    if is_standings_browse_mode_active(component_states) {
         debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
         return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
     }
@@ -139,7 +139,7 @@ fn handle_scores_tab_keys(
     key_code: KeyCode,
     component_states: &ComponentStateStore,
 ) -> Option<Action> {
-    if is_box_selection_active(component_states) {
+    if is_scores_browse_mode_active(component_states) {
         // Box selection mode - arrows navigate within game grid
         // Calculate boxes_per_row from cached terminal width
         use crate::layout_constants::GAME_BOX_WITH_MARGIN;
@@ -435,7 +435,7 @@ pub fn key_to_action(
     // 6. Handle Up key with special logic (returns to tab bar unless in nested mode)
     if key.code == KeyCode::Up {
         // Check if we're in a nested mode first
-        if is_box_selection_active(component_states) {
+        if is_scores_browse_mode_active(component_states) {
             // In box selection - Up navigates within grid
             use crate::layout_constants::GAME_BOX_WITH_MARGIN;
             let boxes_per_row = (state.system.terminal_width / GAME_BOX_WITH_MARGIN).max(1);
@@ -455,7 +455,7 @@ pub fn key_to_action(
             }
         } else if current_tab == Tab::Demo {
             // Demo tab - Up handled by handle_demo_tab_keys (both plain and Shift)
-        } else if current_tab == Tab::Standings && is_browse_mode_active(component_states) {
+        } else if current_tab == Tab::Standings && is_standings_browse_mode_active(component_states) {
             // Standings browse mode - Up handled by handle_standings_league_keys (both plain and Shift)
         } else {
             // Not in nested mode - Up returns to tab bar
@@ -475,7 +475,7 @@ pub fn key_to_action(
         Tab::Scores => handle_scores_tab_keys(state, key.code, component_states),
         Tab::Standings => {
             // All standings views use document navigation in browse mode
-            if is_browse_mode_active(component_states) {
+            if is_standings_browse_mode_active(component_states) {
                 handle_standings_league_keys(key, state)
             } else {
                 handle_standings_tab_keys(key.code, state)
@@ -554,7 +554,7 @@ mod tests {
     fn make_component_states_with_box_selection() -> ComponentStateStore {
         let mut store = ComponentStateStore::new();
         let mut scores_state = ScoresTabState::default();
-        scores_state.box_selection_active = true;
+        scores_state.browse_mode = true;
         scores_state.selected_game_index = Some(0); // Select first game
         store.insert("app/scores_tab".to_string(), scores_state);
         store

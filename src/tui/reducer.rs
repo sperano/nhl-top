@@ -455,7 +455,7 @@ mod tests {
         let (new_state, effect) = test_reduce(state.clone(), action);
 
         // State should not be modified by the reducer
-        assert_eq!(new_state.ui.scores.selected_date_index, state.ui.scores.selected_date_index);
+        assert_eq!(new_state.ui.scores.game_date, state.ui.scores.game_date);
 
         // Should dispatch ComponentMessage
         match effect {
@@ -468,13 +468,13 @@ mod tests {
 
     #[test]
     fn test_standings_actions_are_delegated() {
-        // Phase 4: StandingsAction now routes to ComponentMessage
+        // Phase 7: StandingsAction now routes to ComponentMessage
         let state = AppState::default();
         let action = Action::StandingsAction(StandingsAction::CycleViewRight);
         let (new_state, effect) = test_reduce(state.clone(), action);
 
-        // State should not be modified by the reducer
-        assert_eq!(new_state.ui.standings, state.ui.standings);
+        // State should not be modified by the reducer (StandingsUiState removed in Phase 7)
+        assert_eq!(new_state.data.standings, state.data.standings);
 
         // Should dispatch ComponentMessage
         match effect {

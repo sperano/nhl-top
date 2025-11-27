@@ -23,7 +23,7 @@ use super::{TabItem, TabbedPanel, TabbedPanelProps};
 pub struct ScoresTabState {
     pub selected_date_index: usize,
     pub game_date: GameDate,
-    pub box_selection_active: bool,
+    pub browse_mode: bool,
     pub selected_game_index: Option<usize>,
 }
 
@@ -32,7 +32,7 @@ impl Default for ScoresTabState {
         Self {
             selected_date_index: 2, // Middle of 5-date window
             game_date: GameDate::today(),
-            box_selection_active: false,
+            browse_mode: false,
             selected_game_index: None,
         }
     }
@@ -126,12 +126,12 @@ impl Component for ScoresTab {
                 Effect::Action(Action::RefreshSchedule(state.game_date.clone()))
             }
             ScoresTabMsg::EnterBoxSelection => {
-                state.box_selection_active = true;
+                state.browse_mode = true;
                 state.selected_game_index = Some(0);
                 Effect::None
             }
             ScoresTabMsg::ExitBoxSelection => {
-                state.box_selection_active = false;
+                state.browse_mode = false;
                 state.selected_game_index = None;
                 Effect::None
             }
@@ -203,7 +203,7 @@ impl ScoresTab {
             &TabbedPanelProps {
                 active_key,
                 tabs,
-                focused: props.focused && !state.box_selection_active,
+                focused: props.focused && !state.browse_mode,
             },
             &(),
         )
@@ -234,7 +234,7 @@ impl ScoresTab {
             schedule: props.schedule.clone(),
             period_scores: props.period_scores.clone(),
             game_info: props.game_info.clone(),
-            selected_game_index: if state.box_selection_active {
+            selected_game_index: if state.browse_mode {
                 state.selected_game_index
             } else {
                 None
