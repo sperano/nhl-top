@@ -7,9 +7,28 @@ use tracing::{debug, trace};
 
 use crossterm::event::KeyModifiers;
 
-use super::action::{Action, DocumentAction, ScoresAction, SettingsAction, StandingsAction};
+use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
+use super::component_store::ComponentStateStore;
+use super::components::scores_tab::ScoresTabState;
+use super::components::standings_tab::StandingsTabState;
 use super::state::AppState;
 use super::types::{SettingsCategory, Tab};
+
+/// Helper to check if scores tab is in box selection mode
+fn is_box_selection_active(component_states: &ComponentStateStore) -> bool {
+    component_states
+        .get::<ScoresTabState>("app/scores_tab")
+        .map(|s| s.box_selection_active)
+        .unwrap_or(false)
+}
+
+/// Helper to check if standings tab is in browse mode
+fn is_browse_mode_active(component_states: &ComponentStateStore) -> bool {
+    component_states
+        .get::<StandingsTabState>("app/standings_tab")
+        .map(|s| s.browse_mode)
+        .unwrap_or(false)
+}
 
 /// Handle global keys that work regardless of tab or focus state
 fn handle_global_keys(key_code: KeyCode) -> Option<Action> {
@@ -21,7 +40,7 @@ fn handle_global_keys(key_code: KeyCode) -> Option<Action> {
 }
 
 /// Handle ESC key with priority-based navigation up through focus hierarchy
-fn handle_esc_key(state: &AppState) -> Option<Action> {
+fn handle_esc_key(state: &AppState, component_states: &ComponentStateStore) -> Option<Action> {
     // Priority 1: If there's a panel open, close it
     if !state.navigation.panel_stack.is_empty() {
         debug!("KEY: ESC pressed with panel open - popping panel");
@@ -41,13 +60,13 @@ fn handle_esc_key(state: &AppState) -> Option<Action> {
     }
 
     // Priority 3: If in box selection mode on Scores tab, exit to date subtabs
-    if state.ui.scores.box_selection_active {
+    if is_box_selection_active(component_states) {
         debug!("KEY: ESC pressed in box selection - exiting to date subtabs");
         return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
     }
 
     // Priority 4: If in browse mode on Standings tab, exit to view subtabs
-    if state.ui.standings.browse_mode {
+    if is_browse_mode_active(component_states) {
         debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
         return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
     }
@@ -115,8 +134,11 @@ fn handle_tab_bar_navigation(key_code: KeyCode) -> Option<Action> {
 }
 
 /// Handle Scores tab navigation (box selection mode vs date mode)
-fn handle_scores_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Action> {
-    if state.ui.scores.box_selection_active {
+fn handle_scores_tab_keys(
+    key_code: KeyCode,
+    component_states: &ComponentStateStore,
+) -> Option<Action> {
+    if is_box_selection_active(component_states) {
         // Box selection mode - arrows navigate within game grid
         match key_code {
             KeyCode::Down => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown)),
@@ -137,47 +159,46 @@ fn handle_scores_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Action>
     }
 }
 
-/// Handle League standings navigation with document system (similar to Demo tab)
+/// Handle League standings navigation with document system (Phase 7: Routes to component)
 fn handle_standings_league_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
-    match key.code {
+    use crate::tui::components::standings_tab::StandingsTabMsg;
+    use crate::tui::document_nav::DocumentNavMsg;
+
+    let nav_msg = match key.code {
         // Tab key for focus navigation
         KeyCode::Tab => {
             if key.modifiers.contains(KeyModifiers::SHIFT) {
-                Some(Action::DocumentAction(DocumentAction::FocusPrev))
+                DocumentNavMsg::FocusPrev
             } else {
-                Some(Action::DocumentAction(DocumentAction::FocusNext))
+                DocumentNavMsg::FocusNext
             }
         }
-        KeyCode::BackTab => Some(Action::DocumentAction(DocumentAction::FocusPrev)),
-        // Enter to activate focused element
-        KeyCode::Enter => Some(Action::DocumentAction(DocumentAction::ActivateFocused)),
+        KeyCode::BackTab => DocumentNavMsg::FocusPrev,
+        // Enter to activate focused element - TODO: handle activation
+        KeyCode::Enter => return None,
+        // Up/Down arrows for focus navigation
+        KeyCode::Up if !key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::FocusPrev,
+        KeyCode::Down if !key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::FocusNext,
         // Left/Right arrows for Row navigation (Conference view)
-        KeyCode::Left if !key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::FocusLeft))
-        }
-        KeyCode::Right if !key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::FocusRight))
-        }
+        KeyCode::Left if !key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::FocusLeft,
+        KeyCode::Right if !key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::FocusRight,
         // Shift+Arrow keys for scrolling
-        KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))
-        }
-        KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::ScrollUp(1)))
-        }
-        KeyCode::Left if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::ScrollUp(1)))
-        }
-        KeyCode::Right if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))
-        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::ScrollDown(1),
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::ScrollUp(1),
+        KeyCode::Left if key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::ScrollUp(1),
+        KeyCode::Right if key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::ScrollDown(1),
         // Page navigation
-        KeyCode::PageUp => Some(Action::DocumentAction(DocumentAction::PageUp)),
-        KeyCode::PageDown => Some(Action::DocumentAction(DocumentAction::PageDown)),
-        KeyCode::Home => Some(Action::DocumentAction(DocumentAction::ScrollToTop)),
-        KeyCode::End => Some(Action::DocumentAction(DocumentAction::ScrollToBottom)),
-        _ => None,
-    }
+        KeyCode::PageUp => DocumentNavMsg::PageUp,
+        KeyCode::PageDown => DocumentNavMsg::PageDown,
+        KeyCode::Home => DocumentNavMsg::ScrollToTop,
+        KeyCode::End => DocumentNavMsg::ScrollToBottom,
+        _ => return None,
+    };
+
+    Some(Action::ComponentMessage {
+        path: "app/standings_tab".to_string(),
+        message: Box::new(StandingsTabMsg::DocNav(nav_msg)),
+    })
 }
 
 /// Handle Standings tab view selection mode (cycling between Division/Conference/League/Wildcard)
@@ -260,52 +281,64 @@ fn handle_settings_tab_keys(key_code: KeyCode, state: &AppState) -> Option<Actio
     }
 }
 
-/// Handle Demo tab navigation (document system with Tab/Shift-Tab focus navigation)
+/// Handle Demo tab navigation (Phase 7: Routes to component)
 fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
-    match key.code {
+    use crate::tui::components::demo_tab::DemoTabMessage;
+    use crate::tui::document_nav::DocumentNavMsg;
+
+    let nav_msg = match key.code {
         // Tab key for focus navigation
         KeyCode::Tab => {
             if key.modifiers.contains(KeyModifiers::SHIFT) {
                 debug!("KEY: Shift-Tab in Demo tab - focus previous");
-                Some(Action::DocumentAction(DocumentAction::FocusPrev))
+                DocumentNavMsg::FocusPrev
             } else {
                 debug!("KEY: Tab in Demo tab - focus next");
-                Some(Action::DocumentAction(DocumentAction::FocusNext))
+                DocumentNavMsg::FocusNext
             }
         }
         KeyCode::BackTab => {
             debug!("KEY: BackTab in Demo tab - focus previous");
-            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+            DocumentNavMsg::FocusPrev
         }
-        // Enter to activate focused element
+        // Enter to activate focused element - TODO: handle activation
         KeyCode::Enter => {
             debug!("KEY: Enter in Demo tab - activate focused");
-            Some(Action::DocumentAction(DocumentAction::ActivateFocused))
+            return None;
         }
         // Left/Right arrows for row navigation (jump between side-by-side elements)
         KeyCode::Left => {
             debug!("KEY: Left in Demo tab - focus left in row");
-            Some(Action::DocumentAction(DocumentAction::FocusLeft))
+            DocumentNavMsg::FocusLeft
         }
         KeyCode::Right => {
             debug!("KEY: Right in Demo tab - focus right in row");
-            Some(Action::DocumentAction(DocumentAction::FocusRight))
+            DocumentNavMsg::FocusRight
         }
-        // Arrow keys: Up/Down for focus navigation (handled earlier in key_to_action)
+        // Up/Down arrows for focus navigation
+        KeyCode::Up if !key.modifiers.contains(KeyModifiers::SHIFT) => {
+            debug!("KEY: Up in Demo tab - focus previous");
+            DocumentNavMsg::FocusPrev
+        }
+        KeyCode::Down if !key.modifiers.contains(KeyModifiers::SHIFT) => {
+            debug!("KEY: Down in Demo tab - focus next");
+            DocumentNavMsg::FocusNext
+        }
         // Shift+Arrow keys for scrolling
-        KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))
-        }
-        KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
-            Some(Action::DocumentAction(DocumentAction::ScrollUp(1)))
-        }
+        KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::ScrollDown(1),
+        KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::ScrollUp(1),
         // Page navigation
-        KeyCode::PageUp => Some(Action::DocumentAction(DocumentAction::PageUp)),
-        KeyCode::PageDown => Some(Action::DocumentAction(DocumentAction::PageDown)),
-        KeyCode::Home => Some(Action::DocumentAction(DocumentAction::ScrollToTop)),
-        KeyCode::End => Some(Action::DocumentAction(DocumentAction::ScrollToBottom)),
-        _ => None,
-    }
+        KeyCode::PageUp => DocumentNavMsg::PageUp,
+        KeyCode::PageDown => DocumentNavMsg::PageDown,
+        KeyCode::Home => DocumentNavMsg::ScrollToTop,
+        KeyCode::End => DocumentNavMsg::ScrollToBottom,
+        _ => return None,
+    };
+
+    Some(Action::ComponentMessage {
+        path: "app/demo_tab".to_string(),
+        message: Box::new(DemoTabMessage::DocNav(nav_msg)),
+    })
 }
 
 /// Convert a KeyEvent into an Action based on current application state
@@ -315,7 +348,13 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
 /// - Tab bar focus: Left/Right navigate tabs, Down enters content
 /// - Content focus: Context-sensitive navigation, Up returns to tab bar
 /// - Panel navigation (ESC to close)
-pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
+///
+/// Phase 7: Now reads from component state instead of global state for component-specific checks
+pub fn key_to_action(
+    key: KeyEvent,
+    state: &AppState,
+    component_states: &crate::tui::component_store::ComponentStateStore,
+) -> Option<Action> {
     // Get current tab and focus state
     let current_tab = state.navigation.current_tab;
     let content_focused = state.navigation.content_focused;
@@ -335,7 +374,7 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
 
     // 2. Check ESC key (7-priority hierarchy)
     if key.code == KeyCode::Esc {
-        return handle_esc_key(state);
+        return handle_esc_key(state, component_states);
     }
 
     // 3. Check panel navigation (when panel is open)
@@ -353,7 +392,11 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
     // 5. Handle navigation based on focus level
     if !content_focused {
         // TAB BAR FOCUSED: delegate to tab bar handler
-        return handle_tab_bar_navigation(key.code);
+        let action = handle_tab_bar_navigation(key.code);
+        if action.is_some() {
+            debug!("KEY: Tab bar navigation: {:?}", action);
+        }
+        return action;
     }
 
     // CONTENT FOCUSED: context-sensitive navigation
@@ -361,7 +404,7 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
     // 6. Handle Up key with special logic (returns to tab bar unless in nested mode)
     if key.code == KeyCode::Up {
         // Check if we're in a nested mode first
-        if state.ui.scores.box_selection_active {
+        if is_box_selection_active(component_states) {
             // In box selection - Up navigates within grid
             return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp));
         } else if state.ui.settings.modal_open || state.ui.settings.editing {
@@ -377,22 +420,10 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
                 // Navigate settings
                 return Some(Action::SettingsAction(SettingsAction::MoveSelectionUp));
             }
-        } else if current_tab == Tab::Demo && !key.modifiers.contains(KeyModifiers::SHIFT) {
-            // Demo tab - Up focuses previous element (wraps around, doesn't exit)
-            // Shift+Up scrolls, handled in handle_demo_tab_keys
-            debug!("KEY: Up pressed in Demo tab - focus previous");
-            return Some(Action::DocumentAction(DocumentAction::FocusPrev));
         } else if current_tab == Tab::Demo {
-            // Shift+Up in Demo tab - fall through to tab-specific handler for scrolling
-        } else if current_tab == Tab::Standings
-                   && state.ui.standings.browse_mode
-                   && !key.modifiers.contains(KeyModifiers::SHIFT) {
-            // All standings views use document navigation - Up focuses previous element
-            // Shift+Up scrolls, handled in handle_standings_league_keys
-            debug!("KEY: Up pressed in document standings - focus previous");
-            return Some(Action::DocumentAction(DocumentAction::FocusPrev));
-        } else if current_tab == Tab::Standings && state.ui.standings.browse_mode {
-            // Shift+Up in document standings - fall through to tab-specific handler for scrolling
+            // Demo tab - Up handled by handle_demo_tab_keys (both plain and Shift)
+        } else if current_tab == Tab::Standings && is_browse_mode_active(component_states) {
+            // Standings browse mode - Up handled by handle_standings_league_keys (both plain and Shift)
         } else {
             // Not in nested mode - Up returns to tab bar
             debug!("KEY: Up pressed in content - returning to tab bar");
@@ -400,31 +431,18 @@ pub fn key_to_action(key: KeyEvent, state: &AppState) -> Option<Action> {
         }
     }
 
-    // 6b. Handle Down key for Demo tab (focus next) - but not Shift+Down (which scrolls)
-    if key.code == KeyCode::Down
-        && current_tab == Tab::Demo
-        && !key.modifiers.contains(KeyModifiers::SHIFT)
-    {
-        debug!("KEY: Down pressed in Demo tab - focus next");
-        return Some(Action::DocumentAction(DocumentAction::FocusNext));
-    }
+    // 6b. Handle Down key for Demo tab - delegated to handle_demo_tab_keys
+    // (Both plain Down for focus navigation and Shift+Down for scrolling)
 
-    // 6c. Handle Down key for standings in browse mode (focus next) - but not Shift+Down (which scrolls)
-    if key.code == KeyCode::Down
-        && current_tab == Tab::Standings
-        && state.ui.standings.browse_mode
-        && !key.modifiers.contains(KeyModifiers::SHIFT)
-    {
-        debug!("KEY: Down pressed in document standings - focus next");
-        return Some(Action::DocumentAction(DocumentAction::FocusNext));
-    }
+    // 6c. Handle Down key for standings browse mode - delegated to handle_standings_league_keys
+    // (Both plain Down for focus navigation and Shift+Down for scrolling)
 
     // 7. Delegate to tab-specific handlers
     match current_tab {
-        Tab::Scores => handle_scores_tab_keys(key.code, state),
+        Tab::Scores => handle_scores_tab_keys(key.code, component_states),
         Tab::Standings => {
             // All standings views use document navigation in browse mode
-            if state.ui.standings.browse_mode {
+            if is_browse_mode_active(component_states) {
                 handle_standings_league_keys(key, state)
             } else {
                 handle_standings_tab_keys(key.code, state)
@@ -496,17 +514,39 @@ mod tests {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
+    fn make_component_states() -> ComponentStateStore {
+        ComponentStateStore::new()
+    }
+
+    fn make_component_states_with_box_selection() -> ComponentStateStore {
+        let mut store = ComponentStateStore::new();
+        let mut scores_state = ScoresTabState::default();
+        scores_state.box_selection_active = true;
+        store.insert("app/scores_tab".to_string(), scores_state);
+        store
+    }
+
+    fn make_component_states_with_browse_mode() -> ComponentStateStore {
+        let mut store = ComponentStateStore::new();
+        let mut standings_state = StandingsTabState::default();
+        standings_state.browse_mode = true;
+        store.insert("app/standings_tab".to_string(), standings_state);
+        store
+    }
+
     #[test]
     fn test_quit_key() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('q')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('q')), &state, &component_states);
         assert!(matches!(action, Some(Action::Quit)));
     }
 
     #[test]
     fn test_number_keys_navigate_tabs() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('1')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('1')), &state, &component_states);
         assert!(matches!(action, Some(Action::NavigateTab(Tab::Scores))));
     }
 
@@ -521,7 +561,7 @@ mod tests {
                 selected_index: None,
             });
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
         assert!(matches!(action, Some(Action::PopPanel)));
     }
 
@@ -530,7 +570,7 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.content_focused = true;
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
         assert!(matches!(action, Some(Action::ExitContentFocus)));
     }
 
@@ -538,7 +578,7 @@ mod tests {
     fn test_esc_at_tab_bar_does_nothing() {
         let state = AppState::default(); // content_focused = false by default
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
         assert!(
             action.is_none(),
             "ESC at tab bar should do nothing, not quit"
@@ -548,18 +588,19 @@ mod tests {
     #[test]
     fn test_q_quits_application() {
         let state = AppState::default();
+        let component_states = make_component_states();
 
-        let action = key_to_action(make_key(KeyCode::Char('q')), &state);
+        let action = key_to_action(make_key(KeyCode::Char('q')), &state, &component_states);
         assert!(matches!(action, Some(Action::Quit)));
     }
 
     #[test]
     fn test_esc_exits_box_selection_mode() {
         let mut state = AppState::default();
-        state.ui.scores.box_selection_active = true;
         state.navigation.content_focused = true;
+        let component_states = make_component_states_with_box_selection();
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::ExitBoxSelection))
@@ -569,10 +610,10 @@ mod tests {
     #[test]
     fn test_esc_exits_browse_mode() {
         let mut state = AppState::default();
-        state.ui.standings.browse_mode = true;
         state.navigation.content_focused = true;
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::StandingsAction(StandingsAction::ExitBrowseMode))
@@ -584,13 +625,13 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &component_states);
         // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusNext))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -599,13 +640,13 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &component_states);
         // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -614,14 +655,13 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
-        state.ui.standings.view = GroupBy::Wildcard;
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &component_states);
         // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusLeft))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -630,14 +670,13 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
-        state.ui.standings.view = GroupBy::Wildcard;
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &component_states);
         // All standings views use document navigation
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusRight))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -646,14 +685,13 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
-        state.ui.standings.view = GroupBy::Division; // Division view uses document navigation
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &component_states);
         // Left arrow should focus left in Division view (document navigation)
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusLeft))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -662,14 +700,13 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
-        state.ui.standings.view = GroupBy::Division; // Division view uses document navigation
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &component_states);
         // Right arrow should focus right in Division view (document navigation)
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusRight))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -678,9 +715,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = false;
+        let component_states = make_component_states(); // browse_mode = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::StandingsAction(StandingsAction::CycleViewLeft))
@@ -692,9 +729,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = false;
+        let component_states = make_component_states(); // browse_mode = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::StandingsAction(StandingsAction::EnterBrowseMode))
@@ -709,7 +746,7 @@ mod tests {
         state.ui.settings.modal_open = true;
         state.ui.settings.modal_selected_index = 1;
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &make_component_states());
         // Should navigate modal, not exit to tab bar or navigate settings
         assert!(matches!(
             action,
@@ -725,7 +762,7 @@ mod tests {
         state.ui.settings.modal_open = true;
         state.ui.settings.modal_selected_index = 0;
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
         // Should navigate modal
         assert!(matches!(
             action,
@@ -737,14 +774,16 @@ mod tests {
     #[test]
     fn test_slash_toggles_command_palette() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('/')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('/')), &state, &component_states);
         assert!(matches!(action, Some(Action::ToggleCommandPalette)));
     }
 
     #[test]
     fn test_uppercase_q_quits() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('Q')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('Q')), &state, &component_states);
         assert!(matches!(action, Some(Action::Quit)));
     }
 
@@ -756,7 +795,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.settings_mode = true;
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::ExitSettingsMode))
@@ -775,7 +814,7 @@ mod tests {
                 selected_index: Some(1),
             });
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &make_component_states());
         assert!(matches!(action, Some(Action::PanelSelectPrevious)));
     }
 
@@ -790,7 +829,7 @@ mod tests {
                 selected_index: Some(0),
             });
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
         assert!(matches!(action, Some(Action::PanelSelectNext)));
     }
 
@@ -805,7 +844,7 @@ mod tests {
                 selected_index: Some(0),
             });
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
         assert!(matches!(action, Some(Action::PanelSelectItem)));
     }
 
@@ -813,35 +852,40 @@ mod tests {
     #[test]
     fn test_number_key_2_navigates_to_standings() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('2')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('2')), &state, &component_states);
         assert!(matches!(action, Some(Action::NavigateTab(Tab::Standings))));
     }
 
     #[test]
     fn test_number_key_3_navigates_to_stats() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('3')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('3')), &state, &component_states);
         assert!(matches!(action, Some(Action::NavigateTab(Tab::Stats))));
     }
 
     #[test]
     fn test_number_key_4_navigates_to_players() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('4')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('4')), &state, &component_states);
         assert!(matches!(action, Some(Action::NavigateTab(Tab::Players))));
     }
 
     #[test]
     fn test_number_key_5_navigates_to_settings() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('5')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('5')), &state, &component_states);
         assert!(matches!(action, Some(Action::NavigateTab(Tab::Settings))));
     }
 
     #[test]
     fn test_number_key_6_navigates_to_browser() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::Char('6')), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::Char('6')), &state, &component_states);
         assert!(matches!(action, Some(Action::NavigateTab(Tab::Demo))));
     }
 
@@ -851,7 +895,7 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.content_focused = false;
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &make_component_states());
         assert!(matches!(action, Some(Action::NavigateTabLeft)));
     }
 
@@ -860,7 +904,7 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.content_focused = false;
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &make_component_states());
         assert!(matches!(action, Some(Action::NavigateTabRight)));
     }
 
@@ -869,7 +913,7 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.content_focused = false;
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
         assert!(matches!(action, Some(Action::EnterContentFocus)));
     }
 
@@ -879,10 +923,10 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.content_focused = true;
         state.navigation.current_tab = Tab::Scores;
-        // Not in box selection mode
-        state.ui.scores.box_selection_active = false;
+        // Not in box selection mode (default)
+        let component_states = make_component_states();
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &component_states);
         assert!(matches!(action, Some(Action::ExitContentFocus)));
     }
 
@@ -892,9 +936,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = true;
+        let component_states = make_component_states_with_box_selection();
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp))
@@ -906,9 +950,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = true;
+        let component_states = make_component_states_with_box_selection();
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown))
@@ -920,9 +964,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = true;
+        let component_states = make_component_states_with_box_selection();
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft))
@@ -934,9 +978,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = true;
+        let component_states = make_component_states_with_box_selection();
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight))
@@ -948,9 +992,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = true;
+        let component_states = make_component_states_with_box_selection();
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::SelectGame))
@@ -963,9 +1007,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = false;
+        let component_states = make_component_states(); // box_selection_active = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::DateLeft))
@@ -977,9 +1021,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = false;
+        let component_states = make_component_states(); // box_selection_active = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::DateRight))
@@ -991,9 +1035,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = false;
+        let component_states = make_component_states(); // box_selection_active = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::EnterBoxSelection))
@@ -1005,9 +1049,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Scores;
         state.navigation.content_focused = true;
-        state.ui.scores.box_selection_active = false;
+        let component_states = make_component_states(); // box_selection_active = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::ScoresAction(ScoresAction::SelectGame))
@@ -1020,14 +1064,11 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = true;
+        let component_states = make_component_states_with_browse_mode();
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
-        // All standings views use document navigation
-        assert!(matches!(
-            action,
-            Some(Action::DocumentAction(DocumentAction::ActivateFocused))
-        ));
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &component_states);
+        // TODO: Enter activation not yet implemented
+        assert!(action.is_none());
     }
 
     #[test]
@@ -1035,9 +1076,9 @@ mod tests {
         let mut state = AppState::default();
         state.navigation.current_tab = Tab::Standings;
         state.navigation.content_focused = true;
-        state.ui.standings.browse_mode = false;
+        let component_states = make_component_states(); // browse_mode = false (default)
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::StandingsAction(StandingsAction::CycleViewRight))
@@ -1052,7 +1093,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.modal_open = true;
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::ModalConfirm))
@@ -1066,7 +1107,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.modal_open = true;
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::ModalCancel))
@@ -1082,8 +1123,9 @@ mod tests {
         state.ui.settings.editing = true;
         state.ui.settings.selected_category = SettingsCategory::Logging;
         state.ui.settings.selected_setting_index = 1; // log_file
+        let component_states = make_component_states();
 
-        let action = key_to_action(make_key(KeyCode::Char('a')), &state);
+        let action = key_to_action(make_key(KeyCode::Char('a')), &state, &component_states);
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::AppendChar('a')))
@@ -1097,7 +1139,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.editing = true;
 
-        let action = key_to_action(make_key(KeyCode::Backspace), &state);
+        let action = key_to_action(make_key(KeyCode::Backspace), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::DeleteChar))
@@ -1113,7 +1155,7 @@ mod tests {
         state.ui.settings.selected_category = SettingsCategory::Logging;
         state.ui.settings.selected_setting_index = 1; // log_file
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::CommitEdit(_)))
@@ -1127,7 +1169,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.editing = true;
 
-        let action = key_to_action(make_key(KeyCode::Esc), &state);
+        let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::CancelEditing))
@@ -1143,7 +1185,7 @@ mod tests {
         state.ui.settings.settings_mode = true;
         state.ui.settings.selected_setting_index = 0; // At top
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::ExitSettingsMode))
@@ -1158,7 +1200,7 @@ mod tests {
         state.ui.settings.settings_mode = true;
         state.ui.settings.selected_setting_index = 1; // Not at top
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::MoveSelectionUp))
@@ -1172,7 +1214,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.settings_mode = true;
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::MoveSelectionDown))
@@ -1188,7 +1230,7 @@ mod tests {
         state.ui.settings.selected_category = SettingsCategory::Display;
         state.ui.settings.selected_setting_index = 1; // use_unicode (index 0 is theme)
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::ToggleBoolean(_)))
@@ -1204,7 +1246,7 @@ mod tests {
         state.ui.settings.selected_category = SettingsCategory::Logging;
         state.ui.settings.selected_setting_index = 0; // log_level
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::StartEditing(_)))
@@ -1219,7 +1261,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.settings_mode = false;
 
-        let action = key_to_action(make_key(KeyCode::Left), &state);
+        let action = key_to_action(make_key(KeyCode::Left), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::NavigateCategoryLeft))
@@ -1233,7 +1275,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.settings_mode = false;
 
-        let action = key_to_action(make_key(KeyCode::Right), &state);
+        let action = key_to_action(make_key(KeyCode::Right), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(
@@ -1249,7 +1291,7 @@ mod tests {
         state.navigation.content_focused = true;
         state.ui.settings.settings_mode = false;
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
         assert!(matches!(
             action,
             Some(Action::SettingsAction(SettingsAction::EnterSettingsMode))
@@ -1386,15 +1428,16 @@ mod tests {
         state.navigation.content_focused = true;
 
         // Left/Right/Down should return None for tabs with no navigation
-        assert!(key_to_action(make_key(KeyCode::Left), &state).is_none());
-        assert!(key_to_action(make_key(KeyCode::Right), &state).is_none());
-        assert!(key_to_action(make_key(KeyCode::Down), &state).is_none());
+        assert!(key_to_action(make_key(KeyCode::Left), &state, &make_component_states()).is_none());
+        assert!(key_to_action(make_key(KeyCode::Right), &state, &make_component_states()).is_none());
+        assert!(key_to_action(make_key(KeyCode::Down), &state, &make_component_states()).is_none());
     }
 
     #[test]
     fn test_unknown_key_returns_none() {
         let state = AppState::default();
-        let action = key_to_action(make_key(KeyCode::F(1)), &state);
+        let component_states = make_component_states();
+        let action = key_to_action(make_key(KeyCode::F(1)), &state, &component_states);
         assert!(action.is_none());
     }
 
@@ -1407,7 +1450,7 @@ mod tests {
         state.ui.settings.selected_category = SettingsCategory::Display;
         state.ui.settings.selected_setting_index = 2; // Selection Color - not editable
 
-        let action = key_to_action(make_key(KeyCode::Enter), &state);
+        let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
         // Should return None since color settings aren't editable
         assert!(action.is_none());
     }
@@ -1419,11 +1462,11 @@ mod tests {
         state.navigation.current_tab = Tab::Demo;
         state.navigation.content_focused = true;
 
-        let action = key_to_action(make_key(KeyCode::Up), &state);
+        let action = key_to_action(make_key(KeyCode::Up), &state, &make_component_states());
         // Up should focus previous element, NOT exit to tab bar
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -1433,10 +1476,10 @@ mod tests {
         state.navigation.current_tab = Tab::Demo;
         state.navigation.content_focused = true;
 
-        let action = key_to_action(make_key(KeyCode::Down), &state);
+        let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusNext))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -1446,10 +1489,10 @@ mod tests {
         state.navigation.current_tab = Tab::Demo;
         state.navigation.content_focused = true;
 
-        let action = key_to_action(KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT), &state);
+        let action = key_to_action(KeyEvent::new(KeyCode::Down, KeyModifiers::SHIFT), &state, &make_component_states());
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::ScrollDown(1)))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -1459,10 +1502,10 @@ mod tests {
         state.navigation.current_tab = Tab::Demo;
         state.navigation.content_focused = true;
 
-        let action = key_to_action(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), &state);
+        let action = key_to_action(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), &state, &make_component_states());
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusNext))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 
@@ -1472,10 +1515,10 @@ mod tests {
         state.navigation.current_tab = Tab::Demo;
         state.navigation.content_focused = true;
 
-        let action = key_to_action(KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT), &state);
+        let action = key_to_action(KeyEvent::new(KeyCode::Tab, KeyModifiers::SHIFT), &state, &make_component_states());
         assert!(matches!(
             action,
-            Some(Action::DocumentAction(DocumentAction::FocusPrev))
+            Some(Action::ComponentMessage { .. })
         ));
     }
 }

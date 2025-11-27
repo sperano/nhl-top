@@ -7,6 +7,7 @@ pub mod action;
 pub mod component;
 pub mod component_store;
 pub mod document;
+pub mod document_nav;
 pub mod effects;
 pub mod focus_helpers;
 pub mod helpers;
@@ -137,7 +138,12 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
             let boxes_per_row = calculate_boxes_per_row(area.width);
 
             // Dispatch action to update boxes_per_row if it changed
-            let current_boxes_per_row = runtime.state().ui.scores.boxes_per_row;
+            // Phase 7: Read from component state instead of global state
+            use crate::tui::components::scores_tab::ScoresTabState;
+            let current_boxes_per_row = runtime.component_states()
+                .get::<ScoresTabState>("app/scores_tab")
+                .map(|s| s.boxes_per_row)
+                .unwrap_or(2);
             if boxes_per_row != current_boxes_per_row {
                 tracing::debug!(
                     "DRAW: boxes_per_row changed: {} -> {}",
@@ -147,24 +153,6 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
                 runtime.dispatch(Action::ScoresAction(ScoresAction::UpdateBoxesPerRow(
                     boxes_per_row,
                 )));
-            }
-
-            // Update viewport heights for document-based tabs
-            // Base chrome = main tab bar (2 lines) + status bar (2 lines) = 4 lines
-            // Standings has nested subtab bar (Wildcard/Division/Conference/League) = +2 lines
-            const BASE_CHROME_LINES: u16 = 4;
-            const STANDINGS_SUBTAB_LINES: u16 = 2;
-
-            let demo_viewport = area.height.saturating_sub(BASE_CHROME_LINES);
-            let standings_viewport = area.height.saturating_sub(BASE_CHROME_LINES + STANDINGS_SUBTAB_LINES);
-
-            let current_demo = runtime.state().ui.demo.viewport_height;
-            let current_standings = runtime.state().ui.standings_doc.viewport_height;
-            if demo_viewport != current_demo || standings_viewport != current_standings {
-                runtime.dispatch(Action::DocumentAction(DocumentAction::UpdateViewportHeight {
-                    demo: demo_viewport,
-                    standings: standings_viewport,
-                }));
             }
 
             // Build virtual tree from current state
@@ -229,7 +217,7 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
                 }
 
                 // Convert key to action
-                let action = key_to_action(key, runtime.state());
+                let action = key_to_action(key, runtime.state(), runtime.component_states());
 
                 // Check for quit action before handling
                 let should_quit = action.as_ref().is_some_and(is_quit_action);

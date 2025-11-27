@@ -14,6 +14,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::config::DisplayConfig;
+use crate::tui::action::ComponentMessageTrait;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
 use crate::tui::components::TableWidget;
@@ -116,26 +117,30 @@ pub struct DemoTabProps {
     pub standings: Arc<Option<Vec<Standing>>>,
 }
 
-/// State for the Demo tab (component state, not to be confused with AppState.ui.demo)
-#[derive(Clone, Default)]
-pub struct DemoTabState;
 
 /// Messages that can be sent to the Demo tab
+#[derive(Clone, Debug)]
 pub enum DemoTabMessage {
-    /// Tab key pressed - focus next element
-    FocusNext,
-    /// Shift-Tab key pressed - focus previous element
-    FocusPrev,
-    /// Scroll up
-    ScrollUp,
-    /// Scroll down
-    ScrollDown,
-    /// Page up
-    PageUp,
-    /// Page down
-    PageDown,
-    /// Activate focused element
-    Activate,
+    /// Document navigation (Phase 7: Delegated to DocumentNavMsg)
+    DocNav(crate::tui::document_nav::DocumentNavMsg),
+    /// Update viewport height
+    UpdateViewportHeight(u16),
+}
+
+impl ComponentMessageTrait for DemoTabMessage {
+    fn apply(&self, state: &mut dyn std::any::Any) -> Effect {
+        if let Some(demo_state) = state.downcast_mut::<crate::tui::document_nav::DocumentNavState>() {
+            let mut component = DemoTab;
+            let msg = self.clone();
+            component.update(msg, demo_state)
+        } else {
+            Effect::None
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
+        Box::new(self.clone())
+    }
 }
 
 /// Demo tab component
@@ -143,41 +148,23 @@ pub struct DemoTab;
 
 impl Component for DemoTab {
     type Props = DemoTabProps;
-    type State = DemoTabState;
+    type State = crate::tui::document_nav::DocumentNavState;
     type Message = DemoTabMessage;
 
     fn init(_props: &Self::Props) -> Self::State {
-        DemoTabState::default()
+        crate::tui::document_nav::DocumentNavState::default()
     }
 
-    fn update(&mut self, msg: Self::Message, _state: &mut Self::State) -> Effect {
-        // Note: In a real implementation, focus and scroll state would be managed
-        // via AppState. For this demo, we just log the messages.
+    fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
         match msg {
-            DemoTabMessage::FocusNext => {
-                tracing::debug!("Demo: focus_next requested");
+            DemoTabMessage::DocNav(nav_msg) => {
+                crate::tui::document_nav::handle_message(state, &nav_msg)
             }
-            DemoTabMessage::FocusPrev => {
-                tracing::debug!("Demo: focus_prev requested");
-            }
-            DemoTabMessage::ScrollUp => {
-                tracing::debug!("Demo: scroll_up requested");
-            }
-            DemoTabMessage::ScrollDown => {
-                tracing::debug!("Demo: scroll_down requested");
-            }
-            DemoTabMessage::PageUp => {
-                tracing::debug!("Demo: page_up requested");
-            }
-            DemoTabMessage::PageDown => {
-                tracing::debug!("Demo: page_down requested");
-            }
-            DemoTabMessage::Activate => {
-                tracing::debug!("Demo: activate requested");
+            DemoTabMessage::UpdateViewportHeight(height) => {
+                state.viewport_height = height;
+                Effect::None
             }
         }
-
-        Effect::None
     }
 
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
@@ -403,7 +390,7 @@ mod tests {
             scroll_offset: 0,
             standings: Arc::new(None),
         };
-        let state = DemoTabState::default();
+        let state = crate::tui::document_nav::DocumentNavState::default();
         let demo_tab = DemoTab;
 
         let element = demo_tab.view(&props, &state);

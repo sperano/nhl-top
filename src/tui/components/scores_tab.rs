@@ -181,15 +181,50 @@ impl Component for ScoresTab {
         }
     }
 
-    fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        // NOTE: For Phase 3, we're still using props for rendering
-        // In a future phase, we'll switch to using state from the component store
-        self.render_date_tabs_from_props(props)
+    fn view(&self, props: &Self::Props, state: &Self::State) -> Element {
+        // Phase 7: Now using component state for UI state, props for data
+        self.render_date_tabs_from_state(props, state)
     }
 }
 //
 impl ScoresTab {
+    /// Render date tabs using component state for UI, props for data (Phase 7)
+    fn render_date_tabs_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState) -> Element {
+        const DATE_WINDOW_SIZE: usize = 5;
+        //
+        // Calculate the 5-date window using component state
+        let window_base_date = state.game_date.add_days(-(state.selected_date_index as i64));
+        let dates: Vec<GameDate> = (0..DATE_WINDOW_SIZE)
+            .map(|i| window_base_date.add_days(i as i64))
+            .collect();
+        //
+        // Create TabItems for each date
+        let tabs: Vec<TabItem> = dates
+            .iter()
+            .map(|date| {
+                let key = self.date_to_key(date);
+                let title = self.format_date_label(date);
+                let content = self.render_game_list_from_state(props, state);
+                //
+                TabItem::new(key, title, content)
+            })
+            .collect();
+        //
+        // Active key is the current game_date from component state
+        let active_key = self.date_to_key(&state.game_date);
+        //
+        TabbedPanel.view(
+            &TabbedPanelProps {
+                active_key,
+                tabs,
+                focused: props.focused && !state.box_selection_active,
+            },
+            &(),
+        )
+    }
+
     /// Render date tabs using TabbedPanel (from props - Phase 3 temporary)
+    #[allow(dead_code)]
     fn render_date_tabs_from_props(&self, props: &ScoresTabProps) -> Element {
         const DATE_WINDOW_SIZE: usize = 5;
         //
@@ -243,6 +278,19 @@ impl ScoresTab {
         }
     }
     //
+    fn render_game_list_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState) -> Element {
+        Element::Widget(Box::new(GameListWidget {
+            schedule: props.schedule.clone(),
+            period_scores: props.period_scores.clone(),
+            game_info: props.game_info.clone(),
+            selected_game_index: if state.box_selection_active {
+                state.selected_game_index
+            } else {
+                None
+            },
+        }))
+    }
+
     fn render_game_list_from_props(&self, props: &ScoresTabProps) -> Element {
         Element::Widget(Box::new(GameListWidget {
             schedule: props.schedule.clone(),

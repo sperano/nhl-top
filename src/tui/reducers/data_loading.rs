@@ -10,10 +10,15 @@ use crate::tui::reducers::standings::rebuild_focusable_metadata;
 use crate::tui::state::{AppState, LoadingKey};
 
 /// Handle all data loading actions (API responses)
-pub fn reduce_data_loading(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
+/// Phase 7: Now takes component_states to update focusable metadata in component state
+pub fn reduce_data_loading(
+    state: &AppState,
+    action: &Action,
+    component_states: &mut crate::tui::component_store::ComponentStateStore,
+) -> Option<(AppState, Effect)> {
     match action {
         Action::StandingsLoaded(result) => {
-            Some(handle_standings_loaded(state.clone(), result.clone()))
+            Some(handle_standings_loaded(state.clone(), result.clone(), component_states))
         }
         Action::ScheduleLoaded(result) => {
             Some(handle_schedule_loaded(state.clone(), result.clone()))
@@ -47,6 +52,7 @@ pub fn reduce_data_loading(state: &AppState, action: &Action) -> Option<(AppStat
 fn handle_standings_loaded(
     state: AppState,
     result: Result<Vec<nhl_api::Standing>, String>,
+    component_states: &mut crate::tui::component_store::ComponentStateStore,
 ) -> (AppState, Effect) {
     let mut new_state = state;
 
@@ -63,8 +69,8 @@ fn handle_standings_loaded(
             new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
             new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
 
-            // Rebuild standings document focusable data for current view
-            rebuild_focusable_metadata(&mut new_state);
+            // Rebuild standings document focusable data in component state (Phase 7)
+            rebuild_focusable_metadata(&new_state, component_states);
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
@@ -80,10 +86,13 @@ fn handle_standings_loaded(
             new_state.ui.demo.focusable_ids = demo_doc.focusable_ids();
             new_state.ui.demo.focusable_row_positions = demo_doc.focusable_row_positions();
 
-            // Clear standings focusable data on error
-            new_state.ui.standings_doc.focusable_positions = Vec::new();
-            new_state.ui.standings_doc.focusable_ids = Vec::new();
-            new_state.ui.standings_doc.focusable_row_positions = Vec::new();
+            // Clear standings focusable data in component state on error (Phase 7)
+            use crate::tui::components::standings_tab::StandingsTabState;
+            if let Some(standings_state) = component_states.get_mut::<StandingsTabState>("app/standings_tab") {
+                standings_state.doc_nav.focusable_positions = Vec::new();
+                standings_state.focusable_ids = Vec::new();
+                standings_state.doc_nav.focusable_row_positions = Vec::new();
+            }
         }
     }
 

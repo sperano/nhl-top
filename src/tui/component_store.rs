@@ -40,6 +40,19 @@ impl ComponentStateStore {
             .expect("State type mismatch")
     }
 
+    /// Get immutable state
+    ///
+    /// Returns None if no state exists for this path, or Some(&S) if found.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the stored state type doesn't match the requested type.
+    pub fn get<S: 'static + Send + Sync>(&self, path: &str) -> Option<&S> {
+        self.states
+            .get(path)
+            .map(|(_, state)| state.downcast_ref().expect("State type mismatch"))
+    }
+
     /// Get mutable state for update
     ///
     /// Returns None if no state exists for this path, or Some(&mut S) if found.
@@ -58,6 +71,14 @@ impl ComponentStateStore {
     /// Used when the concrete type is not known at compile time.
     pub fn get_mut_any(&mut self, path: &str) -> Option<&mut (dyn Any + Send + Sync)> {
         self.states.get_mut(path).map(|(_, state)| &mut **state)
+    }
+
+    /// Insert state for a component path
+    ///
+    /// Used for testing or direct state initialization.
+    pub fn insert<S: 'static + Send + Sync>(&mut self, path: String, state: S) {
+        let type_id = TypeId::of::<S>();
+        self.states.insert(path, (type_id, Box::new(state)));
     }
 
     /// Remove state for a component path

@@ -57,22 +57,6 @@ pub fn reduce(
         if let Some(component_state) = component_states.get_mut_any(path) {
             debug!("COMPONENT: Dispatching message to {}: {:?}", path, message);
             let effect = message.apply(component_state);
-
-            // PHASE 3.5: Sync component state back to global state for ScoresTab
-            // This is temporary until Phase 7 when we migrate key routing
-            if path == "app/scores_tab" {
-                use crate::tui::components::scores_tab::ScoresTabState;
-                if let Some(scores_state) = component_states.get_mut::<ScoresTabState>(path) {
-                    let mut new_state = state.clone();
-                    new_state.ui.scores.box_selection_active = scores_state.box_selection_active;
-                    new_state.ui.scores.selected_game_index = scores_state.selected_game_index;
-                    new_state.ui.scores.selected_date_index = scores_state.selected_date_index;
-                    new_state.ui.scores.game_date = scores_state.game_date.clone();
-                    new_state.ui.scores.boxes_per_row = scores_state.boxes_per_row;
-                    return (new_state, effect);
-                }
-            }
-
             return (state, effect);
         } else {
             debug!("COMPONENT: No state found for path: {}", path);
@@ -90,13 +74,13 @@ pub fn reduce(
         return result;
     }
 
-    // Data loading actions
-    if let Some(result) = reduce_data_loading(&state, &action) {
+    // Data loading actions (Phase 7: Pass component_states for focusable metadata)
+    if let Some(result) = reduce_data_loading(&state, &action, component_states) {
         return result;
     }
 
-    // Document actions (for Demo tab)
-    if let Some(result) = reduce_document(&state, &action) {
+    // Document actions (Phase 7: Pass component_states)
+    if let Some(result) = reduce_document(&state, &action, component_states) {
         return result;
     }
 
@@ -482,15 +466,21 @@ mod tests {
 
     #[test]
     fn test_standings_actions_are_delegated() {
-        use crate::commands::standings::GroupBy;
-
-        let mut state = AppState::default();
-        state.ui.standings.view = GroupBy::Division;
-
+        // Phase 4: StandingsAction now routes to ComponentMessage
+        let state = AppState::default();
         let action = Action::StandingsAction(StandingsAction::CycleViewRight);
-        let (new_state, _) = test_reduce(state, action);
+        let (new_state, effect) = test_reduce(state.clone(), action);
 
-        assert_eq!(new_state.ui.standings.view, GroupBy::Conference);
+        // State should not be modified by the reducer
+        assert_eq!(new_state.ui.standings, state.ui.standings);
+
+        // Should dispatch ComponentMessage
+        match effect {
+            Effect::Action(Action::ComponentMessage { path, .. }) => {
+                assert_eq!(path, "app/standings_tab");
+            }
+            _ => panic!("Expected ComponentMessage effect"),
+        }
     }
 
     #[test]

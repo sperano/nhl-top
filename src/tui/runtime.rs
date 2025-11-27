@@ -62,6 +62,11 @@ impl Runtime {
         &self.state
     }
 
+    /// Get a reference to the component state store
+    pub fn component_states(&self) -> &ComponentStateStore {
+        &self.component_states
+    }
+
     /// Dispatch an action to be processed by the reducer
     pub fn dispatch(&mut self, action: Action) {
         trace!("ACTION: Dispatching {:?}", action);
@@ -491,19 +496,20 @@ mod tests {
     async fn test_tab_navigation_keys() {
         let runtime = create_test_runtime();
         let state = runtime.state();
+        let component_states = runtime.component_states();
 
         // Test number keys - should work on any tab regardless of focus
         let key1 = KeyEvent::new(KeyCode::Char('1'), KeyModifiers::empty());
-        let action1 = key_to_action(key1, state);
+        let action1 = key_to_action(key1, state, component_states);
         assert!(matches!(action1, Some(Action::NavigateTab(_))));
 
         // With tab bar focused (default), arrows should navigate tabs
         let key_right = KeyEvent::new(KeyCode::Right, KeyModifiers::empty());
-        let action_right = key_to_action(key_right, state);
+        let action_right = key_to_action(key_right, state, component_states);
         assert!(matches!(action_right, Some(Action::NavigateTabRight)));
 
         let key_left = KeyEvent::new(KeyCode::Left, KeyModifiers::empty());
-        let action_left = key_to_action(key_left, state);
+        let action_left = key_to_action(key_left, state, component_states);
         assert!(matches!(action_left, Some(Action::NavigateTabLeft)));
     }
 
@@ -511,9 +517,10 @@ mod tests {
     async fn test_quit_key() {
         let runtime = create_test_runtime();
         let state = runtime.state();
+        let component_states = runtime.component_states();
 
         let key = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::empty());
-        let action = key_to_action(key, state);
+        let action = key_to_action(key, state, component_states);
 
         assert!(matches!(action, Some(Action::Quit)));
     }
@@ -522,25 +529,27 @@ mod tests {
     async fn test_focus_level_keys() {
         let mut runtime = create_test_runtime();
         let state = runtime.state();
+        let component_states = runtime.component_states();
 
         // Start with tab bar focused - Down should enter content focus
         let key_down = KeyEvent::new(KeyCode::Down, KeyModifiers::empty());
-        let action_down = key_to_action(key_down, state);
+        let action_down = key_to_action(key_down, state, component_states);
         assert!(matches!(action_down, Some(Action::EnterContentFocus)));
 
         // After entering content focus, arrows should be context-sensitive
         runtime.dispatch(Action::EnterContentFocus);
         let state = runtime.state();
+        let component_states = runtime.component_states();
         assert!(state.navigation.content_focused);
 
         // Now arrows should navigate dates on Scores tab
         let key_right = KeyEvent::new(KeyCode::Right, KeyModifiers::empty());
-        let action_right = key_to_action(key_right, state);
+        let action_right = key_to_action(key_right, state, component_states);
         assert!(matches!(action_right, Some(Action::ScoresAction(_))));
 
         // Up should return to tab bar
         let key_up = KeyEvent::new(KeyCode::Up, KeyModifiers::empty());
-        let action_up = key_to_action(key_up, state);
+        let action_up = key_to_action(key_up, state, component_states);
         assert!(matches!(action_up, Some(Action::ExitContentFocus)));
     }
 

@@ -177,7 +177,7 @@ impl App {
                 // No panel - render normal tab content
                 (
                     self.render_scores_tab_with_states(state, component_states),
-                    self.render_standings_tab(state),
+                    self.render_standings_tab_with_states(state, component_states),
                     self.render_settings_tab(state),
                 )
             };
@@ -320,8 +320,14 @@ impl App {
         ScoresTab.view(&props, &component_state)
     }
     //
-    /// Render Standings tab content
-    fn render_standings_tab(&self, state: &AppState) -> Element {
+    /// Render Standings tab content (with component states - Phase 4)
+    fn render_standings_tab_with_states(
+        &self,
+        state: &AppState,
+        component_states: &mut ComponentStateStore,
+    ) -> Element {
+        use crate::tui::components::standings_tab::StandingsTab;
+
         let props = StandingsTabProps {
             view: state.ui.standings.view,
             browse_mode: state.ui.standings.browse_mode,
@@ -329,10 +335,28 @@ impl App {
             panel_stack: state.navigation.panel_stack.clone(),
             focused: state.navigation.content_focused,
             config: state.system.config.clone(),
-            focus_index: state.ui.standings_doc.focus_index,
-            scroll_offset: state.ui.standings_doc.scroll_offset,
         };
-        StandingsTab.view(&props, &())
+
+        let standings_state =
+            component_states.get_or_init::<StandingsTab>("app/standings_tab", &props);
+        StandingsTab.view(&props, standings_state)
+    }
+
+    /// Render Standings tab content (old method - kept for compatibility during migration)
+    #[allow(dead_code)]
+    fn render_standings_tab(&self, state: &AppState) -> Element {
+        use crate::tui::components::standings_tab::StandingsTabState;
+
+        let props = StandingsTabProps {
+            view: state.ui.standings.view,
+            browse_mode: state.ui.standings.browse_mode,
+            standings: state.data.standings.clone(),
+            panel_stack: state.navigation.panel_stack.clone(),
+            focused: state.navigation.content_focused,
+            config: state.system.config.clone(),
+        };
+        let component_state = StandingsTabState::default();
+        StandingsTab.view(&props, &component_state)
     }
     //
     /// Render Settings tab content

@@ -17,6 +17,63 @@ use crate::tui::{
 
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 
+use crate::tui::action::ComponentMessageTrait;
+use crate::tui::component::Effect;
+use crate::tui::document::FocusableId;
+use crate::tui::document_nav::DocumentNavState;
+use std::any::Any;
+
+/// Component state for StandingsTab - managed by the component itself
+#[derive(Clone, Debug)]
+pub struct StandingsTabState {
+    pub view: GroupBy,
+    pub browse_mode: bool,
+    pub focusable_ids: Vec<FocusableId>,
+    // Document navigation state (embedded)
+    pub doc_nav: DocumentNavState,
+}
+
+impl Default for StandingsTabState {
+    fn default() -> Self {
+        Self {
+            view: GroupBy::Wildcard,
+            browse_mode: false,
+            focusable_ids: Vec::new(),
+            doc_nav: DocumentNavState::default(),
+        }
+    }
+}
+
+/// Messages handled by StandingsTab component
+#[derive(Clone, Debug)]
+pub enum StandingsTabMsg {
+    CycleViewLeft,
+    CycleViewRight,
+    EnterBrowseMode,
+    ExitBrowseMode,
+
+    // Document navigation (delegated to DocumentNavMsg)
+    DocNav(crate::tui::document_nav::DocumentNavMsg),
+
+    // Update viewport height
+    UpdateViewportHeight(u16),
+}
+
+impl ComponentMessageTrait for StandingsTabMsg {
+    fn apply(&self, state: &mut dyn Any) -> Effect {
+        if let Some(standings_state) = state.downcast_mut::<StandingsTabState>() {
+            let mut component = StandingsTab;
+            component.update(self.clone(), standings_state)
+        } else {
+            Effect::None
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
+        Box::new(self.clone())
+    }
+}
+
 /// Props for StandingsTab component
 #[derive(Clone)]
 pub struct StandingsTabProps {
@@ -26,10 +83,6 @@ pub struct StandingsTabProps {
     pub panel_stack: Vec<PanelState>,
     pub focused: bool,
     pub config: Config,
-
-    // Document system state
-    pub focus_index: Option<usize>,
-    pub scroll_offset: u16,
 }
 
 /// StandingsTab component - renders standings with view selector
@@ -37,10 +90,66 @@ pub struct StandingsTab;
 
 impl Component for StandingsTab {
     type Props = StandingsTabProps;
-    type State = ();
-    type Message = ();
+    type State = StandingsTabState;
+    type Message = StandingsTabMsg;
 
-    fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
+    fn init(_props: &Self::Props) -> Self::State {
+        StandingsTabState::default()
+    }
+
+    fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
+        match msg {
+            StandingsTabMsg::CycleViewLeft => {
+                state.view = match state.view {
+                    GroupBy::Wildcard => GroupBy::League,
+                    GroupBy::Division => GroupBy::Wildcard,
+                    GroupBy::Conference => GroupBy::Division,
+                    GroupBy::League => GroupBy::Conference,
+                };
+                // Reset focus/scroll when changing views
+                state.doc_nav.focus_index = None;
+                state.doc_nav.scroll_offset = 0;
+                Effect::None
+            }
+            StandingsTabMsg::CycleViewRight => {
+                state.view = match state.view {
+                    GroupBy::Wildcard => GroupBy::Division,
+                    GroupBy::Division => GroupBy::Conference,
+                    GroupBy::Conference => GroupBy::League,
+                    GroupBy::League => GroupBy::Wildcard,
+                };
+                // Reset focus/scroll when changing views
+                state.doc_nav.focus_index = None;
+                state.doc_nav.scroll_offset = 0;
+                Effect::None
+            }
+            StandingsTabMsg::EnterBrowseMode => {
+                state.browse_mode = true;
+                // Initialize focus to first element if available
+                if !state.doc_nav.focusable_positions.is_empty() && state.doc_nav.focus_index.is_none() {
+                    state.doc_nav.focus_index = Some(0);
+                }
+                Effect::None
+            }
+            StandingsTabMsg::ExitBrowseMode => {
+                state.browse_mode = false;
+                state.doc_nav.focus_index = None;
+                state.doc_nav.scroll_offset = 0;
+                Effect::None
+            }
+
+            StandingsTabMsg::DocNav(nav_msg) => {
+                crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
+            }
+
+            StandingsTabMsg::UpdateViewportHeight(height) => {
+                state.doc_nav.viewport_height = height;
+                Effect::None
+            }
+        }
+    }
+
+    fn view(&self, props: &Self::Props, state: &Self::State) -> Element {
         // If in panel view, render the panel instead
         if !props.panel_stack.is_empty() {
             tracing::debug!(
@@ -50,15 +159,16 @@ impl Component for StandingsTab {
             return self.render_panel(props);
         }
 
-        // Use TabbedPanel for view selection
-        self.render_view_tabs(props)
+        // Use TabbedPanel for view selection (Phase 7: using component state)
+        self.render_view_tabs(props, state)
     }
 }
 
 impl StandingsTab {
 
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
-    fn render_view_tabs(&self, props: &StandingsTabProps) -> Element {
+    /// Phase 7: Using component state for UI state, props for data
+    fn render_view_tabs(&self, props: &StandingsTabProps, state: &StandingsTabState) -> Element {
         // All inactive tabs get Element::None to avoid cloning issues
         let tabs = [
             GroupBy::Wildcard,
@@ -72,8 +182,8 @@ impl StandingsTab {
                 TabItem::new(
                     g.name(),
                     g.name(),
-                    if props.view == *g {
-                        self.render_standings_table(props, g)
+                    if state.view == *g {
+                        self.render_standings_table(props, state, g)
                     } else {
                         Element::None
                     },
@@ -83,15 +193,15 @@ impl StandingsTab {
 
         TabbedPanel.view(
             &TabbedPanelProps {
-                active_key: props.view.name().to_string(),
+                active_key: state.view.name().to_string(),
                 tabs,
-                focused: props.focused && !props.browse_mode,
+                focused: props.focused && !state.browse_mode,
             },
             &(),
         )
     }
 
-    fn render_standings_table(&self, props: &StandingsTabProps, view: &GroupBy) -> Element {
+    fn render_standings_table(&self, props: &StandingsTabProps, state: &StandingsTabState, view: &GroupBy) -> Element {
         // If no standings data, show loading message
         let Some(standings) = props.standings.as_ref().as_ref() else {
             return Element::Widget(Box::new(LoadingWidget {
@@ -106,57 +216,57 @@ impl StandingsTab {
         }
 
         match view {
-            GroupBy::Conference => self.render_conference_view(props, standings),
-            GroupBy::Division => self.render_division_view(props, standings),
-            GroupBy::Wildcard => self.render_wildcard_view(props, standings),
-            GroupBy::League => self.render_league_view(props, standings),
+            GroupBy::Conference => self.render_conference_view(props, state, standings),
+            GroupBy::Division => self.render_division_view(props, state, standings),
+            GroupBy::Wildcard => self.render_wildcard_view(props, state, standings),
+            GroupBy::League => self.render_league_view(props, state, standings),
         }
     }
 
-    fn render_league_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
+    fn render_league_view(&self, props: &StandingsTabProps, state: &StandingsTabState, standings: &[Standing]) -> Element {
         use super::StandingsDocumentWidget;
 
         Element::Widget(Box::new(StandingsDocumentWidget::league(
             Arc::new(standings.to_vec()),
             props.config.clone(),
-            props.focus_index,
-            props.scroll_offset,
+            state.doc_nav.focus_index,
+            state.doc_nav.scroll_offset,
         )))
     }
 
-    fn render_conference_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
+    fn render_conference_view(&self, props: &StandingsTabProps, state: &StandingsTabState, standings: &[Standing]) -> Element {
         // Use the document system for Conference view (like League view)
         use super::StandingsDocumentWidget;
 
         Element::Widget(Box::new(StandingsDocumentWidget::conference(
             Arc::new(standings.to_vec()),
             props.config.clone(),
-            props.focus_index,
-            props.scroll_offset,
+            state.doc_nav.focus_index,
+            state.doc_nav.scroll_offset,
         )))
     }
 
-    fn render_division_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
+    fn render_division_view(&self, props: &StandingsTabProps, state: &StandingsTabState, standings: &[Standing]) -> Element {
         // Use the document system for Division view
         use super::StandingsDocumentWidget;
 
         Element::Widget(Box::new(StandingsDocumentWidget::division(
             Arc::new(standings.to_vec()),
             props.config.clone(),
-            props.focus_index,
-            props.scroll_offset,
+            state.doc_nav.focus_index,
+            state.doc_nav.scroll_offset,
         )))
     }
 
-    fn render_wildcard_view(&self, props: &StandingsTabProps, standings: &[Standing]) -> Element {
+    fn render_wildcard_view(&self, props: &StandingsTabProps, state: &StandingsTabState, standings: &[Standing]) -> Element {
         // Use the document system for Wildcard view
         use super::StandingsDocumentWidget;
 
         Element::Widget(Box::new(StandingsDocumentWidget::wildcard(
             Arc::new(standings.to_vec()),
             props.config.clone(),
-            props.focus_index,
-            props.scroll_offset,
+            state.doc_nav.focus_index,
+            state.doc_nav.scroll_offset,
         )))
     }
 
@@ -244,11 +354,9 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
-            focus_index: None,
-            scroll_offset: 0,
         };
 
-        let element = standings_tab.view(&props, &());
+        let element = standings_tab.view(&props, &StandingsTabState::default());
 
         match element {
             Element::Container { children, .. } => {
@@ -270,12 +378,10 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
-            focus_index: None,
-            scroll_offset: 0,
         };
 
         // This should not panic - verifies TableWidget can be created
-        let element = standings_tab.view(&props, &());
+        let element = standings_tab.view(&props, &StandingsTabState::default());
 
         match element {
             Element::Container { children, .. } => {
@@ -312,11 +418,14 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
-            focus_index: None,
-            scroll_offset: 0,
         };
 
-        let element = standings_tab.view(&props, &());
+        let state = StandingsTabState {
+            view: GroupBy::League,
+            ..Default::default()
+        };
+
+        let element = standings_tab.view(&props, &state);
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
@@ -376,11 +485,14 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
-            focus_index: None,
-            scroll_offset: 0,
         };
 
-        let element = standings_tab.view(&props, &());
+        let state = StandingsTabState {
+            view: GroupBy::Division,
+            ..Default::default()
+        };
+
+        let element = standings_tab.view(&props, &state);
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
@@ -443,11 +555,14 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
-            focus_index: None,
-            scroll_offset: 0,
         };
 
-        let element = standings_tab.view(&props, &());
+        let state = StandingsTabState {
+            view: GroupBy::Conference,
+            ..Default::default()
+        };
+
+        let element = standings_tab.view(&props, &state);
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 
@@ -507,11 +622,9 @@ mod tests {
             panel_stack: Vec::new(),
             focused: false,
             config: Config::default(),
-            focus_index: None,
-            scroll_offset: 0,
         };
 
-        let element = standings_tab.view(&props, &());
+        let element = standings_tab.view(&props, &StandingsTabState::default());
         let config = DisplayConfig::default();
         let buf = render_element_to_buffer(&element, RENDER_WIDTH, RENDER_HEIGHT, &config);
 

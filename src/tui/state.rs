@@ -119,7 +119,7 @@ pub struct UiState {
     pub standings: StandingsUiState,
     pub settings: SettingsUiState,
     pub demo: DocumentState,
-    pub standings_doc: DocumentState,
+    // standings_doc removed in Phase 7 - now in StandingsTabState component state
 }
 
 /// UI state for Scores tab
@@ -156,7 +156,13 @@ impl Default for ScoresUiState {
     }
 }
 
-#[derive(Debug, Clone)]
+/// UI state for Standings tab
+///
+/// PHASE 4 TRANSITION: This state is being migrated to component-local state.
+/// Some fields are still needed in global state temporarily for key routing and data effects.
+///
+/// TODO (Phase 7): Move remaining fields to component state when key routing is migrated
+#[derive(Debug, Clone, PartialEq)]
 pub struct StandingsUiState {
     pub view: GroupBy,
     pub browse_mode: bool,
