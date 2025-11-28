@@ -14,17 +14,23 @@ use crate::config::DisplayConfig;
 use crate::layout_constants::SCORE_BOX_WIDTH;
 use crate::tui::action::{Action, ComponentMessageTrait};
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
+use crate::tui::document::{Document, FocusContext};
+use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
+
+use super::scores_grid_document::ScoresGridDocument;
 //
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 //
 /// Component state for ScoresTab - managed by the component itself
 #[derive(Clone, Debug)]
 pub struct ScoresTabState {
+    // Date window state
     pub selected_date_index: usize,
     pub game_date: GameDate,
-    pub browse_mode: bool,
-    pub selected_game_index: Option<usize>,
+
+    // Document navigation (replaces browse_mode and selected_game_index)
+    pub doc_nav: DocumentNavState,
 }
 
 impl Default for ScoresTabState {
@@ -32,19 +38,39 @@ impl Default for ScoresTabState {
         Self {
             selected_date_index: 2, // Middle of 5-date window
             game_date: GameDate::today(),
-            browse_mode: false,
-            selected_game_index: None,
+            doc_nav: DocumentNavState::default(),
         }
+    }
+}
+
+impl ScoresTabState {
+    /// Check if browse mode is active (derived from focus_index)
+    pub fn is_browse_mode(&self) -> bool {
+        self.doc_nav.focus_index.is_some()
     }
 }
 
 /// Messages handled by ScoresTab component
 #[derive(Clone, Debug)]
 pub enum ScoresTabMsg {
+    // Date navigation
     NavigateLeft,
     NavigateRight,
+
+    // Browse mode (game selection)
     EnterBoxSelection,
     ExitBoxSelection,
+
+    // Document navigation (delegated)
+    DocNav(DocumentNavMsg),
+
+    // Viewport management
+    UpdateViewportHeight(u16),
+
+    // Game activation
+    ActivateGame,
+
+    // Legacy game selection (TODO: remove after migration complete)
     MoveGameSelectionUp(u16),    // boxes_per_row
     MoveGameSelectionDown(u16),  // boxes_per_row
     MoveGameSelectionLeft,
@@ -126,41 +152,73 @@ impl Component for ScoresTab {
                 Effect::Action(Action::RefreshSchedule(state.game_date.clone()))
             }
             ScoresTabMsg::EnterBoxSelection => {
-                state.browse_mode = true;
-                state.selected_game_index = Some(0);
+                // Initialize focus to first element if available
+                if !state.doc_nav.focusable_positions.is_empty() && state.doc_nav.focus_index.is_none() {
+                    state.doc_nav.focus_index = Some(0);
+                }
                 Effect::None
             }
             ScoresTabMsg::ExitBoxSelection => {
-                state.browse_mode = false;
-                state.selected_game_index = None;
+                state.doc_nav.focus_index = None;
+                state.doc_nav.scroll_offset = 0;
                 Effect::None
             }
+
+            // Document navigation (delegated to generic handler)
+            ScoresTabMsg::DocNav(nav_msg) => {
+                crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
+            }
+
+            ScoresTabMsg::UpdateViewportHeight(h) => {
+                state.doc_nav.viewport_height = h;
+                Effect::None
+            }
+
+            // Game activation
+            ScoresTabMsg::ActivateGame => {
+                if let Some(focus_idx) = state.doc_nav.focus_index {
+                    if let Some(id) = state.doc_nav.focusable_ids.get(focus_idx) {
+                        if let crate::tui::document::FocusableId::Link(link_id) = id {
+                            // Parse "game_12345" -> 12345
+                            if let Some(game_id) = link_id.strip_prefix("game_")
+                                .and_then(|s| s.parse::<i64>().ok()) {
+                                return Effect::Action(Action::PushPanel(
+                                    crate::tui::types::Panel::Boxscore { game_id }
+                                ));
+                            }
+                        }
+                    }
+                }
+                Effect::None
+            }
+
+            // Legacy game selection (kept for backward compatibility during migration)
             ScoresTabMsg::MoveGameSelectionUp(boxes_per_row) => {
-                if let Some(idx) = state.selected_game_index {
+                if let Some(idx) = state.doc_nav.focus_index {
                     if idx >= boxes_per_row as usize {
-                        state.selected_game_index = Some(idx - boxes_per_row as usize);
+                        state.doc_nav.focus_index = Some(idx - boxes_per_row as usize);
                     }
                 }
                 Effect::None
             }
             ScoresTabMsg::MoveGameSelectionDown(boxes_per_row) => {
                 // TODO: Get game count from schedule and bounds check
-                if let Some(idx) = state.selected_game_index {
-                    state.selected_game_index = Some(idx + boxes_per_row as usize);
+                if let Some(idx) = state.doc_nav.focus_index {
+                    state.doc_nav.focus_index = Some(idx + boxes_per_row as usize);
                 }
                 Effect::None
             }
             ScoresTabMsg::MoveGameSelectionLeft => {
-                if let Some(idx) = state.selected_game_index {
+                if let Some(idx) = state.doc_nav.focus_index {
                     if idx > 0 {
-                        state.selected_game_index = Some(idx - 1);
+                        state.doc_nav.focus_index = Some(idx - 1);
                     }
                 }
                 Effect::None
             }
             ScoresTabMsg::MoveGameSelectionRight => {
-                if let Some(idx) = state.selected_game_index {
-                    state.selected_game_index = Some(idx + 1);
+                if let Some(idx) = state.doc_nav.focus_index {
+                    state.doc_nav.focus_index = Some(idx + 1);
                 }
                 Effect::None
             }
@@ -190,7 +248,7 @@ impl ScoresTab {
             .map(|date| {
                 let key = self.date_to_key(date);
                 let title = self.format_date_label(date);
-                let content = self.render_game_list_from_state(props, state);
+                let content = self.render_game_list_from_state(props, state, date);
                 //
                 TabItem::new(key, title, content)
             })
@@ -203,7 +261,7 @@ impl ScoresTab {
             &TabbedPanelProps {
                 active_key,
                 tabs,
-                focused: props.focused && !state.browse_mode,
+                focused: props.focused && !state.is_browse_mode(),
             },
             &(),
         )
@@ -229,13 +287,16 @@ impl ScoresTab {
         }
     }
     //
-    fn render_game_list_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState) -> Element {
+    fn render_game_list_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState, _date: &GameDate) -> Element {
+        // TODO Phase 5: Replace GameListWidget with document rendering
+        // For now, keeping GameListWidget to maintain functionality
+        // Next step: Integrate ScoresGridDocument properly with Element tree
         Element::Widget(Box::new(GameListWidget {
             schedule: props.schedule.clone(),
             period_scores: props.period_scores.clone(),
             game_info: props.game_info.clone(),
-            selected_game_index: if state.browse_mode {
-                state.selected_game_index
+            selected_game_index: if state.is_browse_mode() {
+                state.doc_nav.focus_index
             } else {
                 None
             },

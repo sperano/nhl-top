@@ -18,7 +18,7 @@ use super::types::{SettingsCategory, Tab};
 fn is_scores_browse_mode_active(component_states: &ComponentStateStore) -> bool {
     component_states
         .get::<ScoresTabState>("app/scores_tab")
-        .map(|s| s.browse_mode)
+        .map(|s| s.is_browse_mode())
         .unwrap_or(false)
 }
 
@@ -26,7 +26,7 @@ fn is_scores_browse_mode_active(component_states: &ComponentStateStore) -> bool 
 fn is_standings_browse_mode_active(component_states: &ComponentStateStore) -> bool {
     component_states
         .get::<StandingsTabState>("app/standings_tab")
-        .map(|s| s.browse_mode)
+        .map(|s| s.is_browse_mode())
         .unwrap_or(false)
 }
 
@@ -154,7 +154,7 @@ fn handle_scores_tab_keys(
                 use crate::tui::components::scores_tab::ScoresTabState;
 
                 if let Some(scores_state) = component_states.get::<ScoresTabState>("app/scores_tab") {
-                    if let Some(selected_index) = scores_state.selected_game_index {
+                    if let Some(selected_index) = scores_state.doc_nav.focus_index {
                         if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
                             if let Some(game) = schedule.games.get(selected_index) {
                                 return Some(Action::ScoresAction(ScoresAction::SelectGame(game.id)));
@@ -554,8 +554,7 @@ mod tests {
     fn make_component_states_with_box_selection() -> ComponentStateStore {
         let mut store = ComponentStateStore::new();
         let mut scores_state = ScoresTabState::default();
-        scores_state.browse_mode = true;
-        scores_state.selected_game_index = Some(0); // Select first game
+        scores_state.doc_nav.focus_index = Some(0); // Select first game (activates browse mode)
         store.insert("app/scores_tab".to_string(), scores_state);
         store
     }
@@ -563,7 +562,7 @@ mod tests {
     fn make_component_states_with_browse_mode() -> ComponentStateStore {
         let mut store = ComponentStateStore::new();
         let mut standings_state = StandingsTabState::default();
-        standings_state.browse_mode = true;
+        standings_state.doc_nav.focus_index = Some(0); // Activate browse mode
         store.insert("app/standings_tab".to_string(), standings_state);
         store
     }

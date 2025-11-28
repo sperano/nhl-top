@@ -4,7 +4,7 @@
 //! scrollable, focusable document-like content (e.g., StandingsTab, DemoTab).
 
 use crate::tui::component::Effect;
-use crate::tui::document::RowPosition;
+use crate::tui::document::{FocusableId, RowPosition};
 
 /// Minimum viewport height - if smaller than this, autoscroll may behave oddly
 const MIN_VIEWPORT_HEIGHT: u16 = 5;
@@ -32,6 +32,7 @@ pub struct DocumentNavState {
     pub scroll_offset: u16,
     pub viewport_height: u16,
     pub focusable_positions: Vec<u16>,
+    pub focusable_ids: Vec<FocusableId>,
     pub focusable_row_positions: Vec<Option<RowPosition>>,
 }
 
@@ -297,6 +298,7 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
+            focusable_ids: vec![],
             focusable_row_positions: vec![None, None, None],
         };
 
@@ -313,6 +315,7 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
+            focusable_ids: vec![],
             focusable_row_positions: vec![None, None, None],
         };
 
@@ -328,6 +331,7 @@ mod tests {
             scroll_offset: 5,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
+            focusable_ids: vec![],
             focusable_row_positions: vec![None, None, None],
         };
 
@@ -344,6 +348,7 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
+            focusable_ids: vec![],
             focusable_row_positions: vec![None, None, None],
         };
 
@@ -359,6 +364,7 @@ mod tests {
             scroll_offset: 10,
             viewport_height: 20,
             focusable_positions: vec![],
+            focusable_ids: vec![],
             focusable_row_positions: vec![],
         };
 
@@ -376,6 +382,7 @@ mod tests {
             scroll_offset: 10,
             viewport_height: 20,
             focusable_positions: vec![],
+            focusable_ids: vec![],
             focusable_row_positions: vec![],
         };
 
@@ -390,6 +397,7 @@ mod tests {
             scroll_offset: 100,
             viewport_height: 20,
             focusable_positions: vec![],
+            focusable_ids: vec![],
             focusable_row_positions: vec![],
         };
 
@@ -404,6 +412,7 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![],
+            focusable_ids: vec![],
             focusable_row_positions: vec![],
         };
 
@@ -418,6 +427,7 @@ mod tests {
             scroll_offset: 50,
             viewport_height: 20,
             focusable_positions: vec![],
+            focusable_ids: vec![],
             focusable_row_positions: vec![],
         };
 
@@ -432,6 +442,7 @@ mod tests {
             scroll_offset: 30,
             viewport_height: 20,
             focusable_positions: vec![],
+            focusable_ids: vec![],
             focusable_row_positions: vec![],
         };
 
@@ -446,6 +457,7 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 10,
             focusable_positions: vec![0, 2, 4, 6, 8, 20, 22], // Element 5 is at y=20
+            focusable_ids: vec![],
             focusable_row_positions: vec![None; 7],
         };
 
@@ -462,6 +474,7 @@ mod tests {
             scroll_offset: 10,
             viewport_height: 10,
             focusable_positions: vec![0, 2, 4, 6, 8, 20, 22], // Element 0 is at y=0
+            focusable_ids: vec![],
             focusable_row_positions: vec![None; 7],
         };
 

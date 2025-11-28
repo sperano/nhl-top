@@ -6,6 +6,7 @@ pub mod breadcrumb;
 pub mod demo_tab;
 pub mod goalie_stats_table;
 pub mod player_detail_panel;
+pub mod scores_grid_document;
 pub mod scores_tab;
 pub mod settings_tab;
 pub mod skater_stats_table;

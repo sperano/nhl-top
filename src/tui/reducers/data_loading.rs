@@ -20,7 +20,7 @@ pub fn reduce_data_loading(
             Some(handle_standings_loaded(state.clone(), result.clone(), component_states))
         }
         Action::ScheduleLoaded(result) => {
-            Some(handle_schedule_loaded(state.clone(), result.clone()))
+            Some(handle_schedule_loaded(state.clone(), result.clone(), component_states))
         }
         Action::GameDetailsLoaded(game_id, result) => Some(handle_game_details_loaded(
             state.clone(),
@@ -106,15 +106,40 @@ fn handle_standings_loaded(
 fn handle_schedule_loaded(
     state: AppState,
     result: Result<nhl_api::DailySchedule, String>,
+    component_states: &mut crate::tui::component_store::ComponentStateStore,
 ) -> (AppState, Effect) {
     let mut new_state = state;
 
     match result {
         Ok(schedule) => {
             debug!("DATA: Loaded schedule with {} games", schedule.games.len());
-            new_state.data.schedule = Arc::new(Some(schedule));
+            new_state.data.schedule = Arc::new(Some(schedule.clone()));
             new_state.data.errors.clear();
             // TODO: Remove Schedule loading key - needs date string
+
+            // Rebuild scores tab focusable metadata (Phase 7)
+            use crate::tui::components::scores_tab::ScoresTabState;
+            use crate::tui::components::scores_grid_document::ScoresGridDocument;
+            use crate::tui::document::Document;
+
+            if let Some(scores_state) = component_states.get_mut::<ScoresTabState>("app/scores_tab") {
+                // Calculate boxes per row (placeholder - should come from viewport width)
+                let boxes_per_row = 3;
+
+                // Create document to extract focusable metadata
+                let doc = ScoresGridDocument::new(
+                    Arc::new(Some(schedule)),
+                    new_state.data.game_info.clone(),
+                    new_state.data.period_scores.clone(),
+                    boxes_per_row,
+                    scores_state.game_date.clone(),
+                );
+
+                // Rebuild focusable metadata
+                scores_state.doc_nav.focusable_positions = doc.focusable_positions();
+                scores_state.doc_nav.focusable_ids = doc.focusable_ids();
+                scores_state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
+            }
         }
         Err(e) => {
             debug!("DATA: Failed to load schedule: {}", e);

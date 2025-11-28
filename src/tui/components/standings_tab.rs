@@ -27,9 +27,8 @@ use std::any::Any;
 #[derive(Clone, Debug)]
 pub struct StandingsTabState {
     pub view: GroupBy,
-    pub browse_mode: bool,
     pub focusable_ids: Vec<FocusableId>,
-    // Document navigation state (embedded)
+    // Document navigation state (embedded, browse_mode derived from focus_index)
     pub doc_nav: DocumentNavState,
 }
 
@@ -37,10 +36,16 @@ impl Default for StandingsTabState {
     fn default() -> Self {
         Self {
             view: GroupBy::Wildcard,
-            browse_mode: false,
             focusable_ids: Vec::new(),
             doc_nav: DocumentNavState::default(),
         }
+    }
+}
+
+impl StandingsTabState {
+    /// Check if browse mode is active (derived from focus_index)
+    pub fn is_browse_mode(&self) -> bool {
+        self.doc_nav.focus_index.is_some()
     }
 }
 
@@ -125,7 +130,6 @@ impl Component for StandingsTab {
                 Effect::None
             }
             StandingsTabMsg::EnterBrowseMode => {
-                state.browse_mode = true;
                 // Initialize focus to first element if available
                 if !state.doc_nav.focusable_positions.is_empty() && state.doc_nav.focus_index.is_none() {
                     state.doc_nav.focus_index = Some(0);
@@ -133,7 +137,6 @@ impl Component for StandingsTab {
                 Effect::None
             }
             StandingsTabMsg::ExitBrowseMode => {
-                state.browse_mode = false;
                 state.doc_nav.focus_index = None;
                 state.doc_nav.scroll_offset = 0;
                 Effect::None
@@ -196,7 +199,7 @@ impl StandingsTab {
             &TabbedPanelProps {
                 active_key: state.view.name().to_string(),
                 tabs,
-                focused: props.focused && !state.browse_mode,
+                focused: props.focused && !state.is_browse_mode(),
             },
             &(),
         )
