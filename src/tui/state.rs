@@ -8,7 +8,7 @@ use crate::commands::scores_format::PeriodScores;
 use crate::config::Config;
 
 use super::document::{FocusableId, RowPosition};
-use super::types::{Panel, SettingsCategory, Tab};
+use super::types::{SettingsCategory, StackedDocument, Tab};
 
 /// Shared state for document-based navigation
 ///
@@ -61,7 +61,7 @@ pub struct AppState {
 #[derive(Debug, Clone)]
 pub struct NavigationState {
     pub current_tab: Tab,
-    pub panel_stack: Vec<PanelState>,
+    pub document_stack: Vec<DocumentStackEntry>,
     /// Whether focus is on content (true) or tab bar (false)
     pub content_focused: bool,
 }
@@ -70,18 +70,20 @@ impl Default for NavigationState {
     fn default() -> Self {
         Self {
             current_tab: Tab::Scores,
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             content_focused: false, // Start with tab bar focused
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct PanelState {
-    pub panel: Panel,
-    /// Selected item index within the panel (None = no selection)
-    /// Used for navigating lists (players, games, etc.) within panels
+pub struct DocumentStackEntry {
+    pub document: StackedDocument,
+    /// Selected item index within the document (None = no selection)
+    /// Used for navigating lists (players, games, etc.) within documents
     pub selected_index: Option<usize>,
+    /// Scroll offset (lines from top) for document viewport
+    pub scroll_offset: u16,
 }
 
 #[derive(Debug, Clone, Default)]

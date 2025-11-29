@@ -672,10 +672,19 @@ mod tests {
         // Should have 32 focusable positions (16 per conference)
         assert_eq!(positions.len(), 32);
 
-        // With Row layout, positions alternate between left and right tables
-        // So positions are NOT sorted, but they follow a pattern
-        // All positions should be >= 5 (after headers in both tables)
-        assert!(positions.iter().all(|&p| p >= 5));
+        // With Row layout, left column elements are collected first, then right column.
+        // Both columns have the SAME y-positions because they're rendered side-by-side.
+        // Left column (16 teams): positions 5, 6, 7, ... 20
+        // Right column (16 teams): positions 5, 6, 7, ... 20
+
+        // First 16 positions are left column
+        for i in 0..16 {
+            assert_eq!(positions[i], 5 + i as u16, "Left column position {} should be {}", i, 5 + i);
+        }
+        // Second 16 positions are right column - SAME y values as left
+        for i in 0..16 {
+            assert_eq!(positions[16 + i], 5 + i as u16, "Right column position {} should be {}", i, 5 + i);
+        }
     }
 
     #[test]

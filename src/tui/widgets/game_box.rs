@@ -1,6 +1,6 @@
-use crate::config::DisplayConfig;
+use crate::config::{DisplayConfig, SELECTION_STYLE_MODIFIER};
 use crate::layout_constants::SCORE_BOX_WIDTH;
-use crate::tui::widgets::{StandaloneWidget, ScoreTable};
+use crate::tui::widgets::{ScoreTable, StandaloneWidget};
 /// GameBox widget - displays a single game's score in a compact box
 ///
 /// This is a composition widget that combines a header line with a ScoreTable.
@@ -106,11 +106,15 @@ impl GameBox {
     }
 
     /// Get the appropriate style based on selection state
+    ///
+    /// - Normal: Uses theme.fg2 (via text_style)
+    /// - Selected: Uses theme.fg2 with SELECTION_STYLE_MODIFIER (reverse + bold)
     fn get_style(&self, config: &DisplayConfig) -> Style {
+        let base_style = config.text_style();
         if self.selected {
-            Style::default().fg(config.selection_fg)
+            base_style.add_modifier(SELECTION_STYLE_MODIFIER)
         } else {
-            Style::default()
+            base_style
         }
     }
 }

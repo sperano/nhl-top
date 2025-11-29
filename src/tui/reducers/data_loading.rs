@@ -4,6 +4,7 @@ use tracing::debug;
 
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
+use crate::tui::constants::{DEMO_TAB_PATH, SCORES_TAB_PATH, STANDINGS_TAB_PATH};
 use crate::tui::document::Document;
 use crate::tui::reducers::standings::rebuild_focusable_metadata;
 use crate::tui::state::{AppState, LoadingKey};
@@ -64,10 +65,12 @@ fn handle_standings_loaded(
             // Rebuild demo document focusable data in component state (Phase 8)
             use crate::tui::components::demo_tab::DemoDocument;
             use crate::tui::document_nav::DocumentNavState;
-            if let Some(demo_state) = component_states.get_mut::<DocumentNavState>("app/demo_tab") {
+            if let Some(demo_state) = component_states.get_mut::<DocumentNavState>(DEMO_TAB_PATH) {
                 let demo_doc = DemoDocument::new(Some(standings.clone()));
                 demo_state.focusable_positions = demo_doc.focusable_positions();
+                demo_state.focusable_ids = demo_doc.focusable_ids();
                 demo_state.focusable_row_positions = demo_doc.focusable_row_positions();
+                demo_state.link_targets = demo_doc.focusable_link_targets();
             }
 
             // Rebuild standings document focusable data in component state (Phase 7)
@@ -84,18 +87,21 @@ fn handle_standings_loaded(
             // Rebuild demo focusable data for empty standings case (Phase 8)
             use crate::tui::components::demo_tab::DemoDocument;
             use crate::tui::document_nav::DocumentNavState;
-            if let Some(demo_state) = component_states.get_mut::<DocumentNavState>("app/demo_tab") {
+            if let Some(demo_state) = component_states.get_mut::<DocumentNavState>(DEMO_TAB_PATH) {
                 let demo_doc = DemoDocument::new(None);
                 demo_state.focusable_positions = demo_doc.focusable_positions();
+                demo_state.focusable_ids = demo_doc.focusable_ids();
                 demo_state.focusable_row_positions = demo_doc.focusable_row_positions();
+                demo_state.link_targets = demo_doc.focusable_link_targets();
             }
 
             // Clear standings focusable data in component state on error (Phase 7)
             use crate::tui::components::standings_tab::StandingsTabState;
-            if let Some(standings_state) = component_states.get_mut::<StandingsTabState>("app/standings_tab") {
+            if let Some(standings_state) = component_states.get_mut::<StandingsTabState>(STANDINGS_TAB_PATH) {
                 standings_state.doc_nav.focusable_positions = Vec::new();
-                standings_state.focusable_ids = Vec::new();
+                standings_state.doc_nav.focusable_ids = Vec::new();
                 standings_state.doc_nav.focusable_row_positions = Vec::new();
+                standings_state.doc_nav.link_targets = Vec::new();
             }
         }
     }
@@ -117,16 +123,17 @@ fn handle_schedule_loaded(
             new_state.data.errors.clear();
             // TODO: Remove Schedule loading key - needs date string
 
-            // Rebuild scores tab focusable metadata (Phase 7)
-            use crate::tui::components::scores_tab::ScoresTabState;
+            // Rebuild scores tab focusable metadata from the document
             use crate::tui::components::scores_grid_document::ScoresGridDocument;
+            use crate::tui::components::scores_tab::ScoresTabState;
             use crate::tui::document::Document;
 
-            if let Some(scores_state) = component_states.get_mut::<ScoresTabState>("app/scores_tab") {
-                // Calculate boxes per row (placeholder - should come from viewport width)
-                let boxes_per_row = 3;
+            if let Some(scores_state) = component_states.get_mut::<ScoresTabState>(SCORES_TAB_PATH) {
+                // Calculate boxes_per_row from terminal width
+                let box_with_margin = crate::layout_constants::GAME_BOX_WITH_MARGIN;
+                let boxes_per_row = (new_state.system.terminal_width / box_with_margin).max(1);
 
-                // Create document to extract focusable metadata
+                // Create the document to extract focusable metadata
                 let doc = ScoresGridDocument::new(
                     Arc::new(Some(schedule)),
                     new_state.data.game_info.clone(),
@@ -135,8 +142,9 @@ fn handle_schedule_loaded(
                     scores_state.game_date.clone(),
                 );
 
-                // Rebuild focusable metadata
+                // Use document methods to get focusable metadata
                 scores_state.doc_nav.focusable_positions = doc.focusable_positions();
+                scores_state.doc_nav.focusable_heights = doc.focusable_heights();
                 scores_state.doc_nav.focusable_ids = doc.focusable_ids();
                 scores_state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
             }

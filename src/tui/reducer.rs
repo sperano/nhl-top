@@ -3,14 +3,16 @@ use tracing::debug;
 use super::action::{Action, SettingsAction};
 use super::component::Effect;
 use super::component_store::ComponentStateStore;
-//use super::settings_helpers::find_initial_modal_index;
+use super::constants::SETTINGS_TAB_PATH;
+#[cfg(test)]
+use super::constants::{SCORES_TAB_PATH, STANDINGS_TAB_PATH};
 use super::state::AppState;
 use super::types::SettingsCategory;
 use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
 use crate::tui::reducers::{
-    reduce_data_loading, reduce_navigation, reduce_panels, reduce_scores, reduce_standings,
+    reduce_data_loading, reduce_document_stack, reduce_navigation, reduce_scores, reduce_standings,
 };
 
 /// Create an effect to save config to disk asynchronously
@@ -68,8 +70,8 @@ pub fn reduce(
         return result;
     }
 
-    // Panel management actions
-    if let Some(result) = reduce_panels(&state, &action) {
+    // Document stack management actions
+    if let Some(result) = reduce_document_stack(&state, &action) {
         return result;
     }
 
@@ -83,7 +85,7 @@ pub fn reduce(
     // Tab-specific action delegation
     match action {
         Action::ScoresAction(scores_action) => reduce_scores(state, scores_action),
-        Action::StandingsAction(standings_action) => reduce_standings(state, standings_action),
+        Action::StandingsAction(standings_action) => reduce_standings(state, standings_action, component_states),
         Action::SettingsAction(settings_action) => reduce_settings(state, settings_action, component_states),
 
         // // Special cases that don't fit cleanly into sub-modules
@@ -94,12 +96,12 @@ pub fn reduce(
         //     );
         //     let mut new_state = state;
         //
-        //     // Push PlayerDetail panel onto stack
+        //     // Push PlayerDetail document onto stack
         //     new_state
         //         .navigation
-        //         .panel_stack
-        //         .push(super::state::PanelState {
-        //             panel: Panel::PlayerDetail { player_id },
+        //         .document_stack
+        //         .push(super::state::DocumentStackEntry {
+        //             document: StackedDocument::PlayerDetail { player_id },
         //             selected_index: Some(0), // Start with first season selected
         //         });
         //
@@ -107,15 +109,15 @@ pub fn reduce(
         // }
 
         // Action::SelectTeam(team_abbrev) => {
-        //     debug!("TEAM: Opening team detail panel for team={}", team_abbrev);
+        //     debug!("TEAM: Opening team detail document for team={}", team_abbrev);
         //     let mut new_state = state;
         //
-        //     // Push TeamDetail panel onto stack
+        //     // Push TeamDetail document onto stack
         //     new_state
         //         .navigation
-        //         .panel_stack
-        //         .push(super::state::PanelState {
-        //             panel: Panel::TeamDetail {
+        //         .document_stack
+        //         .push(super::state::DocumentStackEntry {
+        //             document: StackedDocument::TeamDetail {
         //                 abbrev: team_abbrev,
         //             },
         //             selected_index: Some(0), // Start with first player selected
@@ -166,7 +168,7 @@ fn reduce_settings(
             };
 
             // Update focusable metadata in component state
-            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>("app/settings_tab") {
+            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>(SETTINGS_TAB_PATH) {
                 let doc = SettingsDocument::new(new_state.ui.settings.selected_category, new_state.system.config.clone());
                 settings_state.doc_nav = Default::default(); // Reset navigation
                 settings_state.doc_nav.focusable_positions = doc.focusable_positions();
@@ -189,7 +191,7 @@ fn reduce_settings(
             };
 
             // Update focusable metadata in component state
-            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>("app/settings_tab") {
+            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>(SETTINGS_TAB_PATH) {
                 let doc = SettingsDocument::new(new_state.ui.settings.selected_category, new_state.system.config.clone());
                 settings_state.doc_nav = Default::default(); // Reset navigation
                 settings_state.doc_nav.focusable_positions = doc.focusable_positions();
@@ -295,21 +297,21 @@ mod tests {
         let (new_state, _) = test_reduce(state, action);
 
         assert_eq!(new_state.navigation.current_tab, Tab::Settings);
-        assert!(new_state.navigation.panel_stack.is_empty());
+        assert!(new_state.navigation.document_stack.is_empty());
         assert!(!new_state.navigation.content_focused);
     }
 
     #[test]
-    fn test_panel_actions_are_handled() {
+    fn test_document_stack_actions_are_handled() {
         let state = AppState::default();
-        let panel = super::super::types::Panel::TeamDetail {
+        let doc = super::super::types::StackedDocument::TeamDetail {
             abbrev: "BOS".to_string(),
         };
-        let action = Action::PushPanel(panel.clone());
+        let action = Action::PushDocument(doc.clone());
 
         let (new_state, _) = test_reduce(state, action);
 
-        assert_eq!(new_state.navigation.panel_stack.len(), 1);
+        assert_eq!(new_state.navigation.document_stack.len(), 1);
     }
 
     #[test]
@@ -325,7 +327,7 @@ mod tests {
         // Should dispatch ComponentMessage
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, "app/scores_tab");
+                assert_eq!(path, SCORES_TAB_PATH);
             }
             _ => panic!("Expected ComponentMessage effect"),
         }
@@ -344,7 +346,7 @@ mod tests {
         // Should dispatch ComponentMessage
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, "app/standings_tab");
+                assert_eq!(path, STANDINGS_TAB_PATH);
             }
             _ => panic!("Expected ComponentMessage effect"),
         }
@@ -367,32 +369,32 @@ mod tests {
     //
     //     let (new_state, effect) = test_reduce(state, action);
     //
-    //     assert_eq!(new_state.navigation.panel_stack.len(), 1);
-    //     match &new_state.navigation.panel_stack[0].panel {
-    //         Panel::PlayerDetail { player_id } => {
+    //     assert_eq!(new_state.navigation.document_stack.len(), 1);
+    //     match &new_state.navigation.document_stack[0].document {
+    //         StackedDocument::PlayerDetail { player_id } => {
     //             assert_eq!(*player_id, 8471214);
     //         }
-    //         _ => panic!("Expected PlayerDetail panel"),
+    //         _ => panic!("Expected PlayerDetail document"),
     //     }
-    //     assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+    //     assert_eq!(new_state.navigation.document_stack[0].selected_index, Some(0));
     //     assert!(matches!(effect, Effect::None));
     // }
     //
     // #[test]
-    // fn test_select_team_opens_panel() {
+    // fn test_select_team_opens_document() {
     //     let state = AppState::default();
     //     let action = Action::SelectTeam("BOS".to_string());
     //
     //     let (new_state, effect) = test_reduce(state, action);
     //
-    //     assert_eq!(new_state.navigation.panel_stack.len(), 1);
-    //     match &new_state.navigation.panel_stack[0].panel {
-    //         Panel::TeamDetail { abbrev } => {
+    //     assert_eq!(new_state.navigation.document_stack.len(), 1);
+    //     match &new_state.navigation.document_stack[0].document {
+    //         StackedDocument::TeamDetail { abbrev } => {
     //             assert_eq!(abbrev, "BOS");
     //         }
-    //         _ => panic!("Expected TeamDetail panel"),
+    //         _ => panic!("Expected TeamDetail document"),
     //     }
-    //     assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+    //     assert_eq!(new_state.navigation.document_stack[0].selected_index, Some(0));
     //     assert!(matches!(effect, Effect::None));
     // }
 

@@ -8,11 +8,9 @@ use std::sync::Arc;
 
 use nhl_api::{DailySchedule, GameDate, GameMatchup};
 
-use crate::commands::scores_format::PeriodScores;
+use crate::commands::scores_format::{format_period_text, PeriodScores};
 use crate::tui::document::{Document, DocumentBuilder, DocumentElement, FocusContext, FocusableId};
-
-/// Constant for game box height
-//const GAME_BOX_HEIGHT: u16 = 7;
+use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
 
 /// Document that displays games in a grid layout using Row elements
 pub struct ScoresGridDocument {
@@ -40,10 +38,81 @@ impl ScoresGridDocument {
         }
     }
 
-    /// Create a GameBox for a given game
-    /// Format a game as a text label for now (will be replaced with actual GameBox rendering)
-    fn format_game_label(&self, game: &nhl_api::ScheduleGame) -> String {
-        format!("{} @ {}", game.away_team.abbrev, game.home_team.abbrev)
+    /// Create a GameBox widget for a given game
+    fn create_game_box(&self, game: &nhl_api::ScheduleGame) -> GameBox {
+        // Determine game state
+        let state = if game.game_state.is_final() {
+            WidgetGameState::Final
+        } else if game.game_state.has_started() {
+            // Get period text and time from game_info
+            if let Some(info) = self.game_info.get(&game.id) {
+                let period_text = format_period_text(
+                    info.period_descriptor.period_type,
+                    info.period_descriptor.number,
+                );
+                let (time_remaining, in_intermission) = if let Some(clock) = &info.clock {
+                    (Some(clock.time_remaining.clone()), clock.in_intermission)
+                } else {
+                    (None, false)
+                };
+                WidgetGameState::Live {
+                    period_text,
+                    time_remaining,
+                    in_intermission,
+                }
+            } else {
+                WidgetGameState::Live {
+                    period_text: "Live".to_string(),
+                    time_remaining: None,
+                    in_intermission: false,
+                }
+            }
+        } else {
+            // Scheduled game - format start time
+            let start_time =
+                if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&game.start_time_utc) {
+                    let local_time: chrono::DateTime<chrono::Local> = parsed.into();
+                    local_time.format("%I:%M %p").to_string()
+                } else {
+                    game.start_time_utc.clone()
+                };
+            WidgetGameState::Scheduled { start_time }
+        };
+
+        // Get scores and period details
+        let (away_score, home_score, away_periods, home_periods, has_ot, has_so) =
+            if let Some(scores) = self.period_scores.get(&game.id) {
+                (
+                    Some(scores.away_total()),
+                    Some(scores.home_total()),
+                    Some(scores.away_periods.clone()),
+                    Some(scores.home_periods.clone()),
+                    scores.has_ot,
+                    scores.has_so,
+                )
+            } else {
+                (None, None, None, None, false, false)
+            };
+
+        // Get current period
+        let current_period = self
+            .game_info
+            .get(&game.id)
+            .map(|info| info.period_descriptor.number);
+
+        GameBox::new(
+            game.away_team.abbrev.clone(),
+            game.home_team.abbrev.clone(),
+            away_score,
+            home_score,
+            away_periods,
+            home_periods,
+            has_ot,
+            has_so,
+            current_period,
+            state,
+            false, // selected is set by focused state during rendering
+        )
     }
 }
 
@@ -69,26 +138,19 @@ impl Document for ScoresGridDocument {
         let chunks: Vec<&[&nhl_api::ScheduleGame]> =
             games.chunks(self.boxes_per_row as usize).collect();
 
-        for (_row_idx, chunk) in chunks.iter().enumerate() {
-            // Create game box elements for this row
+        for chunk in chunks.iter() {
+            // Create GameBox elements for this row
             let game_elements: Vec<DocumentElement> = chunk
                 .iter()
-                .enumerate()
-                .map(|(_col_idx, game)| {
-                    let game_id = format!("game_{}", game.id);
-                    let label = self.format_game_label(game);
-                    let focused = focus.focused_id == Some(FocusableId::Link(game_id.clone()));
+                .map(|game| {
+                    // GameBoxElement uses FocusableId::GameLink(game_id)
+                    let focused = focus.focused_id == Some(FocusableId::GameLink(game.id));
 
-                    // For now, use Link elements (will be replaced with Custom rendering later)
-                    // Target is an Action that will trigger PushPanel
-                    DocumentElement::Link {
-                        display: label,
-                        target: crate::tui::document::LinkTarget::Action(
-                            format!("open_boxscore_{}", game.id)
-                        ),
-                        id: game_id,
-                        focused,
-                    }
+                    // Create the GameBox widget with all score data
+                    let game_box = self.create_game_box(game);
+
+                    // Use the new GameBoxElement variant
+                    DocumentElement::game_box_element(game.id, game_box, focused)
                 })
                 .collect();
 

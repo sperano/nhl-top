@@ -112,6 +112,16 @@ pub trait Document: Send + Sync {
         FocusManager::from_elements(&elements).y_positions()
     }
 
+    /// Get heights of all focusable elements in this document
+    ///
+    /// This is useful for autoscrolling - tall elements (like GameBox)
+    /// need the viewport to scroll enough to show the entire element,
+    /// not just the top.
+    fn focusable_heights(&self) -> Vec<u16> {
+        let elements = self.build(&FocusContext::default());
+        FocusManager::from_elements(&elements).heights()
+    }
+
     /// Get row positions for all focusable elements in this document
     ///
     /// Returns RowPosition for elements in Rows, None for others.
@@ -126,6 +136,14 @@ pub trait Document: Send + Sync {
     fn focusable_ids(&self) -> Vec<FocusableId> {
         let elements = self.build(&FocusContext::default());
         FocusManager::from_elements(&elements).ids()
+    }
+
+    /// Get link targets of all focusable elements in this document
+    ///
+    /// Returns link targets in document order. None for elements without links.
+    fn focusable_link_targets(&self) -> Vec<Option<LinkTarget>> {
+        let elements = self.build(&FocusContext::default());
+        FocusManager::from_elements(&elements).link_targets()
     }
 
     /// Render the document to a buffer at full height

@@ -14,7 +14,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::config::DisplayConfig;
-use crate::tui::action::ComponentMessageTrait;
+use crate::tui::action::{Action, ComponentMessageTrait};
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
 use crate::tui::components::TableWidget;
@@ -22,6 +22,7 @@ use crate::tui::document::{
     Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, LinkTarget,
 };
 use crate::tui::helpers::StandingsSorting;
+use crate::tui::types::StackedDocument;
 use crate::tui::{Alignment, CellValue, ColumnDef};
 
 /// Demo player data for the sample player table
@@ -121,6 +122,8 @@ pub enum DemoTabMessage {
     DocNav(crate::tui::document_nav::DocumentNavMsg),
     /// Update viewport height
     UpdateViewportHeight(u16),
+    /// Activate the currently focused link (team or player)
+    ActivateLink,
 }
 
 impl ComponentMessageTrait for DemoTabMessage {
@@ -147,8 +150,18 @@ impl Component for DemoTab {
     type State = crate::tui::document_nav::DocumentNavState;
     type Message = DemoTabMessage;
 
-    fn init(_props: &Self::Props) -> Self::State {
-        crate::tui::document_nav::DocumentNavState::default()
+    fn init(props: &Self::Props) -> Self::State {
+        use crate::tui::document::Document;
+        // Build initial state with focusable metadata from the document
+        let standings = props.standings.as_ref().clone();
+        let doc = DemoDocument::new(standings);
+        crate::tui::document_nav::DocumentNavState {
+            focusable_positions: doc.focusable_positions(),
+            focusable_ids: doc.focusable_ids(),
+            focusable_row_positions: doc.focusable_row_positions(),
+            link_targets: doc.focusable_link_targets(),
+            ..Default::default()
+        }
     }
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
@@ -158,6 +171,28 @@ impl Component for DemoTab {
             }
             DemoTabMessage::UpdateViewportHeight(height) => {
                 state.viewport_height = height;
+                Effect::None
+            }
+            DemoTabMessage::ActivateLink => {
+                // Get the link target from the focused element
+                if let Some(link_target) = state.focused_link_target() {
+                    if let LinkTarget::Action(action) = link_target {
+                        // Parse "team:BOS" or "player:12345" format
+                        if let Some(abbrev) = action.strip_prefix("team:") {
+                            return Effect::Action(Action::PushDocument(
+                                StackedDocument::TeamDetail {
+                                    abbrev: abbrev.to_string(),
+                                },
+                            ));
+                        } else if let Some(player_id_str) = action.strip_prefix("player:") {
+                            if let Ok(player_id) = player_id_str.parse::<i64>() {
+                                return Effect::Action(Action::PushDocument(
+                                    StackedDocument::PlayerDetail { player_id },
+                                ));
+                            }
+                        }
+                    }
+                }
                 Effect::None
             }
         }
@@ -448,5 +483,75 @@ mod tests {
         // Shift-Tab goes back
         view.focus_prev();
         assert_eq!(view.focus_manager().current_index(), Some(0));
+    }
+
+    #[test]
+    fn test_activate_link_team() {
+        use crate::tui::component::Component;
+        use crate::tui::document_nav::DocumentNavState;
+
+        let mut demo_tab = DemoTab;
+        let mut state = DocumentNavState::default();
+
+        // Set up state with a focused team link
+        // The first 4 focusable elements are team links (BOS, TOR, NYR, MTL)
+        state.focus_index = Some(0); // BOS link
+        state.link_targets = vec![
+            Some(LinkTarget::Action("team:BOS".to_string())),
+            Some(LinkTarget::Action("team:TOR".to_string())),
+            Some(LinkTarget::Action("team:NYR".to_string())),
+            Some(LinkTarget::Action("team:MTL".to_string())),
+        ];
+
+        let effect = demo_tab.update(DemoTabMessage::ActivateLink, &mut state);
+
+        // Should return PushDocument action for TeamDetail
+        match effect {
+            Effect::Action(Action::PushDocument(StackedDocument::TeamDetail { abbrev })) => {
+                assert_eq!(abbrev, "BOS");
+            }
+            _ => panic!("Expected PushDocument(TeamDetail), got {:?}", effect),
+        }
+    }
+
+    #[test]
+    fn test_activate_link_player() {
+        use crate::tui::component::Component;
+        use crate::tui::document_nav::DocumentNavState;
+
+        let mut demo_tab = DemoTab;
+        let mut state = DocumentNavState::default();
+
+        // Set up state with a focused player link
+        state.focus_index = Some(0);
+        state.link_targets = vec![Some(LinkTarget::Action("player:8477492".to_string()))];
+
+        let effect = demo_tab.update(DemoTabMessage::ActivateLink, &mut state);
+
+        // Should return PushDocument action for PlayerDetail
+        match effect {
+            Effect::Action(Action::PushDocument(StackedDocument::PlayerDetail { player_id })) => {
+                assert_eq!(player_id, 8477492);
+            }
+            _ => panic!("Expected PushDocument(PlayerDetail), got {:?}", effect),
+        }
+    }
+
+    #[test]
+    fn test_activate_link_no_focus() {
+        use crate::tui::component::Component;
+        use crate::tui::document_nav::DocumentNavState;
+
+        let mut demo_tab = DemoTab;
+        let mut state = DocumentNavState::default();
+
+        // No focus index set
+        state.focus_index = None;
+        state.link_targets = vec![Some(LinkTarget::Action("team:BOS".to_string()))];
+
+        let effect = demo_tab.update(DemoTabMessage::ActivateLink, &mut state);
+
+        // Should return None effect when no focus
+        assert!(matches!(effect, Effect::None));
     }
 }

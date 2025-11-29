@@ -29,7 +29,14 @@ pub enum FocusableId {
         col: usize,
     },
     /// A standalone link with a string identifier
+    /// TODO: Remove once all usages are migrated to typed variants (TeamLink, PlayerLink, GameLink)
     Link(String),
+    /// A team link with the team abbreviation (e.g., "TOR", "BOS")
+    TeamLink(String),
+    /// A player link with the player ID
+    PlayerLink(i64),
+    /// A game link with the game ID
+    GameLink(i64),
 }
 
 impl FocusableId {
@@ -47,11 +54,26 @@ impl FocusableId {
         Self::Link(id.into())
     }
 
+    /// Create a team link ID
+    pub fn team_link(abbrev: impl Into<String>) -> Self {
+        Self::TeamLink(abbrev.into())
+    }
+
+    /// Create a player link ID
+    pub fn player_link(player_id: i64) -> Self {
+        Self::PlayerLink(player_id)
+    }
+
+    /// Create a game link ID
+    pub fn game_link(game_id: i64) -> Self {
+        Self::GameLink(game_id)
+    }
+
     /// Get the table row if this is a table cell
     pub fn table_row(&self) -> Option<usize> {
         match self {
             Self::TableCell { row, .. } => Some(*row),
-            Self::Link(_) => None,
+            _ => None,
         }
     }
 
@@ -59,7 +81,7 @@ impl FocusableId {
     pub fn table_name(&self) -> Option<&str> {
         match self {
             Self::TableCell { table_name, .. } => Some(table_name),
-            Self::Link(_) => None,
+            _ => None,
         }
     }
 
@@ -68,6 +90,9 @@ impl FocusableId {
         match self {
             Self::TableCell { row, .. } => format!("Table row {}", row + 1),
             Self::Link(id) => format_link_id(id),
+            Self::TeamLink(abbrev) => format!("Team {}", abbrev),
+            Self::PlayerLink(id) => format!("Player {}", id),
+            Self::GameLink(id) => format!("Game {}", id),
         }
     }
 }
@@ -324,6 +349,13 @@ impl FocusManager {
         self.elements.iter().map(|e| e.y).collect()
     }
 
+    /// Get heights of all focusable elements
+    ///
+    /// Useful for storing heights in state for autoscrolling with tall elements.
+    pub fn heights(&self) -> Vec<u16> {
+        self.elements.iter().map(|e| e.height).collect()
+    }
+
     /// Get row positions for all elements
     pub fn row_positions(&self) -> Vec<Option<RowPosition>> {
         self.elements.iter().map(|e| e.row_position).collect()
@@ -332,6 +364,13 @@ impl FocusManager {
     /// Get all focusable element IDs in document order
     pub fn ids(&self) -> Vec<FocusableId> {
         self.elements.iter().map(|e| e.id.clone()).collect()
+    }
+
+    /// Get all link targets in document order
+    ///
+    /// Returns None for elements without link targets.
+    pub fn link_targets(&self) -> Vec<Option<LinkTarget>> {
+        self.elements.iter().map(|e| e.link_target.clone()).collect()
     }
 }
 

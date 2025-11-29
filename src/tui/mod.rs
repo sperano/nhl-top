@@ -6,6 +6,7 @@ pub mod widgets;
 pub mod action;
 pub mod component;
 pub mod component_store;
+pub mod constants;
 pub mod document;
 pub mod document_nav;
 pub mod effects;
@@ -36,7 +37,7 @@ pub use renderer::Renderer;
 pub use runtime::Runtime;
 pub use state::AppState;
 pub use table::{Alignment, CellValue, ColumnDef};
-pub use types::{Panel, SettingsCategory, Tab};
+pub use types::{SettingsCategory, StackedDocument, Tab};
 
 use crate::config::Config;
 use crate::data_provider::NHLDataProvider;
@@ -132,7 +133,12 @@ pub async fn run(client: Arc<dyn NHLDataProvider>, config: Config) -> Result<(),
             terminal_width = area.width; // Capture width for key handling
 
             // Build virtual tree from current state
+            // This creates component states if they don't exist yet
             let element = runtime.build();
+
+            // Update viewport heights for document-based components
+            // Called after build() to ensure component states exist
+            runtime.update_viewport_heights(area.height);
 
             // Render virtual tree to ratatui buffer
             let config = &runtime.state().system.config.display;
@@ -254,8 +260,8 @@ mod tests {
     }
 
     #[test]
-    fn test_is_quit_action_with_panel_actions() {
-        assert!(!is_quit_action(&Action::PopPanel));
+    fn test_is_quit_action_with_document_stack_actions() {
+        assert!(!is_quit_action(&Action::PopDocument));
         assert!(!is_quit_action(&Action::RefreshData));
     }
 

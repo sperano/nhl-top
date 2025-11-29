@@ -12,23 +12,23 @@ use crate::config::Config;
 use crate::config::DisplayConfig;
 use crate::tui::{
     component::{Component, Element, ElementWidget},
-    state::PanelState,
+    state::DocumentStackEntry,
 };
 
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 
-use crate::tui::action::ComponentMessageTrait;
+use crate::tui::action::{Action, ComponentMessageTrait};
 use crate::tui::component::Effect;
-use crate::tui::document::FocusableId;
 use crate::tui::document_nav::DocumentNavState;
+use crate::tui::types::StackedDocument;
 use std::any::Any;
 
 /// Component state for StandingsTab - managed by the component itself
 #[derive(Clone, Debug)]
 pub struct StandingsTabState {
     pub view: GroupBy,
-    pub focusable_ids: Vec<FocusableId>,
     // Document navigation state (embedded, browse_mode derived from focus_index)
+    // Contains focusable_ids, link_targets, positions, etc.
     pub doc_nav: DocumentNavState,
 }
 
@@ -36,7 +36,6 @@ impl Default for StandingsTabState {
     fn default() -> Self {
         Self {
             view: GroupBy::Wildcard,
-            focusable_ids: Vec::new(),
             doc_nav: DocumentNavState::default(),
         }
     }
@@ -62,6 +61,9 @@ pub enum StandingsTabMsg {
 
     // Update viewport height
     UpdateViewportHeight(u16),
+
+    // Activate the currently focused team (push TeamDetail document)
+    ActivateTeam,
 }
 
 impl ComponentMessageTrait for StandingsTabMsg {
@@ -85,7 +87,7 @@ pub struct StandingsTabProps {
     // API data
     pub standings: Arc<Option<Vec<Standing>>>,
     // Navigation state
-    pub panel_stack: Vec<PanelState>,
+    pub document_stack: Vec<DocumentStackEntry>,
     pub focused: bool,
     // Config
     pub config: Config,
@@ -115,7 +117,10 @@ impl Component for StandingsTab {
                 // Reset focus/scroll when changing views
                 state.doc_nav.focus_index = None;
                 state.doc_nav.scroll_offset = 0;
-                Effect::None
+                // Signal that focusable metadata needs to be rebuilt
+                Effect::Action(crate::tui::action::Action::StandingsAction(
+                    crate::tui::action::StandingsAction::RebuildFocusableMetadata,
+                ))
             }
             StandingsTabMsg::CycleViewRight => {
                 state.view = match state.view {
@@ -127,7 +132,10 @@ impl Component for StandingsTab {
                 // Reset focus/scroll when changing views
                 state.doc_nav.focus_index = None;
                 state.doc_nav.scroll_offset = 0;
-                Effect::None
+                // Signal that focusable metadata needs to be rebuilt
+                Effect::Action(crate::tui::action::Action::StandingsAction(
+                    crate::tui::action::StandingsAction::RebuildFocusableMetadata,
+                ))
             }
             StandingsTabMsg::EnterBrowseMode => {
                 // Initialize focus to first element if available
@@ -150,17 +158,34 @@ impl Component for StandingsTab {
                 state.doc_nav.viewport_height = height;
                 Effect::None
             }
+
+            StandingsTabMsg::ActivateTeam => {
+                // Get the team abbreviation from the focused element's link target
+                if let Some(link_target) = state.doc_nav.focused_link_target() {
+                    if let crate::tui::document::LinkTarget::Action(action) = link_target {
+                        // Parse "team:TOR" format
+                        if let Some(abbrev) = action.strip_prefix("team:") {
+                            return Effect::Action(Action::PushDocument(
+                                StackedDocument::TeamDetail {
+                                    abbrev: abbrev.to_string(),
+                                },
+                            ));
+                        }
+                    }
+                }
+                Effect::None
+            }
         }
     }
 
     fn view(&self, props: &Self::Props, state: &Self::State) -> Element {
-        // If in panel view, render the panel instead
-        if !props.panel_stack.is_empty() {
+        // If in document stack view, render the stacked document instead
+        if !props.document_stack.is_empty() {
             tracing::debug!(
-                "RENDER: Panel stack has {} items, rendering panel",
-                props.panel_stack.len()
+                "RENDER: Document stack has {} items, rendering stacked document",
+                props.document_stack.len()
             );
-            return self.render_panel(props);
+            return self.render_stacked_document(props);
         }
 
         // Use TabbedPanel for view selection (Phase 7: using component state)
@@ -274,29 +299,29 @@ impl StandingsTab {
         )))
     }
 
-    fn render_panel(&self, props: &StandingsTabProps) -> Element {
-        // Get the current panel info
-        let panel_info = if let Some(panel_state) = props.panel_stack.last() {
-            let msg = match &panel_state.panel {
-                super::super::Panel::TeamDetail { abbrev } => {
-                    format!("Team Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", abbrev)
+    fn render_stacked_document(&self, props: &StandingsTabProps) -> Element {
+        // Get the current stacked document info
+        let doc_info = if let Some(doc_entry) = props.document_stack.last() {
+            let msg = match &doc_entry.document {
+                super::super::StackedDocument::TeamDetail { abbrev } => {
+                    format!("Team Detail: {}\n\n(Document rendering not yet implemented)\n\nPress ESC to go back", abbrev)
                 }
-                super::super::Panel::PlayerDetail { player_id } => {
-                    format!("Player Detail: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", player_id)
+                super::super::StackedDocument::PlayerDetail { player_id } => {
+                    format!("Player Detail: {}\n\n(Document rendering not yet implemented)\n\nPress ESC to go back", player_id)
                 }
-                super::super::Panel::Boxscore { game_id } => {
-                    format!("Boxscore: {}\n\n(Panel rendering not yet implemented)\n\nPress ESC to go back", game_id)
+                super::super::StackedDocument::Boxscore { game_id } => {
+                    format!("Boxscore: {}\n\n(Document rendering not yet implemented)\n\nPress ESC to go back", game_id)
                 }
             };
-            tracing::debug!("RENDER: Rendering panel with message: {}", msg);
+            tracing::debug!("RENDER: Rendering stacked document with message: {}", msg);
             msg
         } else {
-            tracing::warn!("RENDER: render_panel called but panel_stack is empty!");
-            "No panel".to_string()
+            tracing::warn!("RENDER: render_stacked_document called but document_stack is empty!");
+            "No document".to_string()
         };
 
-        Element::Widget(Box::new(PanelWidget {
-            message: panel_info,
+        Element::Widget(Box::new(StackedDocumentWidget {
+            message: doc_info,
         }))
     }
 }
@@ -320,20 +345,20 @@ impl ElementWidget for LoadingWidget {
     }
 }
 
-/// Panel widget placeholder
-struct PanelWidget {
+/// Stacked document widget placeholder
+struct StackedDocumentWidget {
     message: String,
 }
 
-impl ElementWidget for PanelWidget {
+impl ElementWidget for StackedDocumentWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
         let widget = Paragraph::new(self.message.as_str())
-            .block(Block::default().borders(Borders::ALL).title("Panel View"));
+            .block(Block::default().borders(Borders::ALL).title("Document View"));
         ratatui::widgets::Widget::render(widget, area, buf);
     }
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(PanelWidget {
+        Box::new(StackedDocumentWidget {
             message: self.message.clone(),
         })
     }
@@ -353,7 +378,7 @@ mod tests {
         let standings_tab = StandingsTab;
         let props = StandingsTabProps {
             standings: Arc::new(None),
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             focused: false,
             config: Config::default(),
         };
@@ -375,7 +400,7 @@ mod tests {
 
         let props = StandingsTabProps {
             standings: Arc::new(Some(standings)),
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             focused: false,
             config: Config::default(),
         };
@@ -413,7 +438,7 @@ mod tests {
 
         let props = StandingsTabProps {
             standings: Arc::new(Some(standings)),
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             focused: false,
             config: Config::default(),
         };
@@ -478,7 +503,7 @@ mod tests {
 
         let props = StandingsTabProps {
             standings: Arc::new(Some(standings)),
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             focused: false,
             config: Config::default(),
         };
@@ -546,7 +571,7 @@ mod tests {
 
         let props = StandingsTabProps {
             standings: Arc::new(Some(standings)),
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             focused: false,
             config: Config::default(),
         };
@@ -611,7 +636,7 @@ mod tests {
         let standings = create_test_standings();
         let props = StandingsTabProps {
             standings: Arc::new(Some(standings)),
-            panel_stack: Vec::new(),
+            document_stack: Vec::new(),
             focused: false,
             config: Config::default(),
         };
@@ -662,5 +687,131 @@ mod tests {
             "",
             "",
         ]);
+    }
+
+    /// Regression test: focusable_positions must be rebuilt when switching views
+    ///
+    /// Bug: When switching between standings views (League, Division, Conference, Wildcard),
+    /// the focusable_positions were not being updated. This caused autoscroll to use
+    /// stale position data from the previous view, resulting in incorrect scrolling behavior.
+    ///
+    /// For example, switching from Conference view (positions [5-20, 5-20] for two columns)
+    /// to League view (positions [2-33] for single column) would use the wrong positions.
+    #[test]
+    fn test_cycle_view_triggers_rebuild_focusable_metadata() {
+        use crate::tui::action::{Action, StandingsAction};
+        use crate::tui::component::{Component, Effect};
+
+        let mut standings_tab = StandingsTab;
+        let mut state = StandingsTabState {
+            view: GroupBy::Wildcard,
+            ..Default::default()
+        };
+
+        // Cycle view left should return Effect::Action to rebuild metadata
+        let effect = standings_tab.update(StandingsTabMsg::CycleViewLeft, &mut state);
+
+        // View should change
+        assert_eq!(state.view, GroupBy::League);
+
+        // Focus/scroll should be reset
+        assert_eq!(state.doc_nav.focus_index, None);
+        assert_eq!(state.doc_nav.scroll_offset, 0);
+
+        // Effect should trigger RebuildFocusableMetadata
+        match effect {
+            Effect::Action(Action::StandingsAction(StandingsAction::RebuildFocusableMetadata)) => {
+                // Good - this is the fix for the regression
+            }
+            _ => panic!("Expected RebuildFocusableMetadata action, got {:?}", effect),
+        }
+    }
+
+    #[test]
+    fn test_cycle_view_right_triggers_rebuild_focusable_metadata() {
+        use crate::tui::action::{Action, StandingsAction};
+        use crate::tui::component::{Component, Effect};
+
+        let mut standings_tab = StandingsTab;
+        let mut state = StandingsTabState {
+            view: GroupBy::League,
+            ..Default::default()
+        };
+
+        // Cycle view right should return Effect::Action to rebuild metadata
+        let effect = standings_tab.update(StandingsTabMsg::CycleViewRight, &mut state);
+
+        // View should change
+        assert_eq!(state.view, GroupBy::Wildcard);
+
+        // Focus/scroll should be reset
+        assert_eq!(state.doc_nav.focus_index, None);
+        assert_eq!(state.doc_nav.scroll_offset, 0);
+
+        // Effect should trigger RebuildFocusableMetadata
+        match effect {
+            Effect::Action(Action::StandingsAction(StandingsAction::RebuildFocusableMetadata)) => {
+                // Good - this is the fix for the regression
+            }
+            _ => panic!("Expected RebuildFocusableMetadata action, got {:?}", effect),
+        }
+    }
+
+    #[test]
+    fn test_activate_team_pushes_team_detail_document() {
+        use crate::tui::action::Action;
+        use crate::tui::component::{Component, Effect};
+        use crate::tui::document::LinkTarget;
+        use crate::tui::types::StackedDocument;
+
+        let mut standings_tab = StandingsTab;
+        let mut state = StandingsTabState {
+            view: GroupBy::League,
+            ..Default::default()
+        };
+
+        // Set link targets for teams (what table cells now use)
+        state.doc_nav.link_targets = vec![
+            Some(LinkTarget::Action("team:TOR".to_string())),
+            Some(LinkTarget::Action("team:BOS".to_string())),
+            Some(LinkTarget::Action("team:MTL".to_string())),
+        ];
+
+        // Set focus to second team (BOS)
+        state.doc_nav.focus_index = Some(1);
+
+        // ActivateTeam should push TeamDetail document
+        let effect = standings_tab.update(StandingsTabMsg::ActivateTeam, &mut state);
+
+        match effect {
+            Effect::Action(Action::PushDocument(StackedDocument::TeamDetail { abbrev })) => {
+                assert_eq!(abbrev, "BOS");
+            }
+            _ => panic!("Expected PushDocument(TeamDetail) action, got {:?}", effect),
+        }
+    }
+
+    #[test]
+    fn test_activate_team_without_focus_does_nothing() {
+        use crate::tui::component::{Component, Effect};
+        use crate::tui::document::LinkTarget;
+
+        let mut standings_tab = StandingsTab;
+        let mut state = StandingsTabState {
+            view: GroupBy::League,
+            ..Default::default()
+        };
+
+        // Set link targets for teams
+        state.doc_nav.link_targets = vec![
+            Some(LinkTarget::Action("team:TOR".to_string())),
+        ];
+
+        // No focus set
+        state.doc_nav.focus_index = None;
+
+        let effect = standings_tab.update(StandingsTabMsg::ActivateTeam, &mut state);
+
+        assert!(matches!(effect, Effect::None));
     }
 }

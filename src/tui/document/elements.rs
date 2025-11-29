@@ -10,6 +10,7 @@ use ratatui::style::Style;
 use crate::config::DisplayConfig;
 use crate::tui::component::ElementWidget;
 use crate::tui::components::TableWidget;
+use crate::tui::widgets::{GameBox, StandaloneWidget};
 
 use super::focus::{FocusableElement, FocusableId, RowPosition};
 use super::link::LinkTarget;
@@ -90,6 +91,21 @@ pub enum DocumentElement {
         /// Gap between elements in characters
         gap: u16,
     },
+
+    /// A game box widget for displaying NHL game scores
+    ///
+    /// Fixed height of 7 rows (1 header + 6 score table).
+    /// Used in the scores grid to show game matchups.
+    GameBoxElement {
+        /// Unique identifier for focus/activation (e.g., "game_12345")
+        id: String,
+        /// Game ID for activation
+        game_id: i64,
+        /// The game box widget containing all score data
+        game_box: GameBox,
+        /// Whether this game box is currently focused
+        focused: bool,
+    },
 }
 
 impl std::fmt::Debug for DocumentElement {
@@ -140,6 +156,12 @@ impl std::fmt::Debug for DocumentElement {
                 .field("children", &children.len())
                 .field("gap", gap)
                 .finish(),
+            Self::GameBoxElement { id, game_id, focused, .. } => f
+                .debug_struct("GameBoxElement")
+                .field("id", id)
+                .field("game_id", game_id)
+                .field("focused", focused)
+                .finish(),
         }
     }
 }
@@ -169,6 +191,10 @@ impl DocumentElement {
             Self::Row { children, .. } => {
                 // Height is the maximum height of all children (side by side)
                 children.iter().map(|c| c.height()).max().unwrap_or(0)
+            }
+            Self::GameBoxElement { game_box, .. } => {
+                // GameBox has fixed height of 7
+                game_box.preferred_height().unwrap_or(7)
             }
         }
     }
@@ -235,6 +261,19 @@ impl DocumentElement {
                     }
                 }
             }
+            Self::GameBoxElement { game_id, game_box, .. } => {
+                // GameBox is a single focusable element with typed GameLink ID
+                let height = game_box.preferred_height().unwrap_or(7);
+                let width = game_box.preferred_width().unwrap_or(37);
+                out.push(FocusableElement {
+                    id: FocusableId::game_link(*game_id),
+                    y: y_offset,
+                    height,
+                    rect: Rect::new(0, y_offset, width, height),
+                    link_target: Some(LinkTarget::Action(format!("open_boxscore_{}", game_id))),
+                    row_position: None,
+                });
+            }
             _ => {}
         }
     }
@@ -265,6 +304,9 @@ impl DocumentElement {
                 for child in children {
                     child.collect_focusable_ids(out, y_offset);
                 }
+            }
+            Self::GameBoxElement { game_id, .. } => {
+                out.push(FocusableId::game_link(*game_id));
             }
             _ => {}
         }
@@ -301,6 +343,12 @@ impl DocumentElement {
             }
             Self::Row { children, gap } => {
                 render_row(children, *gap, area, buf, config);
+            }
+            Self::GameBoxElement { game_box, focused, .. } => {
+                // Clone and set selection based on focus state
+                let mut box_to_render = game_box.clone();
+                box_to_render.selected = *focused;
+                box_to_render.render(area, buf, config);
             }
         }
     }
@@ -404,30 +452,34 @@ impl DocumentElement {
         let data_start_y = header_offset + TABLE_COLUMN_HEADER_HEIGHT;
 
         // Extract focusable elements from link cells
+        // Use TableCell IDs for row tracking, LinkTarget for activation data
         for row_idx in 0..widget.row_count() {
             for col_idx in 0..widget.column_count() {
                 if let Some(cell) = widget.get_cell_value(row_idx, col_idx) {
-                    if cell.is_link() {
-                        let y = data_start_y + row_idx as u16;
-                        let link_target = match &cell {
-                            CellValue::PlayerLink { player_id, .. } => {
-                                Some(LinkTarget::Action(format!("player:{}", player_id)))
-                            }
-                            CellValue::TeamLink { team_abbrev, .. } => {
-                                Some(LinkTarget::Action(format!("team:{}", team_abbrev)))
-                            }
-                            _ => None,
-                        };
+                    let y = data_start_y + row_idx as u16;
 
-                        focusable.push(FocusableElement {
-                            id: FocusableId::table_cell(&table_name, row_idx, col_idx),
-                            y,
-                            height: 1,
-                            rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
-                            link_target,
-                            row_position: None,
-                        });
-                    }
+                    // Create LinkTarget based on cell type (used for activation)
+                    let link_target = match &cell {
+                        CellValue::PlayerLink { player_id, .. } => {
+                            Some(LinkTarget::Action(format!("player:{}", player_id)))
+                        }
+                        CellValue::TeamLink { team_abbrev, .. } => {
+                            Some(LinkTarget::Action(format!("team:{}", team_abbrev)))
+                        }
+                        _ => continue, // Skip non-link cells
+                    };
+
+                    // Use TableCell ID for row tracking (enables focused_table_row())
+                    let id = FocusableId::table_cell(&table_name, row_idx, col_idx);
+
+                    focusable.push(FocusableElement {
+                        id,
+                        y,
+                        height: 1,
+                        rect: Rect::new(0, y, cell.display_text().len() as u16, 1),
+                        link_target,
+                        row_position: None,
+                    });
                 }
             }
         }
@@ -445,6 +497,21 @@ impl DocumentElement {
     /// Create a horizontal row with custom gap
     pub fn row_with_gap(children: Vec<DocumentElement>, gap: u16) -> Self {
         Self::Row { children, gap }
+    }
+
+    /// Create a game box element
+    ///
+    /// # Arguments
+    /// - `game_id`: The NHL API game ID (used for activation and as part of the element ID)
+    /// - `game_box`: The GameBox widget containing score data
+    /// - `focused`: Whether this game box is currently focused
+    pub fn game_box_element(game_id: i64, game_box: GameBox, focused: bool) -> Self {
+        Self::GameBoxElement {
+            id: format!("game_{}", game_id),
+            game_id,
+            game_box,
+            focused,
+        }
     }
 }
 
@@ -917,12 +984,13 @@ mod tests {
         let mut focusable = Vec::new();
         elem.collect_focusable(&mut focusable, 0);
 
-        // Should have 2 focusable elements (one per row)
+        // Should have 2 focusable elements (one per row) with TableCell IDs
+        // TableCell IDs enable row highlighting via focused_table_row()
         assert_eq!(focusable.len(), 2);
         assert_eq!(focusable[0].id, FocusableId::table_cell("teams", 0, 0));
         assert_eq!(focusable[1].id, FocusableId::table_cell("teams", 1, 0));
 
-        // Check link targets
+        // Check link targets (contain team info for activation)
         match &focusable[0].link_target {
             Some(LinkTarget::Action(action)) => assert_eq!(action, "team:BOS"),
             _ => panic!("Expected team action"),
@@ -1036,5 +1104,150 @@ mod tests {
                 "",
             ],
         );
+    }
+
+    #[test]
+    fn test_game_box_element_height() {
+        use crate::tui::widgets::GameBox;
+        use crate::tui::widgets::GameState as WidgetGameState;
+
+        let game_box = GameBox::new(
+            "TOR".to_string(),
+            "MTL".to_string(),
+            Some(3),
+            Some(2),
+            Some(vec![1, 1, 1]),
+            Some(vec![1, 1, 0]),
+            false,
+            false,
+            None,
+            WidgetGameState::Final,
+            false,
+        );
+
+        let elem = DocumentElement::game_box_element(12345, game_box, false);
+        assert_eq!(elem.height(), 7);
+    }
+
+    #[test]
+    fn test_game_box_element_collect_focusable() {
+        use crate::tui::widgets::GameBox;
+        use crate::tui::widgets::GameState as WidgetGameState;
+
+        let game_box = GameBox::new(
+            "TOR".to_string(),
+            "MTL".to_string(),
+            Some(3),
+            Some(2),
+            None,
+            None,
+            false,
+            false,
+            None,
+            WidgetGameState::Final,
+            false,
+        );
+
+        let elem = DocumentElement::game_box_element(12345, game_box, false);
+
+        let mut focusable = Vec::new();
+        elem.collect_focusable(&mut focusable, 10);
+
+        assert_eq!(focusable.len(), 1);
+        assert_eq!(focusable[0].id, FocusableId::game_link(12345));
+        assert_eq!(focusable[0].y, 10);
+        assert_eq!(focusable[0].height, 7);
+    }
+
+    #[test]
+    fn test_row_of_game_boxes_focusable_positions() {
+        use crate::tui::widgets::GameBox;
+        use crate::tui::widgets::GameState as WidgetGameState;
+
+        // Create two game boxes in a row
+        let game1 = GameBox::new(
+            "TOR".to_string(), "MTL".to_string(),
+            Some(3), Some(2), None, None,
+            false, false, None,
+            WidgetGameState::Final, false,
+        );
+        let game2 = GameBox::new(
+            "BOS".to_string(), "NYR".to_string(),
+            Some(4), Some(1), None, None,
+            false, false, None,
+            WidgetGameState::Final, false,
+        );
+
+        let row = DocumentElement::row(vec![
+            DocumentElement::game_box_element(111, game1, false),
+            DocumentElement::game_box_element(222, game2, false),
+        ]);
+
+        let mut focusable = Vec::new();
+        row.collect_focusable(&mut focusable, 0);
+
+        // Both game boxes should be collected with correct row positions
+        assert_eq!(focusable.len(), 2);
+
+        assert_eq!(focusable[0].id, FocusableId::game_link(111));
+        assert_eq!(focusable[0].y, 0);
+        assert!(focusable[0].row_position.is_some());
+        let pos0 = focusable[0].row_position.unwrap();
+        assert_eq!(pos0.row_y, 0);
+        assert_eq!(pos0.child_idx, 0);
+        assert_eq!(pos0.idx_within_child, 0);
+
+        assert_eq!(focusable[1].id, FocusableId::game_link(222));
+        assert_eq!(focusable[1].y, 0);
+        assert!(focusable[1].row_position.is_some());
+        let pos1 = focusable[1].row_position.unwrap();
+        assert_eq!(pos1.row_y, 0);
+        assert_eq!(pos1.child_idx, 1);
+        assert_eq!(pos1.idx_within_child, 0);
+    }
+
+    #[test]
+    fn test_two_rows_of_game_boxes_y_positions() {
+        use crate::tui::widgets::GameBox;
+        use crate::tui::widgets::GameState as WidgetGameState;
+
+        let make_game_box = || GameBox::new(
+            "TOR".to_string(), "MTL".to_string(),
+            Some(3), Some(2), None, None,
+            false, false, None,
+            WidgetGameState::Final, false,
+        );
+
+        // Create two rows of game boxes
+        let row1 = DocumentElement::row(vec![
+            DocumentElement::game_box_element(1, make_game_box(), false),
+            DocumentElement::game_box_element(2, make_game_box(), false),
+        ]);
+        let row2 = DocumentElement::row(vec![
+            DocumentElement::game_box_element(3, make_game_box(), false),
+            DocumentElement::game_box_element(4, make_game_box(), false),
+        ]);
+
+        // Collect from document containing both rows
+        let elements = vec![row1.clone(), row2.clone()];
+
+        // Simulate how FocusManager collects focusables
+        let mut focusable = Vec::new();
+        let mut y_offset = 0u16;
+        for elem in &elements {
+            elem.collect_focusable(&mut focusable, y_offset);
+            y_offset += elem.height();
+        }
+
+        // Should have 4 focusable elements
+        assert_eq!(focusable.len(), 4);
+
+        // First row (y=0)
+        assert_eq!(focusable[0].y, 0);
+        assert_eq!(focusable[1].y, 0);
+
+        // Second row (y=7, because each row has height 7)
+        assert_eq!(focusable[2].y, 7);
+        assert_eq!(focusable[3].y, 7);
     }
 }

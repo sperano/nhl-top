@@ -25,9 +25,9 @@ fn navigate_to_tab(state: AppState, tab: Tab) -> (AppState, Effect) {
     trace!("Navigating to tab: {:?}", tab);
     let mut new_state = state;
     new_state.navigation.current_tab = tab;
-    new_state.navigation.panel_stack.clear();
+    new_state.navigation.document_stack.clear();
     new_state.navigation.content_focused = false; // Return focus to tab bar
-    trace!("  Cleared panel stack and returned focus to tab bar");
+    trace!("  Cleared document stack and returned focus to tab bar");
     (new_state, Effect::None)
 }
 
@@ -39,7 +39,7 @@ fn navigate_tab_left(state: AppState) -> (AppState, Effect) {
         Tab::Settings => Tab::Standings,
         Tab::Demo => Tab::Settings,
     };
-    new_state.navigation.panel_stack.clear();
+    new_state.navigation.document_stack.clear();
     new_state.navigation.content_focused = false; // Return focus to tab bar
     (new_state, Effect::None)
 }
@@ -52,7 +52,7 @@ fn navigate_tab_right(state: AppState) -> (AppState, Effect) {
         Tab::Settings => Tab::Demo,
         Tab::Demo => Tab::Scores,
     };
-    new_state.navigation.panel_stack.clear();
+    new_state.navigation.document_stack.clear();
     new_state.navigation.content_focused = false; // Return focus to tab bar
     (new_state, Effect::None)
 }
@@ -99,7 +99,7 @@ mod tests {
         let (new_state, _) = navigate_to_tab(state, Tab::Settings);
 
         assert_eq!(new_state.navigation.current_tab, Tab::Settings);
-        assert!(new_state.navigation.panel_stack.is_empty());
+        assert!(new_state.navigation.document_stack.is_empty());
         assert!(!new_state.navigation.content_focused);
     }
 

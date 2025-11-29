@@ -22,9 +22,9 @@ pub enum TeamView {
     Home,
 }
 
-/// BoxscorePanel component props
+/// BoxscoreDocument component props
 #[derive(Clone)]
-pub struct BoxscorePanelProps {
+pub struct BoxscoreDocumentProps {
     pub game_id: i64,
     pub boxscore: Option<Boxscore>,
     pub loading: bool,
@@ -33,16 +33,16 @@ pub struct BoxscorePanelProps {
     pub focused: bool,                 // Whether panel has focus for selection highlighting
 }
 
-/// BoxscorePanel component - displays detailed game statistics
-pub struct BoxscorePanel;
+/// BoxscoreDocument component - displays detailed game statistics
+pub struct BoxscoreDocument;
 
-impl Component for BoxscorePanel {
-    type Props = BoxscorePanelProps;
+impl Component for BoxscoreDocument {
+    type Props = BoxscoreDocumentProps;
     type State = ();
     type Message = ();
 
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        Element::Widget(Box::new(BoxscorePanelWidget {
+        Element::Widget(Box::new(BoxscoreDocumentWidget {
             game_id: props.game_id,
             boxscore: props.boxscore.clone(),
             loading: props.loading,
@@ -54,7 +54,7 @@ impl Component for BoxscorePanel {
 }
 
 /// Widget for rendering boxscore panel
-struct BoxscorePanelWidget {
+struct BoxscoreDocumentWidget {
     game_id: i64,
     boxscore: Option<Boxscore>,
     loading: bool,
@@ -63,7 +63,7 @@ struct BoxscorePanelWidget {
     focused: bool,
 }
 
-impl ElementWidget for BoxscorePanelWidget {
+impl ElementWidget for BoxscoreDocumentWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         let block = Block::default()
             .borders(Borders::ALL)
@@ -88,7 +88,7 @@ impl ElementWidget for BoxscorePanelWidget {
     }
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(BoxscorePanelWidget {
+        Box::new(BoxscoreDocumentWidget {
             game_id: self.game_id,
             boxscore: self.boxscore.clone(),
             loading: self.loading,
@@ -99,7 +99,7 @@ impl ElementWidget for BoxscorePanelWidget {
     }
 }
 
-impl BoxscorePanelWidget {
+impl BoxscoreDocumentWidget {
     fn render_boxscore(
         &self,
         boxscore: &Boxscore,
@@ -777,8 +777,8 @@ mod tests {
         };
 
         // Render the panel to see the Forwards and Defense sections
-        let panel = BoxscorePanel;
-        let props = BoxscorePanelProps {
+        let panel = BoxscoreDocument;
+        let props = BoxscoreDocumentProps {
             game_id: 2024020001,
             boxscore: Some(boxscore),
             loading: false,
@@ -899,15 +899,15 @@ mod tests {
     }
 
     #[test]
-    fn test_boxscore_panel_renders() {
-        let panel = BoxscorePanel;
-        let props = BoxscorePanelProps {
+    fn test_boxscore_document_renders() {
+        let document = BoxscoreDocument;
+        let props = BoxscoreDocumentProps {
             game_id: 2024020001,
             boxscore: Some(create_test_boxscore()),
             loading: false,
         };
 
-        let element = panel.view(&props, &());
+        let element = document.view(&props, &());
 
         match element {
             Element::Widget(_) => {
@@ -918,15 +918,15 @@ mod tests {
     }
 
     #[test]
-    fn test_boxscore_panel_loading() {
-        let panel = BoxscorePanel;
-        let props = BoxscorePanelProps {
+    fn test_boxscore_document_loading() {
+        let document = BoxscoreDocument;
+        let props = BoxscoreDocumentProps {
             game_id: 2024020001,
             boxscore: None,
             loading: true,
         };
 
-        let element = panel.view(&props, &());
+        let element = document.view(&props, &());
 
         match element {
             Element::Widget(_) => {

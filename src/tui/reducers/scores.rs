@@ -1,71 +1,43 @@
-
 use crate::tui::action::{Action, ScoresAction};
 use crate::tui::component::Effect;
 use crate::tui::components::scores_tab::ScoresTabMsg;
-use crate::tui::state::{AppState, PanelState};
-use crate::tui::types::Panel;
+use crate::tui::constants::SCORES_TAB_PATH;
+use crate::tui::state::{AppState, DocumentStackEntry};
+use crate::tui::types::StackedDocument;
 
 /// Sub-reducer for scores tab
 ///
-/// Phase 3.5: Most actions are now routed to ComponentMessage for ScoresTab.
-/// Only SelectGame and SelectGameById remain here since they modify global navigation state.
+/// Most actions are now routed to ComponentMessage for ScoresTab.
+/// Only SelectGame remains here since it modifies global navigation state (document stack).
 pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect) {
     match action {
         // Route navigation actions to component
         ScoresAction::DateLeft => (
             state,
             Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
+                path: SCORES_TAB_PATH.to_string(),
                 message: Box::new(ScoresTabMsg::NavigateLeft),
             }),
         ),
         ScoresAction::DateRight => (
             state,
             Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
+                path: SCORES_TAB_PATH.to_string(),
                 message: Box::new(ScoresTabMsg::NavigateRight),
             }),
         ),
         ScoresAction::EnterBoxSelection => (
             state,
             Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
+                path: SCORES_TAB_PATH.to_string(),
                 message: Box::new(ScoresTabMsg::EnterBoxSelection),
             }),
         ),
         ScoresAction::ExitBoxSelection => (
             state,
             Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
+                path: SCORES_TAB_PATH.to_string(),
                 message: Box::new(ScoresTabMsg::ExitBoxSelection),
-            }),
-        ),
-        ScoresAction::MoveGameSelectionUp(boxes_per_row) => (
-            state,
-            Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::MoveGameSelectionUp(boxes_per_row)),
-            }),
-        ),
-        ScoresAction::MoveGameSelectionDown(boxes_per_row) => (
-            state,
-            Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::MoveGameSelectionDown(boxes_per_row)),
-            }),
-        ),
-        ScoresAction::MoveGameSelectionLeft => (
-            state,
-            Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::MoveGameSelectionLeft),
-            }),
-        ),
-        ScoresAction::MoveGameSelectionRight => (
-            state,
-            Effect::Action(Action::ComponentMessage {
-                path: "app/scores_tab".to_string(),
-                message: Box::new(ScoresTabMsg::MoveGameSelectionRight),
             }),
         ),
 
@@ -77,10 +49,11 @@ pub fn reduce_scores(state: AppState, action: ScoresAction) -> (AppState, Effect
 fn handle_select_game(state: AppState, game_id: i64) -> (AppState, Effect) {
     let mut new_state = state;
 
-    // Push boxscore panel onto stack
-    new_state.navigation.panel_stack.push(PanelState {
-        panel: Panel::Boxscore { game_id },
+    // Push boxscore document onto stack
+    new_state.navigation.document_stack.push(DocumentStackEntry {
+        document: StackedDocument::Boxscore { game_id },
         selected_index: Some(0), // Start with first player selected
+        scroll_offset: 0,
     });
 
     (new_state, Effect::None)
@@ -104,7 +77,7 @@ mod tests {
         // Should dispatch ComponentMessage
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, "app/scores_tab");
+                assert_eq!(path, SCORES_TAB_PATH);
             }
             _ => panic!("Expected ComponentMessage effect"),
         }
@@ -121,7 +94,7 @@ mod tests {
         // Should dispatch ComponentMessage
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, "app/scores_tab");
+                assert_eq!(path, SCORES_TAB_PATH);
             }
             _ => panic!("Expected ComponentMessage effect"),
         }
@@ -137,7 +110,7 @@ mod tests {
 
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, "app/scores_tab");
+                assert_eq!(path, SCORES_TAB_PATH);
             }
             _ => panic!("Expected ComponentMessage effect"),
         }
@@ -153,13 +126,13 @@ mod tests {
 
         match effect {
             Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, "app/scores_tab");
+                assert_eq!(path, SCORES_TAB_PATH);
             }
             _ => panic!("Expected ComponentMessage effect"),
         }
     }
 
-    // Test actions that still modify global state (panel stack)
+    // Test actions that still modify global state (document stack)
 
     #[test]
     fn test_select_game() {
@@ -167,12 +140,12 @@ mod tests {
 
         let (new_state, effect) = reduce_scores(state, ScoresAction::SelectGame(98765));
 
-        assert_eq!(new_state.navigation.panel_stack.len(), 1);
-        match &new_state.navigation.panel_stack[0].panel {
-            Panel::Boxscore { game_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 1);
+        match &new_state.navigation.document_stack[0].document {
+            StackedDocument::Boxscore { game_id } => {
                 assert_eq!(*game_id, 98765);
             }
-            _ => panic!("Expected Boxscore panel"),
+            _ => panic!("Expected Boxscore document"),
         }
         assert!(matches!(effect, Effect::None));
     }

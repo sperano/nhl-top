@@ -14,7 +14,7 @@
 ///
 /// - **`ElementWidget`** (`crate::tui::component`): For widgets that participate
 ///   in the Element tree. Requires Send + Sync + clone_box(). Used for component
-///   widgets like `BoxscorePanelWidget`, `StatusBarWidget`.
+///   widgets like `BoxscoreDocumentWidget`, `StatusBarWidget`.
 
 #[cfg(test)]
 pub mod testing;

@@ -1,4 +1,4 @@
-use crate::config::DisplayConfig;
+use crate::config::{DisplayConfig, SELECTION_STYLE_MODIFIER};
 use crate::layout_constants::{PERIOD_COL_WIDTH, SCORE_BOX_WIDTH, TEAM_ABBREV_COL_WIDTH};
 use crate::tui::widgets::StandaloneWidget;
 /// ScoreTable widget - displays period-by-period score breakdown
@@ -96,11 +96,15 @@ impl ScoreTable {
     }
 
     /// Get the appropriate style based on selection state
+    ///
+    /// - Normal: Uses theme.fg2 (via text_style)
+    /// - Selected: Uses theme.fg2 with SELECTION_STYLE_MODIFIER (reverse + bold)
     fn get_style(&self, config: &DisplayConfig) -> Style {
+        let base_style = config.text_style();
         if self.selected {
-            Style::default().fg(config.selection_fg)
+            base_style.add_modifier(SELECTION_STYLE_MODIFIER)
         } else {
-            Style::default()
+            base_style
         }
     }
 }

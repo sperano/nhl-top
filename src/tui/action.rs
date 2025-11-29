@@ -2,7 +2,7 @@ use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerL
 use std::any::Any;
 
 use super::component::Effect;
-use super::types::{Panel, Tab};
+use super::types::{StackedDocument, Tab};
 
 /// Trait for type-erased component messages
 ///
@@ -32,8 +32,8 @@ pub enum Action {
     NavigateTabRight,
     EnterContentFocus, // Down key: move focus from tab bar to content
     ExitContentFocus,  // Up key: move focus from content back to tab bar
-    PushPanel(Panel),
-    PopPanel,
+    PushDocument(StackedDocument),
+    PopDocument,
     ToggleCommandPalette,
 
     // Data actions
@@ -54,10 +54,10 @@ pub enum Action {
     FocusNext,
     FocusPrevious,
 
-    // Panel-specific actions
-    PanelSelectNext,     // Move selection down in current panel
-    PanelSelectPrevious, // Move selection up in current panel
-    PanelSelectItem,     // Activate/enter selected item in panel
+    // Document stack navigation actions
+    DocumentSelectNext,     // Move selection down in current stacked document
+    DocumentSelectPrevious, // Move selection up in current stacked document
+    DocumentSelectItem,     // Activate/enter selected item in stacked document
 
     // Component-specific actions (nested)
     ScoresAction(ScoresAction),
@@ -90,11 +90,7 @@ pub enum ScoresAction {
     DateRight,
     EnterBoxSelection,
     ExitBoxSelection,
-    SelectGame(i64),             // game_id
-    MoveGameSelectionUp(u16),    // boxes_per_row
-    MoveGameSelectionDown(u16),  // boxes_per_row
-    MoveGameSelectionLeft,
-    MoveGameSelectionRight,
+    SelectGame(i64), // game_id
 }
 
 /// Tab-specific actions for Standings
@@ -104,6 +100,8 @@ pub enum StandingsAction {
     CycleViewRight,
     EnterBrowseMode,
     ExitBrowseMode,
+    /// Rebuild focusable metadata after view change
+    RebuildFocusableMetadata,
 }
 
 /// Tab-specific actions for Settings
@@ -127,8 +125,8 @@ impl Clone for Action {
             Self::NavigateTabRight => Self::NavigateTabRight,
             Self::EnterContentFocus => Self::EnterContentFocus,
             Self::ExitContentFocus => Self::ExitContentFocus,
-            Self::PushPanel(panel) => Self::PushPanel(panel.clone()),
-            Self::PopPanel => Self::PopPanel,
+            Self::PushDocument(doc) => Self::PushDocument(doc.clone()),
+            Self::PopDocument => Self::PopDocument,
             Self::ToggleCommandPalette => Self::ToggleCommandPalette,
             Self::RefreshData => Self::RefreshData,
             Self::RefreshSchedule(date) => Self::RefreshSchedule(date.clone()),
@@ -142,9 +140,9 @@ impl Clone for Action {
             Self::PlayerStatsLoaded(id, result) => Self::PlayerStatsLoaded(*id, result.clone()),
             Self::FocusNext => Self::FocusNext,
             Self::FocusPrevious => Self::FocusPrevious,
-            Self::PanelSelectNext => Self::PanelSelectNext,
-            Self::PanelSelectPrevious => Self::PanelSelectPrevious,
-            Self::PanelSelectItem => Self::PanelSelectItem,
+            Self::DocumentSelectNext => Self::DocumentSelectNext,
+            Self::DocumentSelectPrevious => Self::DocumentSelectPrevious,
+            Self::DocumentSelectItem => Self::DocumentSelectItem,
             Self::ScoresAction(action) => Self::ScoresAction(action.clone()),
             Self::StandingsAction(action) => Self::StandingsAction(action.clone()),
             Self::SettingsAction(action) => Self::SettingsAction(action.clone()),
@@ -183,7 +181,7 @@ mod tests {
         assert!(Action::RefreshData.should_render());
         assert!(Action::Quit.should_render());
         assert!(Action::ToggleCommandPalette.should_render());
-        assert!(Action::PopPanel.should_render());
+        assert!(Action::PopDocument.should_render());
         assert!(Action::FocusNext.should_render());
         assert!(Action::FocusPrevious.should_render());
     }

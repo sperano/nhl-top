@@ -3,51 +3,52 @@ use tracing::debug;
 use crate::tui::action::Action;
 use crate::tui::component::Effect;
 use crate::tui::helpers::{ClubGoalieStatsSorting, ClubSkaterStatsSorting, SeasonSorting};
-use crate::tui::state::{AppState, LoadingKey, PanelState};
-use crate::tui::types::Panel;
+use crate::tui::state::{AppState, DocumentStackEntry, LoadingKey};
+use crate::tui::types::StackedDocument;
 
-/// Handle all panel management actions
-pub fn reduce_panels(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
+/// Handle all document stack management actions
+pub fn reduce_document_stack(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
     match action {
-        Action::PushPanel(panel) => Some(push_panel(state.clone(), panel.clone())),
-        Action::PopPanel => Some(pop_panel(state.clone())),
-        Action::PanelSelectNext => Some(panel_select_next(state.clone())),
-        Action::PanelSelectPrevious => Some(panel_select_previous(state.clone())),
-        Action::PanelSelectItem => Some(panel_select_item(state.clone())),
+        Action::PushDocument(doc) => Some(push_document(state.clone(), doc.clone())),
+        Action::PopDocument => Some(pop_document(state.clone())),
+        Action::DocumentSelectNext => Some(document_select_next(state.clone())),
+        Action::DocumentSelectPrevious => Some(document_select_previous(state.clone())),
+        Action::DocumentSelectItem => Some(document_select_item(state.clone())),
         _ => None,
     }
 }
 
-fn push_panel(state: AppState, panel: Panel) -> (AppState, Effect) {
-    debug!("PANEL: Pushing panel onto stack: {:?}", panel);
+fn push_document(state: AppState, doc: StackedDocument) -> (AppState, Effect) {
+    debug!("DOCUMENT_STACK: Pushing document onto stack: {:?}", doc);
     let mut new_state = state;
-    new_state.navigation.panel_stack.push(PanelState {
-        panel,
+    new_state.navigation.document_stack.push(DocumentStackEntry {
+        document: doc,
         selected_index: Some(0), // Start with first item selected
+        scroll_offset: 0,
     });
     (new_state, Effect::None)
 }
 
-fn pop_panel(state: AppState) -> (AppState, Effect) {
-    debug!("PANEL: Popping panel from stack");
+fn pop_document(state: AppState) -> (AppState, Effect) {
+    debug!("DOCUMENT_STACK: Popping document from stack");
     let mut new_state = state;
 
-    if let Some(panel_state) = new_state.navigation.panel_stack.pop() {
-        // Clear the loading state for the panel being popped
-        match &panel_state.panel {
-            Panel::Boxscore { game_id } => {
+    if let Some(doc_entry) = new_state.navigation.document_stack.pop() {
+        // Clear the loading state for the document being popped
+        match &doc_entry.document {
+            StackedDocument::Boxscore { game_id } => {
                 new_state
                     .data
                     .loading
                     .remove(&LoadingKey::Boxscore(*game_id));
             }
-            Panel::TeamDetail { abbrev } => {
+            StackedDocument::TeamDetail { abbrev } => {
                 new_state
                     .data
                     .loading
                     .remove(&LoadingKey::TeamRosterStats(abbrev.clone()));
             }
-            Panel::PlayerDetail { player_id } => {
+            StackedDocument::PlayerDetail { player_id } => {
                 new_state
                     .data
                     .loading
@@ -56,48 +57,48 @@ fn pop_panel(state: AppState) -> (AppState, Effect) {
         }
 
         debug!(
-            "PANEL: Popped panel, {} remaining",
-            new_state.navigation.panel_stack.len()
+            "DOCUMENT_STACK: Popped document, {} remaining",
+            new_state.navigation.document_stack.len()
         );
     }
 
-    // If no panels left, return focus to content
-    if new_state.navigation.panel_stack.is_empty() {
-        debug!("PANEL: Panel stack empty, returning focus to content");
+    // If no documents left, return focus to content
+    if new_state.navigation.document_stack.is_empty() {
+        debug!("DOCUMENT_STACK: Document stack empty, returning focus to content");
     }
 
     (new_state, Effect::None)
 }
 
-fn panel_select_next(state: AppState) -> (AppState, Effect) {
+fn document_select_next(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
-    // Move selection in the current panel
-    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
-        if let Some(idx) = panel.selected_index {
-            panel.selected_index = Some(idx.saturating_add(1));
+    // Move selection in the current document
+    if let Some(doc_entry) = new_state.navigation.document_stack.last_mut() {
+        if let Some(idx) = doc_entry.selected_index {
+            doc_entry.selected_index = Some(idx.saturating_add(1));
             debug!(
-                "PANEL: Selected next item, index: {:?}",
-                panel.selected_index
+                "DOCUMENT_STACK: Selected next item, index: {:?}",
+                doc_entry.selected_index
             );
         } else {
-            panel.selected_index = Some(0);
+            doc_entry.selected_index = Some(0);
         }
     }
 
     (new_state, Effect::None)
 }
 
-fn panel_select_previous(state: AppState) -> (AppState, Effect) {
+fn document_select_previous(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
-    // Move selection in the current panel
-    if let Some(panel) = new_state.navigation.panel_stack.last_mut() {
-        if let Some(idx) = panel.selected_index {
-            panel.selected_index = Some(idx.saturating_sub(1));
+    // Move selection in the current document
+    if let Some(doc_entry) = new_state.navigation.document_stack.last_mut() {
+        if let Some(idx) = doc_entry.selected_index {
+            doc_entry.selected_index = Some(idx.saturating_sub(1));
             debug!(
-                "PANEL: Selected previous item, index: {:?}",
-                panel.selected_index
+                "DOCUMENT_STACK: Selected previous item, index: {:?}",
+                doc_entry.selected_index
             );
         }
     }
@@ -105,21 +106,21 @@ fn panel_select_previous(state: AppState) -> (AppState, Effect) {
     (new_state, Effect::None)
 }
 
-/// Handle selecting a player from a team roster panel
+/// Handle selecting a player from a team roster document
 fn handle_team_roster_selection(
     state: AppState,
     abbrev: &str,
     selected_index: usize,
 ) -> Option<(AppState, Effect)> {
     if let Some(roster) = state.data.team_roster_stats.get(abbrev) {
-        // CRITICAL: Must sort the same way as team_detail_panel.rs does for display
+        // CRITICAL: Must sort the same way as team_detail_document.rs does for display
         // Otherwise visual position won't match data array index
 
-        // Sort skaters by points descending (matching team_detail_panel.rs:103)
+        // Sort skaters by points descending (matching team_detail_document.rs)
         let mut sorted_skaters = roster.skaters.clone();
         sorted_skaters.sort_by_points_desc();
 
-        // Sort goalies by games played descending (matching team_detail_panel.rs:107)
+        // Sort goalies by games played descending (matching team_detail_document.rs)
         let mut sorted_goalies = roster.goalies.clone();
         sorted_goalies.sort_by_games_played_desc();
 
@@ -130,15 +131,16 @@ fn handle_team_roster_selection(
             if let Some(player) = sorted_skaters.get(selected_index) {
                 let player_id = player.player_id;
                 debug!(
-                    "PANEL: Selected skater {} (index {} in sorted list) from team {}",
+                    "DOCUMENT_STACK: Selected skater {} (index {} in sorted list) from team {}",
                     player_id, selected_index, abbrev
                 );
 
-                // Push PlayerDetail panel
+                // Push PlayerDetail document
                 let mut new_state = state;
-                new_state.navigation.panel_stack.push(PanelState {
-                    panel: Panel::PlayerDetail { player_id },
+                new_state.navigation.document_stack.push(DocumentStackEntry {
+                    document: StackedDocument::PlayerDetail { player_id },
                     selected_index: None,
+                    scroll_offset: 0,
                 });
 
                 return Some((new_state, Effect::None));
@@ -149,15 +151,16 @@ fn handle_team_roster_selection(
             if let Some(goalie) = sorted_goalies.get(goalie_idx) {
                 let player_id = goalie.player_id;
                 debug!(
-                    "PANEL: Selected goalie {} (index {} in sorted list) from team {}",
+                    "DOCUMENT_STACK: Selected goalie {} (index {} in sorted list) from team {}",
                     player_id, goalie_idx, abbrev
                 );
 
-                // Push PlayerDetail panel
+                // Push PlayerDetail document
                 let mut new_state = state;
-                new_state.navigation.panel_stack.push(PanelState {
-                    panel: Panel::PlayerDetail { player_id },
+                new_state.navigation.document_stack.push(DocumentStackEntry {
+                    document: StackedDocument::PlayerDetail { player_id },
                     selected_index: None,
+                    scroll_offset: 0,
                 });
 
                 return Some((new_state, Effect::None));
@@ -167,7 +170,7 @@ fn handle_team_roster_selection(
     None
 }
 
-/// Handle selecting a player from a boxscore panel
+/// Handle selecting a player from a boxscore document
 fn handle_boxscore_selection(
     state: AppState,
     game_id: i64,
@@ -177,7 +180,7 @@ fn handle_boxscore_selection(
         let away_stats = &boxscore.player_by_game_stats.away_team;
         let home_stats = &boxscore.player_by_game_stats.home_team;
 
-        // Calculate section boundaries (same as boxscore_panel.rs)
+        // Calculate section boundaries (same as boxscore_document.rs)
         let away_forwards_count = away_stats.forwards.len();
         let away_defense_count = away_stats.defense.len();
         let away_goalies_count = away_stats.goalies.len();
@@ -214,15 +217,16 @@ fn handle_boxscore_selection(
 
         if let Some(player_id) = player_id {
             debug!(
-                "PANEL: Selected player {} (index {}) from boxscore game {}",
+                "DOCUMENT_STACK: Selected player {} (index {}) from boxscore game {}",
                 player_id, selected_index, game_id
             );
 
-            // Push PlayerDetail panel
+            // Push PlayerDetail document
             let mut new_state = state;
-            new_state.navigation.panel_stack.push(PanelState {
-                panel: Panel::PlayerDetail { player_id },
+            new_state.navigation.document_stack.push(DocumentStackEntry {
+                document: StackedDocument::PlayerDetail { player_id },
                 selected_index: None,
+                scroll_offset: 0,
             });
 
             return Some((new_state, Effect::None));
@@ -231,7 +235,7 @@ fn handle_boxscore_selection(
     None
 }
 
-/// Handle selecting a season from a player detail panel
+/// Handle selecting a season from a player detail document
 fn handle_player_season_selection(
     state: AppState,
     player_id: i64,
@@ -255,17 +259,18 @@ fn handle_player_season_selection(
                         crate::team_abbrev::common_name_to_abbrev(&common_name.default)
                     {
                         debug!(
-                            "PANEL: Selected season {} (index {}) from player {}, navigating to team {}",
+                            "DOCUMENT_STACK: Selected season {} (index {}) from player {}, navigating to team {}",
                             season.season, selected_index, player_id, abbrev
                         );
 
-                        // Push TeamDetail panel
+                        // Push TeamDetail document
                         let mut new_state = state;
-                        new_state.navigation.panel_stack.push(PanelState {
-                            panel: Panel::TeamDetail {
+                        new_state.navigation.document_stack.push(DocumentStackEntry {
+                            document: StackedDocument::TeamDetail {
                                 abbrev: abbrev.to_string(),
                             },
                             selected_index: Some(0),
+                            scroll_offset: 0,
                         });
 
                         return Some((new_state, Effect::None));
@@ -277,22 +282,24 @@ fn handle_player_season_selection(
     None
 }
 
-fn panel_select_item(state: AppState) -> (AppState, Effect) {
-    // Get information about the current panel
-    let panel_info = state
+fn document_select_item(state: AppState) -> (AppState, Effect) {
+    // Get information about the current document
+    let doc_info = state
         .navigation
-        .panel_stack
+        .document_stack
         .last()
-        .map(|p| (p.panel.clone(), p.selected_index));
+        .map(|d| (d.document.clone(), d.selected_index));
 
-    if let Some((panel, Some(idx))) = panel_info {
-        // Delegate to panel-specific handlers
-        let result = match panel {
-            Panel::TeamDetail { ref abbrev } => {
+    if let Some((doc, Some(idx))) = doc_info {
+        // Delegate to document-specific handlers
+        let result = match doc {
+            StackedDocument::TeamDetail { ref abbrev } => {
                 handle_team_roster_selection(state.clone(), abbrev, idx)
             }
-            Panel::Boxscore { game_id } => handle_boxscore_selection(state.clone(), game_id, idx),
-            Panel::PlayerDetail { player_id } => {
+            StackedDocument::Boxscore { game_id } => {
+                handle_boxscore_selection(state.clone(), game_id, idx)
+            }
+            StackedDocument::PlayerDetail { player_id } => {
                 handle_player_season_selection(state.clone(), player_id, idx)
             }
         };
@@ -311,33 +318,34 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn test_push_panel() {
+    fn test_push_document() {
         let state = AppState::default();
-        let panel = Panel::TeamDetail {
+        let panel = StackedDocument::TeamDetail {
             abbrev: "BOS".to_string(),
         };
 
-        let (new_state, _) = push_panel(state, panel.clone());
+        let (new_state, _) = push_document(state, panel.clone());
 
-        assert_eq!(new_state.navigation.panel_stack.len(), 1);
-        assert_eq!(new_state.navigation.panel_stack[0].selected_index, Some(0));
+        assert_eq!(new_state.navigation.document_stack.len(), 1);
+        assert_eq!(new_state.navigation.document_stack[0].selected_index, Some(0));
     }
 
     #[test]
-    fn test_pop_panel_clears_loading_state() {
+    fn test_pop_document_clears_loading_state() {
         let mut state = AppState::default();
         let game_id = 2024020001;
 
         // Push a boxscore panel and add loading state
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore { game_id },
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::Boxscore { game_id },
             selected_index: None,
+            scroll_offset: 0,
         });
         state.data.loading.insert(LoadingKey::Boxscore(game_id));
 
-        let (new_state, _) = pop_panel(state);
+        let (new_state, _) = pop_document(state);
 
-        assert!(new_state.navigation.panel_stack.is_empty());
+        assert!(new_state.navigation.document_stack.is_empty());
         assert!(!new_state
             .data
             .loading
@@ -345,32 +353,33 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_selection() {
+    fn test_document_selection() {
         let mut state = AppState::default();
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "BOS".to_string(),
             },
             selected_index: Some(0),
+            scroll_offset: 0,
         });
 
-        let (state, _) = panel_select_next(state);
-        assert_eq!(state.navigation.panel_stack[0].selected_index, Some(1));
+        let (state, _) = document_select_next(state);
+        assert_eq!(state.navigation.document_stack[0].selected_index, Some(1));
 
-        let (state, _) = panel_select_next(state);
-        assert_eq!(state.navigation.panel_stack[0].selected_index, Some(2));
+        let (state, _) = document_select_next(state);
+        assert_eq!(state.navigation.document_stack[0].selected_index, Some(2));
 
-        let (state, _) = panel_select_previous(state);
-        assert_eq!(state.navigation.panel_stack[0].selected_index, Some(1));
+        let (state, _) = document_select_previous(state);
+        assert_eq!(state.navigation.document_stack[0].selected_index, Some(1));
 
         // Test saturating subtraction
-        let (state, _) = panel_select_previous(state);
-        let (state, _) = panel_select_previous(state);
-        assert_eq!(state.navigation.panel_stack[0].selected_index, Some(0));
+        let (state, _) = document_select_previous(state);
+        let (state, _) = document_select_previous(state);
+        assert_eq!(state.navigation.document_stack[0].selected_index, Some(0));
     }
 
     #[test]
-    fn test_panel_select_item_skater() {
+    fn test_document_select_item_skater() {
         // Regression test: Ensure selecting a skater from team detail pushes PlayerDetail panel
         use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, LocalizedString, Position};
 
@@ -467,20 +476,21 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.team_roster_stats).insert("EDM".to_string(), roster);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "EDM".to_string(),
             },
             selected_index: Some(0), // Select first skater
+            scroll_offset: 0,
         });
 
         // Select the first skater
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed a PlayerDetail panel
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(*player_id, 8478402); // Connor McDavid
             }
             _ => panic!("Expected PlayerDetail panel"),
@@ -488,7 +498,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_goalie() {
+    fn test_document_select_item_goalie() {
         // Regression test: Ensure selecting a goalie from team detail pushes PlayerDetail panel
         // Bug: Previously only skaters were handled, selecting a goalie did nothing
         use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, LocalizedString, Position};
@@ -585,20 +595,21 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.team_roster_stats).insert("EDM".to_string(), roster);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "EDM".to_string(),
             },
             selected_index: Some(1), // Select first goalie (index 1, after 1 skater)
+            scroll_offset: 0,
         });
 
         // Select the first goalie
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed a PlayerDetail panel for the goalie
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(*player_id, 8471469); // Stuart Skinner
             }
             _ => panic!("Expected PlayerDetail panel"),
@@ -606,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_second_goalie() {
+    fn test_document_select_item_second_goalie() {
         // Test selecting the second goalie in the list
         use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, LocalizedString, Position};
 
@@ -702,20 +713,21 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.team_roster_stats).insert("TST".to_string(), roster);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "TST".to_string(),
             },
             selected_index: Some(2), // Select second goalie (index 2 = 1 skater + 1 goalie)
+            scroll_offset: 0,
         });
 
         // Select the second goalie
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed a PlayerDetail panel for the second goalie
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(*player_id, 8476999); // Second goalie
             }
             _ => panic!("Expected PlayerDetail panel"),
@@ -723,7 +735,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_uses_sorted_roster() {
+    fn test_document_select_item_uses_sorted_roster() {
         // Regression test for bug: Selecting Martin Necas showed Brock Nelson
         // Root cause: UI displays sorted roster (by points) but selection used unsorted data
         //
@@ -826,20 +838,21 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.team_roster_stats).insert("COL".to_string(), roster);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "COL".to_string(),
             },
             selected_index: Some(0), // Select first VISUAL position (highest points)
+            scroll_offset: 0,
         });
 
         // Select the first visual position
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have selected Martin Necas (highest points), NOT Brent Burns (first in data)
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(*player_id, 8480039, "Should select Martin Necas (40 pts), not Brent Burns (10 pts) or Brock Nelson (5 pts)");
             }
             _ => panic!("Expected PlayerDetail panel"),
@@ -847,7 +860,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_sorted_second_position() {
+    fn test_document_select_item_sorted_second_position() {
         // Test selecting second visual position in sorted roster
         use nhl_api::{ClubSkaterStats, ClubStats, LocalizedString, Position};
 
@@ -942,19 +955,20 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.team_roster_stats).insert("COL".to_string(), roster);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "COL".to_string(),
             },
             selected_index: Some(1), // Select second VISUAL position
+            scroll_offset: 0,
         });
 
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should select Brent Burns (second highest points = 10), not Brock Nelson
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(
                     *player_id, 8470613,
                     "Should select Brent Burns (10 pts, second in sorted list)"
@@ -965,7 +979,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_goalies_sorted_by_games_played() {
+    fn test_document_select_item_goalies_sorted_by_games_played() {
         // Regression test: Goalies should be sorted by games_played, not data order
         use nhl_api::{ClubGoalieStats, ClubStats, LocalizedString};
 
@@ -1063,19 +1077,20 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.team_roster_stats).insert("TST".to_string(), roster);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::TeamDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "TST".to_string(),
             },
             selected_index: Some(0), // Select first goalie visually (0 skaters + 0 = index 0)
+            scroll_offset: 0,
         });
 
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should select Goalie B (15 GP, first in sorted list), not Goalie A (5 GP, first in data)
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(
                     *player_id, 1002,
                     "Should select Goalie B (15 GP), not Goalie A (5 GP)"
@@ -1211,9 +1226,9 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_boxscore_away_forward() {
+    fn test_document_select_item_boxscore_away_forward() {
         // Regression test: Selecting a player from boxscore should work
-        // Bug: Panel selection was not implemented for Boxscore panels
+        // Bug: Document selection was not implemented for Boxscore documents
         let mut state = AppState::default();
         const TEST_GAME_ID: i64 = 2024020001;
 
@@ -1228,19 +1243,20 @@ mod tests {
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::Boxscore {
                 game_id: TEST_GAME_ID,
             },
             selected_index: Some(0), // Select first away forward
+            scroll_offset: 0,
         });
 
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed PlayerDetail panel for Crosby
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(*player_id, 8478483, "Should select Crosby");
             }
             _ => panic!("Expected PlayerDetail panel"),
@@ -1248,7 +1264,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_boxscore_home_forward() {
+    fn test_document_select_item_boxscore_home_forward() {
         // Test selecting a home forward (after all away players)
         let mut state = AppState::default();
         const TEST_GAME_ID: i64 = 2024020002;
@@ -1268,19 +1284,20 @@ mod tests {
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::Boxscore {
                 game_id: TEST_GAME_ID,
             },
             selected_index: Some(1), // Index 1 = first home forward (after 1 away forward)
+            scroll_offset: 0,
         });
 
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed PlayerDetail panel for Forsberg
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(
                     *player_id, 8476887,
                     "Should select Forsberg (first home forward)"
@@ -1291,7 +1308,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_boxscore_away_defense() {
+    fn test_document_select_item_boxscore_away_defense() {
         // Test selecting an away defenseman
         let mut state = AppState::default();
         const TEST_GAME_ID: i64 = 2024020003;
@@ -1312,19 +1329,20 @@ mod tests {
         );
 
         Arc::make_mut(&mut state.data.boxscores).insert(TEST_GAME_ID, boxscore);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::Boxscore {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::Boxscore {
                 game_id: TEST_GAME_ID,
             },
             selected_index: Some(1), // Index 1 = first away defenseman (after 1 forward)
+            scroll_offset: 0,
         });
 
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed PlayerDetail panel for the defenseman
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::PlayerDetail { player_id } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::PlayerDetail { player_id } => {
                 assert_eq!(*player_id, 200, "Should select away defenseman");
             }
             _ => panic!("Expected PlayerDetail panel"),
@@ -1332,7 +1350,7 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_select_item_player_detail_season() {
+    fn test_document_select_item_player_detail_season() {
         // Regression test: Selecting a season from PlayerDetail should navigate to TeamDetail
         // Bug: PlayerDetail selection was removed during reducer refactoring
         use nhl_api::{LocalizedString, PlayerLanding, SeasonTotal};
@@ -1412,19 +1430,20 @@ mod tests {
         };
 
         Arc::make_mut(&mut state.data.player_data).insert(TEST_PLAYER_ID, player_data);
-        state.navigation.panel_stack.push(PanelState {
-            panel: Panel::PlayerDetail {
+        state.navigation.document_stack.push(DocumentStackEntry {
+            document: StackedDocument::PlayerDetail {
                 player_id: TEST_PLAYER_ID,
             },
             selected_index: Some(0), // Select first season (2023-2024, Bruins)
+            scroll_offset: 0,
         });
 
-        let (new_state, _) = panel_select_item(state);
+        let (new_state, _) = document_select_item(state);
 
         // Should have pushed TeamDetail panel for Bruins
-        assert_eq!(new_state.navigation.panel_stack.len(), 2);
-        match &new_state.navigation.panel_stack[1].panel {
-            Panel::TeamDetail { abbrev } => {
+        assert_eq!(new_state.navigation.document_stack.len(), 2);
+        match &new_state.navigation.document_stack[1].document {
+            StackedDocument::TeamDetail { abbrev } => {
                 assert_eq!(abbrev, "BOS", "Should navigate to Bruins roster");
             }
             _ => panic!("Expected TeamDetail panel"),

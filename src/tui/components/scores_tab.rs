@@ -1,25 +1,18 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::{buffer::Buffer, layout::Rect};
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-//
+
 use nhl_api::{DailySchedule, GameDate, GameMatchup};
-//
-use crate::commands::scores_format::{format_period_text, PeriodScores};
+
+use crate::commands::scores_format::PeriodScores;
 use crate::config::DisplayConfig;
-use crate::layout_constants::SCORE_BOX_WIDTH;
 use crate::tui::action::{Action, ComponentMessageTrait};
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
-//use crate::tui::document::{Document};
+use crate::tui::document::{Document, DocumentView};
 use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
-use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
 
-//use super::scores_grid_document::ScoresGridDocument;
-//
+use super::scores_grid_document::ScoresGridDocument;
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 //
 /// Component state for ScoresTab - managed by the component itself
@@ -69,12 +62,6 @@ pub enum ScoresTabMsg {
 
     // Game activation
     ActivateGame,
-
-    // Legacy game selection (TODO: remove after migration complete)
-    MoveGameSelectionUp(u16),    // boxes_per_row
-    MoveGameSelectionDown(u16),  // boxes_per_row
-    MoveGameSelectionLeft,
-    MoveGameSelectionRight,
 }
 
 impl ComponentMessageTrait for ScoresTabMsg {
@@ -182,43 +169,12 @@ impl Component for ScoresTab {
                             // Parse "game_12345" -> 12345
                             if let Some(game_id) = link_id.strip_prefix("game_")
                                 .and_then(|s| s.parse::<i64>().ok()) {
-                                return Effect::Action(Action::PushPanel(
-                                    crate::tui::types::Panel::Boxscore { game_id }
+                                return Effect::Action(Action::PushDocument(
+                                    crate::tui::types::StackedDocument::Boxscore { game_id }
                                 ));
                             }
                         }
                     }
-                }
-                Effect::None
-            }
-
-            // Legacy game selection (kept for backward compatibility during migration)
-            ScoresTabMsg::MoveGameSelectionUp(boxes_per_row) => {
-                if let Some(idx) = state.doc_nav.focus_index {
-                    if idx >= boxes_per_row as usize {
-                        state.doc_nav.focus_index = Some(idx - boxes_per_row as usize);
-                    }
-                }
-                Effect::None
-            }
-            ScoresTabMsg::MoveGameSelectionDown(boxes_per_row) => {
-                // TODO: Get game count from schedule and bounds check
-                if let Some(idx) = state.doc_nav.focus_index {
-                    state.doc_nav.focus_index = Some(idx + boxes_per_row as usize);
-                }
-                Effect::None
-            }
-            ScoresTabMsg::MoveGameSelectionLeft => {
-                if let Some(idx) = state.doc_nav.focus_index {
-                    if idx > 0 {
-                        state.doc_nav.focus_index = Some(idx - 1);
-                    }
-                }
-                Effect::None
-            }
-            ScoresTabMsg::MoveGameSelectionRight => {
-                if let Some(idx) = state.doc_nav.focus_index {
-                    state.doc_nav.focus_index = Some(idx + 1);
                 }
                 Effect::None
             }
@@ -286,186 +242,68 @@ impl ScoresTab {
                 .to_string(),
         }
     }
-    //
+    /// Render game list using the document system with ScoresGridDocument
     fn render_game_list_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState, _date: &GameDate) -> Element {
-        // TODO Phase 5: Replace GameListWidget with document rendering
-        // For now, keeping GameListWidget to maintain functionality
-        // Next step: Integrate ScoresGridDocument properly with Element tree
-        Element::Widget(Box::new(GameListWidget {
-            schedule: props.schedule.clone(),
-            period_scores: props.period_scores.clone(),
-            game_info: props.game_info.clone(),
-            selected_game_index: if state.is_browse_mode() {
-                state.doc_nav.focus_index
-            } else {
-                None
-            },
+        // Create the ScoresGridDocument
+        // Calculate boxes_per_row (we'll use a reasonable default, terminal width not available here)
+        let boxes_per_row = 3; // Will be recalculated based on actual viewport
+
+        let doc = ScoresGridDocument::new(
+            props.schedule.clone(),
+            props.game_info.clone(),
+            props.period_scores.clone(),
+            boxes_per_row,
+            state.game_date.clone(),
+        );
+
+        // Wrap in ScoresDocumentWidget which handles DocumentView rendering
+        Element::Widget(Box::new(ScoresDocumentWidget {
+            doc: Arc::new(doc),
+            focus_index: state.doc_nav.focus_index,
+            scroll_offset: state.doc_nav.scroll_offset,
         }))
     }
+}
 
+/// Widget that renders a ScoresGridDocument with DocumentView
+///
+/// This widget wraps DocumentView and applies focus/scroll state from component state.
+struct ScoresDocumentWidget {
+    doc: Arc<dyn Document>,
+    focus_index: Option<usize>,
+    scroll_offset: u16,
 }
-//
-//
-/// Game list widget - shows games for selected date as GameBox widgets
-struct GameListWidget {
-    schedule: Arc<Option<DailySchedule>>,
-    period_scores: Arc<HashMap<i64, PeriodScores>>,
-    game_info: Arc<HashMap<i64, GameMatchup>>,
-    selected_game_index: Option<usize>,
-}
-//
-impl GameListWidget {
-    /// Convert schedule game to GameBox widget
-    fn create_game_box(&self, game: &nhl_api::ScheduleGame, selected: bool) -> GameBox {
-        // Determine game state
-        let state = if game.game_state.is_final() {
-            WidgetGameState::Final
-        } else if game.game_state.has_started() {
-            // Get period text and time from game_info
-            if let Some(info) = self.game_info.get(&game.id) {
-                let period_text = format_period_text(
-                    info.period_descriptor.period_type,
-                    info.period_descriptor.number,
-                );
-                let (time_remaining, in_intermission) = if let Some(clock) = &info.clock {
-                    (Some(clock.time_remaining.clone()), clock.in_intermission)
-                } else {
-                    (None, false)
-                };
-                WidgetGameState::Live {
-                    period_text,
-                    time_remaining,
-                    in_intermission,
-                }
-            } else {
-                WidgetGameState::Live {
-                    period_text: "Live".to_string(),
-                    time_remaining: None,
-                    in_intermission: false,
-                }
-            }
-        } else {
-            // Scheduled game - format start time
-            let start_time =
-                if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(&game.start_time_utc) {
-                    let local_time: chrono::DateTime<chrono::Local> = parsed.into();
-                    local_time.format("%I:%M %p").to_string()
-                } else {
-                    game.start_time_utc.clone()
-                };
-            WidgetGameState::Scheduled { start_time }
-        };
-        //
-        // Get scores and period details
-        let (away_score, home_score, away_periods, home_periods, has_ot, has_so) =
-            if let Some(scores) = self.period_scores.get(&game.id) {
-                (
-                    Some(scores.away_total()),
-                    Some(scores.home_total()),
-                    Some(scores.away_periods.clone()),
-                    Some(scores.home_periods.clone()),
-                    scores.has_ot,
-                    scores.has_so,
-                )
-            } else {
-                (None, None, None, None, false, false)
-            };
-        //
-        // Get current period
-        let current_period = self
-            .game_info
-            .get(&game.id)
-            .map(|info| info.period_descriptor.number);
-        //
-        GameBox::new(
-            game.away_team.abbrev.clone(),
-            game.home_team.abbrev.clone(),
-            away_score,
-            home_score,
-            away_periods,
-            home_periods,
-            has_ot,
-            has_so,
-            current_period,
-            state,
-            selected,
-        )
-    }
-}
-//
-impl ElementWidget for GameListWidget {
-    fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
-        match self.schedule.as_ref().as_ref() {
-            None => {
-                let widget = Paragraph::new("Loading games...")
-                    .block(Block::default().borders(Borders::ALL).title("Games"));
-                ratatui::widgets::Widget::render(widget, area, buf);
-            }
-            Some(schedule) if schedule.games.is_empty() => {
-                let widget = Paragraph::new("No games scheduled")
-                    .block(Block::default().borders(Borders::ALL).title("Games"));
-                ratatui::widgets::Widget::render(widget, area, buf);
-            }
-            Some(schedule) => {
-                const GAME_BOX_HEIGHT: u16 = 7;
-                const GAME_BOX_MARGIN: u16 = 2;
-                //
-                // Calculate how many game boxes fit in a row
-                let boxes_per_row = (area.width / (SCORE_BOX_WIDTH + GAME_BOX_MARGIN)).max(1);
-                //
-                // Create game boxes
-                let game_boxes: Vec<(GameBox, usize)> = schedule
-                    .games
-                    .iter()
-                    .enumerate()
-                    .map(|(index, game)| {
-                        let selected = self.selected_game_index == Some(index);
-                        (self.create_game_box(game, selected), index)
-                    })
-                    .collect();
-                //
-                // Render in grid layout
-                let rows = (game_boxes.len() as u16).div_ceil(boxes_per_row);
-                //
-                for row_idx in 0..rows {
-                    let row_y = area.y + row_idx * (GAME_BOX_HEIGHT + 1);
-                    if row_y + GAME_BOX_HEIGHT > area.y + area.height {
-                        break; // Don't render outside area
-                    }
-                    //
-                    for col_idx in 0..boxes_per_row {
-                        let game_idx = (row_idx * boxes_per_row + col_idx) as usize;
-                        if game_idx >= game_boxes.len() {
-                            break;
-                        }
-                        //
-                        let col_x = area.x + col_idx * (SCORE_BOX_WIDTH + GAME_BOX_MARGIN);
-                        let box_area = Rect::new(col_x, row_y, SCORE_BOX_WIDTH, GAME_BOX_HEIGHT);
-                        //
-                        if box_area.x + box_area.width <= area.x + area.width {
-                            let (game_box, _) = &game_boxes[game_idx];
-                            // Use default display config for rendering
-                            let config = DisplayConfig::default();
-                            crate::tui::widgets::StandaloneWidget::render(
-                                game_box, box_area, buf, &config,
-                            );
-                        }
-                    }
-                }
-            }
+
+impl ElementWidget for ScoresDocumentWidget {
+    fn render(&self, area: Rect, buf: &mut Buffer, display_config: &DisplayConfig) {
+        // Create DocumentView with viewport height
+        let mut view = DocumentView::new(self.doc.clone(), area.height);
+
+        // Apply focus state
+        if let Some(idx) = self.focus_index {
+            view.focus_by_index(idx);
         }
+
+        // Apply scroll offset
+        view.set_scroll_offset(self.scroll_offset);
+
+        // Render the document
+        view.render(area, buf, display_config);
     }
-    //
+
     fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(GameListWidget {
-            schedule: self.schedule.clone(),
-            period_scores: self.period_scores.clone(),
-            game_info: self.game_info.clone(),
-            selected_game_index: self.selected_game_index,
+        Box::new(ScoresDocumentWidget {
+            doc: self.doc.clone(),
+            focus_index: self.focus_index,
+            scroll_offset: self.scroll_offset,
         })
     }
+
+    fn preferred_height(&self) -> Option<u16> {
+        None // Fills available space
+    }
 }
-//
+
 #[cfg(test)]
 mod tests {
     use super::*;

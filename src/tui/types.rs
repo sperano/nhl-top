@@ -12,9 +12,9 @@ pub enum Tab {
     Demo,
 }
 
-/// Panel types for drill-down views
+/// Document types for drill-down views (pushed onto document stack)
 #[derive(Debug, Clone)]
-pub enum Panel {
+pub enum StackedDocument {
     Boxscore { game_id: i64 },
     TeamDetail { abbrev: String },
     PlayerDetail { player_id: i64 },
@@ -29,8 +29,8 @@ pub enum SettingsCategory {
     Data,
 }
 
-impl Panel {
-    /// Get the display label for this panel (for breadcrumbs)
+impl StackedDocument {
+    /// Get the display label for this document (for breadcrumbs)
     pub fn label(&self) -> String {
         match self {
             Self::Boxscore { game_id } => format!("Game {}", game_id),

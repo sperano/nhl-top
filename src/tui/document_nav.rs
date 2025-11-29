@@ -4,7 +4,7 @@
 //! scrollable, focusable document-like content (e.g., StandingsTab, DemoTab).
 
 use crate::tui::component::Effect;
-use crate::tui::document::{FocusableId, RowPosition};
+use crate::tui::document::{FocusableId, LinkTarget, RowPosition};
 
 /// Minimum viewport height - if smaller than this, autoscroll may behave oddly
 const MIN_VIEWPORT_HEIGHT: u16 = 5;
@@ -32,8 +32,18 @@ pub struct DocumentNavState {
     pub scroll_offset: u16,
     pub viewport_height: u16,
     pub focusable_positions: Vec<u16>,
+    pub focusable_heights: Vec<u16>,
     pub focusable_ids: Vec<FocusableId>,
     pub focusable_row_positions: Vec<Option<RowPosition>>,
+    pub link_targets: Vec<Option<LinkTarget>>,
+}
+
+impl DocumentNavState {
+    /// Get the link target at the current focus, if any
+    pub fn focused_link_target(&self) -> Option<&LinkTarget> {
+        let focus_idx = self.focus_index?;
+        self.link_targets.get(focus_idx)?.as_ref()
+    }
 }
 
 /// Document navigation messages
@@ -252,6 +262,10 @@ pub fn page_down(state: &mut DocumentNavState) {
 }
 
 /// Autoscroll to keep focused element visible
+///
+/// This function ensures the ENTIRE focused element is visible, not just its top.
+/// For tall elements (like GameBox with height=7), we scroll enough to show the
+/// full element including its bottom edge.
 pub fn autoscroll_to_focus(state: &mut DocumentNavState) {
     let focus_idx = match state.focus_index {
         Some(idx) => idx,
@@ -263,26 +277,37 @@ pub fn autoscroll_to_focus(state: &mut DocumentNavState) {
         None => return,
     };
 
+    // Get element height (default to 1 for backwards compatibility)
+    let focused_height = state
+        .focusable_heights
+        .get(focus_idx)
+        .copied()
+        .unwrap_or(1);
+
     let viewport_height = state.viewport_height.max(MIN_VIEWPORT_HEIGHT);
     let scroll_offset = state.scroll_offset;
 
-    // Calculate visible range with padding
-    let visible_start = scroll_offset.saturating_add(AUTOSCROLL_PADDING);
-    let visible_end = scroll_offset
-        .saturating_add(viewport_height)
-        .saturating_sub(AUTOSCROLL_PADDING);
+    // Calculate viewport bounds
+    let viewport_top = scroll_offset;
+    let viewport_bottom = scroll_offset.saturating_add(viewport_height);
 
-    // Check if focused element is outside visible range
-    if focused_y < visible_start {
-        // Scroll up to show focused element with padding
-        let new_offset = focused_y.saturating_sub(AUTOSCROLL_PADDING);
+    // Calculate element bounds
+    let element_top = focused_y;
+    let element_bottom = focused_y.saturating_add(focused_height);
+
+    // Only scroll if element is actually outside the viewport
+    if element_top < viewport_top {
+        // Element top is above viewport - scroll up to show it with padding
+        let new_offset = element_top.saturating_sub(AUTOSCROLL_PADDING);
         state.scroll_offset = new_offset;
-    } else if focused_y >= visible_end {
-        // Scroll down to show focused element with padding
-        let new_offset = focused_y
-            .saturating_sub(viewport_height)
+    } else if element_bottom > viewport_bottom {
+        // Element bottom is below viewport - scroll down to show entire element
+        // We want element_bottom to be at (viewport_bottom - padding)
+        // So: new_offset + viewport_height - padding = element_bottom
+        // Thus: new_offset = element_bottom - viewport_height + padding
+        let new_offset = element_bottom
             .saturating_add(AUTOSCROLL_PADDING)
-            .saturating_add(1);
+            .saturating_sub(viewport_height);
         state.scroll_offset = new_offset;
     }
 }
@@ -298,8 +323,9 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
-            focusable_ids: vec![],
+            focusable_heights: vec![1, 1, 1],
             focusable_row_positions: vec![None, None, None],
+            ..Default::default()
         };
 
         let wrapped = focus_next(&mut state);
@@ -315,8 +341,9 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
-            focusable_ids: vec![],
+            focusable_heights: vec![1, 1, 1],
             focusable_row_positions: vec![None, None, None],
+            ..Default::default()
         };
 
         let wrapped = focus_next(&mut state);
@@ -331,8 +358,9 @@ mod tests {
             scroll_offset: 5,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
-            focusable_ids: vec![],
+            focusable_heights: vec![1, 1, 1],
             focusable_row_positions: vec![None, None, None],
+            ..Default::default()
         };
 
         let wrapped = focus_prev(&mut state);
@@ -348,8 +376,9 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 20,
             focusable_positions: vec![0, 5, 10],
-            focusable_ids: vec![],
+            focusable_heights: vec![1, 1, 1],
             focusable_row_positions: vec![None, None, None],
+            ..Default::default()
         };
 
         let wrapped = focus_prev(&mut state);
@@ -363,9 +392,7 @@ mod tests {
             focus_index: None,
             scroll_offset: 10,
             viewport_height: 20,
-            focusable_positions: vec![],
-            focusable_ids: vec![],
-            focusable_row_positions: vec![],
+            ..Default::default()
         };
 
         scroll_up(&mut state, 5);
@@ -378,12 +405,9 @@ mod tests {
     #[test]
     fn test_scroll_down() {
         let mut state = DocumentNavState {
-            focus_index: None,
             scroll_offset: 10,
             viewport_height: 20,
-            focusable_positions: vec![],
-            focusable_ids: vec![],
-            focusable_row_positions: vec![],
+            ..Default::default()
         };
 
         scroll_down(&mut state, 5);
@@ -393,12 +417,9 @@ mod tests {
     #[test]
     fn test_scroll_to_top() {
         let mut state = DocumentNavState {
-            focus_index: None,
             scroll_offset: 100,
             viewport_height: 20,
-            focusable_positions: vec![],
-            focusable_ids: vec![],
-            focusable_row_positions: vec![],
+            ..Default::default()
         };
 
         scroll_to_top(&mut state);
@@ -408,12 +429,9 @@ mod tests {
     #[test]
     fn test_scroll_to_bottom() {
         let mut state = DocumentNavState {
-            focus_index: None,
             scroll_offset: 0,
             viewport_height: 20,
-            focusable_positions: vec![],
-            focusable_ids: vec![],
-            focusable_row_positions: vec![],
+            ..Default::default()
         };
 
         scroll_to_bottom(&mut state);
@@ -423,12 +441,9 @@ mod tests {
     #[test]
     fn test_page_up() {
         let mut state = DocumentNavState {
-            focus_index: None,
             scroll_offset: 50,
             viewport_height: 20,
-            focusable_positions: vec![],
-            focusable_ids: vec![],
-            focusable_row_positions: vec![],
+            ..Default::default()
         };
 
         page_up(&mut state);
@@ -438,12 +453,9 @@ mod tests {
     #[test]
     fn test_page_down() {
         let mut state = DocumentNavState {
-            focus_index: None,
             scroll_offset: 30,
             viewport_height: 20,
-            focusable_positions: vec![],
-            focusable_ids: vec![],
-            focusable_row_positions: vec![],
+            ..Default::default()
         };
 
         page_down(&mut state);
@@ -457,14 +469,16 @@ mod tests {
             scroll_offset: 0,
             viewport_height: 10,
             focusable_positions: vec![0, 2, 4, 6, 8, 20, 22], // Element 5 is at y=20
-            focusable_ids: vec![],
+            focusable_heights: vec![1, 1, 1, 1, 1, 1, 1],
             focusable_row_positions: vec![None; 7],
+            ..Default::default()
         };
 
         autoscroll_to_focus(&mut state);
-        // Should scroll so element at y=20 is visible
-        // visible_end needs to be > 20 + PADDING
-        assert!(state.scroll_offset > 0);
+        // Element at y=20, height=1, viewport=10, padding=3
+        // element_bottom = 20 + 1 = 21
+        // new_offset = 21 + 3 - 10 = 14
+        assert_eq!(state.scroll_offset, 14);
     }
 
     #[test]
@@ -474,12 +488,136 @@ mod tests {
             scroll_offset: 10,
             viewport_height: 10,
             focusable_positions: vec![0, 2, 4, 6, 8, 20, 22], // Element 0 is at y=0
-            focusable_ids: vec![],
+            focusable_heights: vec![1, 1, 1, 1, 1, 1, 1],
             focusable_row_positions: vec![None; 7],
+            ..Default::default()
         };
 
         autoscroll_to_focus(&mut state);
-        // Should scroll so element at y=0 is visible
+        // Should scroll so element at y=0 is visible (with padding=3, new_offset = 0 - 3 saturates to 0)
         assert_eq!(state.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_no_scroll_when_visible() {
+        // Element at y=5 is within viewport [0, 10)
+        let mut state = DocumentNavState {
+            focus_index: Some(2),
+            scroll_offset: 0,
+            viewport_height: 10,
+            focusable_positions: vec![0, 2, 5, 8, 15], // Element 2 is at y=5
+            focusable_heights: vec![1, 1, 1, 1, 1],
+            focusable_row_positions: vec![None; 5],
+            ..Default::default()
+        };
+
+        autoscroll_to_focus(&mut state);
+        // Should NOT scroll - element is visible
+        assert_eq!(state.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_no_scroll_when_near_bottom_but_visible() {
+        // Regression test: element at y=8, height=1 is within viewport [0, 10)
+        // element_bottom = 8 + 1 = 9, which is < viewport_bottom = 10
+        let mut state = DocumentNavState {
+            focus_index: Some(3),
+            scroll_offset: 0,
+            viewport_height: 10,
+            focusable_positions: vec![0, 2, 5, 8, 15], // Element 3 is at y=8
+            focusable_heights: vec![1, 1, 1, 1, 1],
+            focusable_row_positions: vec![None; 5],
+            ..Default::default()
+        };
+
+        autoscroll_to_focus(&mut state);
+        // Should NOT scroll - element at y=8, height=1 fits in viewport [0, 10)
+        assert_eq!(state.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_correct_offset_for_element_just_outside() {
+        // Element at y=10, height=1 is just outside viewport [0, 10)
+        let mut state = DocumentNavState {
+            focus_index: Some(4),
+            scroll_offset: 0,
+            viewport_height: 10,
+            focusable_positions: vec![0, 2, 5, 8, 10], // Element 4 is at y=10
+            focusable_heights: vec![1, 1, 1, 1, 1],
+            focusable_row_positions: vec![None; 5],
+            ..Default::default()
+        };
+
+        autoscroll_to_focus(&mut state);
+        // element_bottom = 10 + 1 = 11, padding = 3
+        // new_offset = 11 + 3 - 10 = 4
+        // After scroll: viewport is [4, 14), element at y=10 with height=1 is visible
+        assert_eq!(state.scroll_offset, 4);
+    }
+
+    #[test]
+    fn test_autoscroll_tall_element_gamebox() {
+        // GameBox elements are 7 lines tall. When navigating to the third row (y=14),
+        // we need to scroll enough to show the ENTIRE element (y=14 through y=20).
+        // This is a regression test for the bug where only element top was considered,
+        // causing the bottom of tall elements to be cut off.
+        let mut state = DocumentNavState {
+            focus_index: Some(6), // Third row, first game
+            scroll_offset: 0,
+            viewport_height: 20,
+            // Row 1 at y=0, Row 2 at y=7, Row 3 at y=14 (3 games per row)
+            focusable_positions: vec![0, 0, 0, 7, 7, 7, 14, 14, 14],
+            focusable_heights: vec![7, 7, 7, 7, 7, 7, 7, 7, 7], // GameBox height = 7
+            focusable_row_positions: vec![None; 9],
+            ..Default::default()
+        };
+
+        autoscroll_to_focus(&mut state);
+        // Element at y=14, height=7
+        // element_bottom = 14 + 7 = 21
+        // With viewport_height=20 and padding=3:
+        // new_offset = element_bottom + padding - viewport_height = 21 + 3 - 20 = 4
+        // After scroll: viewport is [4, 24), element at y=14..21 is fully visible
+        assert_eq!(state.scroll_offset, 4);
+    }
+
+    #[test]
+    fn test_autoscroll_tall_element_already_visible() {
+        // When a tall element (height=7) is already fully visible, don't scroll
+        let mut state = DocumentNavState {
+            focus_index: Some(0),
+            scroll_offset: 0,
+            viewport_height: 20,
+            focusable_positions: vec![0, 7, 14],
+            focusable_heights: vec![7, 7, 7],
+            focusable_row_positions: vec![None; 3],
+            ..Default::default()
+        };
+
+        autoscroll_to_focus(&mut state);
+        // Element at y=0, height=7, element_bottom=7
+        // viewport is [0, 20), element is at [0, 7)
+        // Element is fully visible, no scroll needed
+        assert_eq!(state.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_autoscroll_tall_element_partially_visible_bottom_cut() {
+        // When bottom of tall element is cut off, scroll to show full element
+        let mut state = DocumentNavState {
+            focus_index: Some(2), // Element at y=14
+            scroll_offset: 0,
+            viewport_height: 18, // viewport ends at y=18, but element bottom is at y=21
+            focusable_positions: vec![0, 7, 14],
+            focusable_heights: vec![7, 7, 7],
+            focusable_row_positions: vec![None; 3],
+            ..Default::default()
+        };
+
+        autoscroll_to_focus(&mut state);
+        // Element at y=14, height=7, element_bottom=21
+        // With viewport_height=18 and padding=3:
+        // new_offset = 21 + 3 - 18 = 6
+        assert_eq!(state.scroll_offset, 6);
     }
 }

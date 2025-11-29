@@ -11,13 +11,14 @@ use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
 use super::component_store::ComponentStateStore;
 use super::components::scores_tab::ScoresTabState;
 use super::components::standings_tab::StandingsTabState;
+use super::constants::{DEMO_TAB_PATH, SCORES_TAB_PATH, SETTINGS_TAB_PATH, STANDINGS_TAB_PATH};
 use super::state::AppState;
 use super::types::Tab;
 
 /// Helper to check if scores tab is in browse mode (box selection)
 fn is_scores_browse_mode_active(component_states: &ComponentStateStore) -> bool {
     component_states
-        .get::<ScoresTabState>("app/scores_tab")
+        .get::<ScoresTabState>(SCORES_TAB_PATH)
         .map(|s| s.is_browse_mode())
         .unwrap_or(false)
 }
@@ -25,7 +26,7 @@ fn is_scores_browse_mode_active(component_states: &ComponentStateStore) -> bool 
 /// Helper to check if standings tab is in browse mode
 fn is_standings_browse_mode_active(component_states: &ComponentStateStore) -> bool {
     component_states
-        .get::<StandingsTabState>("app/standings_tab")
+        .get::<StandingsTabState>(STANDINGS_TAB_PATH)
         .map(|s| s.is_browse_mode())
         .unwrap_or(false)
 }
@@ -34,7 +35,7 @@ fn is_standings_browse_mode_active(component_states: &ComponentStateStore) -> bo
 fn is_settings_modal_open(component_states: &ComponentStateStore) -> bool {
     use super::components::settings_tab::SettingsTabState;
     component_states
-        .get::<SettingsTabState>("app/settings_tab")
+        .get::<SettingsTabState>(SETTINGS_TAB_PATH)
         .map(|s| s.modal.is_some())
         .unwrap_or(false)
 }
@@ -52,17 +53,17 @@ fn handle_global_keys(key_code: KeyCode) -> Option<Action> {
 fn handle_esc_key(state: &AppState, component_states: &ComponentStateStore) -> Option<Action> {
     use crate::tui::components::settings_tab::{ModalMsg, SettingsTabMsg};
 
-    // Priority 1: If there's a panel open, close it
-    if !state.navigation.panel_stack.is_empty() {
-        debug!("KEY: ESC pressed with panel open - popping panel");
-        return Some(Action::PopPanel);
+    // Priority 1: If there's a document on the stack, close it
+    if !state.navigation.document_stack.is_empty() {
+        debug!("KEY: ESC pressed with document open - popping document");
+        return Some(Action::PopDocument);
     }
 
     // Priority 2: If settings modal is open, close it
     if is_settings_modal_open(component_states) {
         debug!("KEY: ESC pressed with settings modal open - closing modal");
         return Some(Action::ComponentMessage {
-            path: "app/settings_tab".to_string(),
+            path: SETTINGS_TAB_PATH.to_string(),
             message: Box::new(SettingsTabMsg::Modal(ModalMsg::Cancel)),
         });
     }
@@ -90,20 +91,20 @@ fn handle_esc_key(state: &AppState, component_states: &ComponentStateStore) -> O
     None
 }
 
-/// Handle navigation when a panel is open
-fn handle_panel_navigation(key_code: KeyCode) -> Option<Action> {
+/// Handle navigation when a stacked document is open
+fn handle_document_stack_navigation(key_code: KeyCode) -> Option<Action> {
     match key_code {
         KeyCode::Up => {
-            debug!("KEY: Up pressed in panel - moving selection up");
-            Some(Action::PanelSelectPrevious)
+            debug!("KEY: Up pressed in document - moving selection up");
+            Some(Action::DocumentSelectPrevious)
         }
         KeyCode::Down => {
-            debug!("KEY: Down pressed in panel - moving selection down");
-            Some(Action::PanelSelectNext)
+            debug!("KEY: Down pressed in document - moving selection down");
+            Some(Action::DocumentSelectNext)
         }
         KeyCode::Enter => {
-            debug!("KEY: Enter pressed in panel - selecting item");
-            Some(Action::PanelSelectItem)
+            debug!("KEY: Enter pressed in document - selecting item");
+            Some(Action::DocumentSelectItem)
         }
         _ => None,
     }
@@ -139,21 +140,33 @@ fn handle_scores_tab_keys(
     key_code: KeyCode,
     component_states: &ComponentStateStore,
 ) -> Option<Action> {
-    if is_scores_browse_mode_active(component_states) {
-        // Box selection mode - arrows navigate within game grid
-        // Calculate boxes_per_row from cached terminal width
-        use crate::layout_constants::GAME_BOX_WITH_MARGIN;
-        let boxes_per_row = (state.system.terminal_width / GAME_BOX_WITH_MARGIN).max(1);
+    use crate::tui::components::scores_tab::ScoresTabMsg;
+    use crate::tui::document_nav::DocumentNavMsg;
 
+    if is_scores_browse_mode_active(component_states) {
+        // Box selection mode - use document navigation
         match key_code {
-            KeyCode::Down => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown(boxes_per_row))),
-            KeyCode::Left => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft)),
-            KeyCode::Right => Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight)),
+            KeyCode::Down => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::DocNav(DocumentNavMsg::FocusNext)),
+            }),
+            KeyCode::Up => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::DocNav(DocumentNavMsg::FocusPrev)),
+            }),
+            KeyCode::Left => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::DocNav(DocumentNavMsg::FocusLeft)),
+            }),
+            KeyCode::Right => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::DocNav(DocumentNavMsg::FocusRight)),
+            }),
             KeyCode::Enter => {
                 // Look up game_id from component state and schedule
                 use crate::tui::components::scores_tab::ScoresTabState;
 
-                if let Some(scores_state) = component_states.get::<ScoresTabState>("app/scores_tab") {
+                if let Some(scores_state) = component_states.get::<ScoresTabState>(SCORES_TAB_PATH) {
                     if let Some(selected_index) = scores_state.doc_nav.focus_index {
                         if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
                             if let Some(game) = schedule.games.get(selected_index) {
@@ -176,7 +189,7 @@ fn handle_scores_tab_keys(
                 // Look up game_id from component state and schedule (first game)
                 use crate::tui::components::scores_tab::ScoresTabState;
 
-                if let Some(_scores_state) = component_states.get::<ScoresTabState>("app/scores_tab") {
+                if let Some(_scores_state) = component_states.get::<ScoresTabState>(SCORES_TAB_PATH) {
                     if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
                         if let Some(game) = schedule.games.first() {
                             return Some(Action::ScoresAction(ScoresAction::SelectGame(game.id)));
@@ -205,8 +218,13 @@ fn handle_standings_league_keys(key: KeyEvent, _state: &AppState) -> Option<Acti
             }
         }
         KeyCode::BackTab => DocumentNavMsg::FocusPrev,
-        // Enter to activate focused element - TODO: handle activation
-        KeyCode::Enter => return None,
+        // Enter to activate focused element (push TeamDetail document)
+        KeyCode::Enter => {
+            return Some(Action::ComponentMessage {
+                path: STANDINGS_TAB_PATH.to_string(),
+                message: Box::new(StandingsTabMsg::ActivateTeam),
+            });
+        }
         // Up/Down arrows for focus navigation
         KeyCode::Up if !key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::FocusPrev,
         KeyCode::Down if !key.modifiers.contains(KeyModifiers::SHIFT) => DocumentNavMsg::FocusNext,
@@ -227,7 +245,7 @@ fn handle_standings_league_keys(key: KeyEvent, _state: &AppState) -> Option<Acti
     };
 
     Some(Action::ComponentMessage {
-        path: "app/standings_tab".to_string(),
+        path: STANDINGS_TAB_PATH.to_string(),
         message: Box::new(StandingsTabMsg::DocNav(nav_msg)),
     })
 }
@@ -253,19 +271,19 @@ fn handle_settings_tab_keys(key: KeyEvent, state: &AppState, component_states: &
     if is_settings_modal_open(component_states) {
         return match key.code {
             KeyCode::Up => Some(Action::ComponentMessage {
-                path: "app/settings_tab".to_string(),
+                path: SETTINGS_TAB_PATH.to_string(),
                 message: Box::new(SettingsTabMsg::Modal(ModalMsg::Up)),
             }),
             KeyCode::Down => Some(Action::ComponentMessage {
-                path: "app/settings_tab".to_string(),
+                path: SETTINGS_TAB_PATH.to_string(),
                 message: Box::new(SettingsTabMsg::Modal(ModalMsg::Down)),
             }),
             KeyCode::Enter => Some(Action::ComponentMessage {
-                path: "app/settings_tab".to_string(),
+                path: SETTINGS_TAB_PATH.to_string(),
                 message: Box::new(SettingsTabMsg::Modal(ModalMsg::Confirm)),
             }),
             KeyCode::Esc => Some(Action::ComponentMessage {
-                path: "app/settings_tab".to_string(),
+                path: SETTINGS_TAB_PATH.to_string(),
                 message: Box::new(SettingsTabMsg::Modal(ModalMsg::Cancel)),
             }),
             _ => None,
@@ -313,7 +331,7 @@ fn handle_settings_tab_keys(key: KeyEvent, state: &AppState, component_states: &
         KeyCode::Enter => {
             debug!("KEY: Enter in Settings tab - activate focused setting");
             return Some(Action::ComponentMessage {
-                path: "app/settings_tab".to_string(),
+                path: SETTINGS_TAB_PATH.to_string(),
                 message: Box::new(SettingsTabMsg::ActivateSetting(state.system.config.clone())),
             });
         }
@@ -321,7 +339,7 @@ fn handle_settings_tab_keys(key: KeyEvent, state: &AppState, component_states: &
     };
 
     Some(Action::ComponentMessage {
-        path: "app/settings_tab".to_string(),
+        path: SETTINGS_TAB_PATH.to_string(),
         message: Box::new(SettingsTabMsg::DocNav(nav_msg)),
     })
 }
@@ -346,10 +364,13 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
             debug!("KEY: BackTab in Demo tab - focus previous");
             DocumentNavMsg::FocusPrev
         }
-        // Enter to activate focused element - TODO: handle activation
+        // Enter to activate focused element (push team/player document)
         KeyCode::Enter => {
-            debug!("KEY: Enter in Demo tab - activate focused");
-            return None;
+            debug!("KEY: Enter in Demo tab - activate focused link");
+            return Some(Action::ComponentMessage {
+                path: DEMO_TAB_PATH.to_string(),
+                message: Box::new(DemoTabMessage::ActivateLink),
+            });
         }
         // Left/Right arrows for row navigation (jump between side-by-side elements)
         KeyCode::Left => {
@@ -381,7 +402,7 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
     };
 
     Some(Action::ComponentMessage {
-        path: "app/demo_tab".to_string(),
+        path: DEMO_TAB_PATH.to_string(),
         message: Box::new(DemoTabMessage::DocNav(nav_msg)),
     })
 }
@@ -392,7 +413,7 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
 /// - Global keys (q, /, ESC)
 /// - Tab bar focus: Left/Right navigate tabs, Down enters content
 /// - Content focus: Context-sensitive navigation, Up returns to tab bar
-/// - Panel navigation (ESC to close)
+/// - Document stack navigation (ESC to close)
 ///
 /// Phase 7: Now reads from component state instead of global state for component-specific checks
 pub fn key_to_action(
@@ -405,11 +426,11 @@ pub fn key_to_action(
     let content_focused = state.navigation.content_focused;
 
     trace!(
-        "KEY: {:?} (tab={:?}, content_focused={}, panel_stack_len={})",
+        "KEY: {:?} (tab={:?}, content_focused={}, document_stack_len={})",
         key.code,
         current_tab,
         content_focused,
-        state.navigation.panel_stack.len()
+        state.navigation.document_stack.len()
     );
 
     // 1. Check global keys (q/Q, /)
@@ -422,9 +443,9 @@ pub fn key_to_action(
         return handle_esc_key(state, component_states);
     }
 
-    // 3. Check panel navigation (when panel is open)
-    if !state.navigation.panel_stack.is_empty() {
-        if let Some(action) = handle_panel_navigation(key.code) {
+    // 3. Check document stack navigation (when stacked document is open)
+    if !state.navigation.document_stack.is_empty() {
+        if let Some(action) = handle_document_stack_navigation(key.code) {
             return Some(action);
         }
     }
@@ -450,10 +471,13 @@ pub fn key_to_action(
     if key.code == KeyCode::Up {
         // Check if we're in a nested mode first
         if is_scores_browse_mode_active(component_states) {
-            // In box selection - Up navigates within grid
-            use crate::layout_constants::GAME_BOX_WITH_MARGIN;
-            let boxes_per_row = (state.system.terminal_width / GAME_BOX_WITH_MARGIN).max(1);
-            return Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp(boxes_per_row)));
+            // In box selection - Up uses document navigation
+            use crate::tui::components::scores_tab::ScoresTabMsg;
+            use crate::tui::document_nav::DocumentNavMsg;
+            return Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::DocNav(DocumentNavMsg::FocusPrev)),
+            });
         } else if current_tab == Tab::Demo {
             // Demo tab - Up handled by handle_demo_tab_keys (both plain and Shift)
         } else if current_tab == Tab::Settings {
@@ -589,18 +613,18 @@ mod tests_disabled {
     }
 
     #[test]
-    fn test_esc_pops_panel_when_panel_open() {
+    fn test_esc_pops_document_when_document_open() {
         let mut state = AppState::default();
         state
             .navigation
-            .panel_stack
-            .push(super::super::state::PanelState {
-                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            .document_stack
+            .push(super::super::state::DocumentStackEntry {
+                document: super::super::types::StackedDocument::Boxscore { game_id: 123 },
                 selected_index: None,
             });
 
         let action = key_to_action(make_key(KeyCode::Esc), &state, &make_component_states());
-        assert!(matches!(action, Some(Action::PopPanel)));
+        assert!(matches!(action, Some(Action::PopDocument)));
     }
 
     #[test]
@@ -840,50 +864,50 @@ mod tests_disabled {
         ));
     }
 
-    // Panel navigation tests
+    // Document stack navigation tests
     #[test]
-    fn test_panel_up_key_selects_previous() {
+    fn test_document_up_key_selects_previous() {
         let mut state = AppState::default();
         state
             .navigation
-            .panel_stack
-            .push(super::super::state::PanelState {
-                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            .document_stack
+            .push(super::super::state::DocumentStackEntry {
+                document: super::super::types::StackedDocument::Boxscore { game_id: 123 },
                 selected_index: Some(1),
             });
 
         let action = key_to_action(make_key(KeyCode::Up), &state, &make_component_states());
-        assert!(matches!(action, Some(Action::PanelSelectPrevious)));
+        assert!(matches!(action, Some(Action::DocumentSelectPrevious)));
     }
 
     #[test]
-    fn test_panel_down_key_selects_next() {
+    fn test_document_down_key_selects_next() {
         let mut state = AppState::default();
         state
             .navigation
-            .panel_stack
-            .push(super::super::state::PanelState {
-                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            .document_stack
+            .push(super::super::state::DocumentStackEntry {
+                document: super::super::types::StackedDocument::Boxscore { game_id: 123 },
                 selected_index: Some(0),
             });
 
         let action = key_to_action(make_key(KeyCode::Down), &state, &make_component_states());
-        assert!(matches!(action, Some(Action::PanelSelectNext)));
+        assert!(matches!(action, Some(Action::DocumentSelectNext)));
     }
 
     #[test]
-    fn test_panel_enter_key_selects_item() {
+    fn test_document_enter_key_selects_item() {
         let mut state = AppState::default();
         state
             .navigation
-            .panel_stack
-            .push(super::super::state::PanelState {
-                panel: super::super::types::Panel::Boxscore { game_id: 123 },
+            .document_stack
+            .push(super::super::state::DocumentStackEntry {
+                document: super::super::types::StackedDocument::Boxscore { game_id: 123 },
                 selected_index: Some(0),
             });
 
         let action = key_to_action(make_key(KeyCode::Enter), &state, &make_component_states());
-        assert!(matches!(action, Some(Action::PanelSelectItem)));
+        assert!(matches!(action, Some(Action::DocumentSelectItem)));
     }
 
     // Number keys for all tabs
@@ -968,7 +992,7 @@ mod tests_disabled {
         assert!(matches!(action, Some(Action::ExitContentFocus)));
     }
 
-    // Scores tab - box selection mode
+    // Scores tab - box selection mode (uses document navigation)
     #[test]
     fn test_scores_box_selection_up() {
         let mut state = AppState::default();
@@ -977,9 +1001,10 @@ mod tests_disabled {
         let component_states = make_component_states_with_box_selection();
 
         let action = key_to_action(make_key(KeyCode::Up), &state, &component_states);
+        // Now dispatches ComponentMessage with DocNav::FocusPrev
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionUp(_)))
+            Some(Action::ComponentMessage { path, .. }) if path == "app/scores_tab"
         ));
     }
 
@@ -991,9 +1016,10 @@ mod tests_disabled {
         let component_states = make_component_states_with_box_selection();
 
         let action = key_to_action(make_key(KeyCode::Down), &state, &component_states);
+        // Now dispatches ComponentMessage with DocNav::FocusNext
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionDown(_)))
+            Some(Action::ComponentMessage { path, .. }) if path == "app/scores_tab"
         ));
     }
 
@@ -1005,9 +1031,10 @@ mod tests_disabled {
         let component_states = make_component_states_with_box_selection();
 
         let action = key_to_action(make_key(KeyCode::Left), &state, &component_states);
+        // Now dispatches ComponentMessage with DocNav::FocusLeft
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionLeft))
+            Some(Action::ComponentMessage { path, .. }) if path == "app/scores_tab"
         ));
     }
 
@@ -1019,9 +1046,10 @@ mod tests_disabled {
         let component_states = make_component_states_with_box_selection();
 
         let action = key_to_action(make_key(KeyCode::Right), &state, &component_states);
+        // Now dispatches ComponentMessage with DocNav::FocusRight
         assert!(matches!(
             action,
-            Some(Action::ScoresAction(ScoresAction::MoveGameSelectionRight))
+            Some(Action::ComponentMessage { path, .. }) if path == "app/scores_tab"
         ));
     }
 

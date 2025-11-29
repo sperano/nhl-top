@@ -151,7 +151,7 @@ mod tests {
         AppState {
             navigation: NavigationState {
                 current_tab: Tab::Scores,
-                panel_stack: Vec::new(),
+                document_stack: Vec::new(),
                 content_focused: false,
             },
             data: Default::default(),

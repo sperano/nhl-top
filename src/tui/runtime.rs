@@ -5,6 +5,7 @@ use tracing::{debug, trace};
 use super::action::Action;
 use super::component::{Effect, Element};
 use super::component_store::ComponentStateStore;
+use super::constants::{DEMO_TAB_PATH, SCORES_TAB_PATH, SETTINGS_TAB_PATH, STANDINGS_TAB_PATH};
 use super::effects::DataEffects;
 use super::reducer::reduce;
 use super::state::AppState;
@@ -100,13 +101,13 @@ impl Runtime {
             let (new_state, reducer_effect) =
                 reduce(self.state.clone(), action, &mut self.component_states);
 
-            // Check if a boxscore panel was just pushed and trigger fetch
+            // Check if a boxscore document was just pushed and trigger fetch
             let boxscore_effect = self.check_for_boxscore_fetch(&self.state, &new_state);
 
-            // Check if a team detail panel was just pushed and trigger fetch
+            // Check if a team detail document was just pushed and trigger fetch
             let team_detail_effect = self.check_for_team_detail_fetch(&self.state, &new_state);
 
-            // Check if a player detail panel was just pushed and trigger fetch
+            // Check if a player detail document was just pushed and trigger fetch
             let player_detail_effect = self.check_for_player_detail_fetch(&self.state, &new_state);
 
             // Check if schedule was just loaded and trigger game detail fetches
@@ -150,12 +151,12 @@ impl Runtime {
         }
     }
 
-    /// Check if a boxscore panel was just pushed and needs data fetching
+    /// Check if a boxscore document was just pushed and needs data fetching
     fn check_for_boxscore_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if panel_stack grew and new panel is a Boxscore
-        if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
-            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
-                if let super::types::Panel::Boxscore { game_id } = panel_state.panel {
+        // Check if document_stack grew and new document is a Boxscore
+        if new_state.navigation.document_stack.len() > old_state.navigation.document_stack.len() {
+            if let Some(doc_entry) = new_state.navigation.document_stack.last() {
+                if let super::types::StackedDocument::Boxscore { game_id } = doc_entry.document {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.boxscores.contains_key(&game_id)
                         && !new_state
@@ -177,12 +178,12 @@ impl Runtime {
         Effect::None
     }
 
-    /// Check if a team detail panel was just pushed and needs data fetching
+    /// Check if a team detail document was just pushed and needs data fetching
     fn check_for_team_detail_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if panel_stack grew and new panel is a TeamDetail
-        if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
-            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
-                if let super::types::Panel::TeamDetail { abbrev } = &panel_state.panel {
+        // Check if document_stack grew and new document is a TeamDetail
+        if new_state.navigation.document_stack.len() > old_state.navigation.document_stack.len() {
+            if let Some(doc_entry) = new_state.navigation.document_stack.last() {
+                if let super::types::StackedDocument::TeamDetail { abbrev } = &doc_entry.document {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.team_roster_stats.contains_key(abbrev)
                         && !new_state
@@ -207,12 +208,12 @@ impl Runtime {
         Effect::None
     }
 
-    /// Check if a player detail panel was just pushed and needs data fetching
+    /// Check if a player detail document was just pushed and needs data fetching
     fn check_for_player_detail_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if panel_stack grew and new panel is a PlayerDetail
-        if new_state.navigation.panel_stack.len() > old_state.navigation.panel_stack.len() {
-            if let Some(panel_state) = new_state.navigation.panel_stack.last() {
-                if let super::types::Panel::PlayerDetail { player_id } = panel_state.panel {
+        // Check if document_stack grew and new document is a PlayerDetail
+        if new_state.navigation.document_stack.len() > old_state.navigation.document_stack.len() {
+            if let Some(doc_entry) = new_state.navigation.document_stack.last() {
+                if let super::types::StackedDocument::PlayerDetail { player_id } = doc_entry.document {
                     // Check if we don't already have the data and aren't already loading
                     if !new_state.data.player_data.contains_key(&player_id)
                         && !new_state
@@ -296,6 +297,55 @@ impl Runtime {
     /// Get a sender for dispatching actions from external sources
     pub fn action_sender(&self) -> mpsc::UnboundedSender<Action> {
         self.action_tx.clone()
+    }
+
+    /// Update viewport heights for all document-based components
+    ///
+    /// Called from the main render loop with the current terminal area height.
+    /// Different components have different chrome (tabs, subtabs, status bars),
+    /// so they get different viewport heights.
+    pub fn update_viewport_heights(&mut self, terminal_height: u16) {
+        use crate::tui::components::scores_tab::ScoresTabState;
+        use crate::tui::components::settings_tab::SettingsTabState;
+        use crate::tui::components::standings_tab::StandingsTabState;
+        use crate::tui::document_nav::DocumentNavState;
+
+        // Base chrome = main tab bar (2 lines) + status bar (2 lines) = 4 lines
+        // Standings/Settings have nested subtab bar = +2 lines
+        const BASE_CHROME_LINES: u16 = 4;
+        const SUBTAB_CHROME_LINES: u16 = 2;
+
+        let base_viewport = terminal_height.saturating_sub(BASE_CHROME_LINES);
+        let subtab_viewport = terminal_height.saturating_sub(BASE_CHROME_LINES + SUBTAB_CHROME_LINES);
+
+        // Update StandingsTab viewport (has subtabs)
+        if let Some(state) = self.component_states.get_mut::<StandingsTabState>(STANDINGS_TAB_PATH) {
+            if state.doc_nav.viewport_height != subtab_viewport {
+                state.doc_nav.viewport_height = subtab_viewport;
+            }
+        }
+
+        // Update ScoresTab viewport (has subtabs - date selector)
+        if let Some(state) = self.component_states.get_mut::<ScoresTabState>(SCORES_TAB_PATH) {
+            if state.doc_nav.viewport_height != subtab_viewport {
+                state.doc_nav.viewport_height = subtab_viewport;
+            }
+        }
+
+        // Update SettingsTab viewport (has subtabs)
+        if let Some(state) = self.component_states.get_mut::<SettingsTabState>(SETTINGS_TAB_PATH) {
+            if state.doc_nav.viewport_height != subtab_viewport {
+                state.doc_nav.viewport_height = subtab_viewport;
+            }
+        }
+
+        // Update DemoTab viewport (no subtabs, uses base chrome)
+        // DemoTab uses DocumentNavState directly as its state type
+        if let Some(state) = self.component_states.get_mut::<DocumentNavState>(DEMO_TAB_PATH) {
+            if state.viewport_height != base_viewport {
+                state.viewport_height = base_viewport;
+            }
+        }
     }
 
     /// Execute effects asynchronously
@@ -589,20 +639,6 @@ mod tests {
             crate::tui::Tab::Standings
         );
 
-        // Go right to Stats
-        runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(
-            runtime.state().navigation.current_tab,
-            crate::tui::Tab::Stats
-        );
-
-        // Go right to Players
-        runtime.dispatch(Action::NavigateTabRight);
-        assert_eq!(
-            runtime.state().navigation.current_tab,
-            crate::tui::Tab::Players
-        );
-
         // Go right to Settings
         runtime.dispatch(Action::NavigateTabRight);
         assert_eq!(
@@ -610,7 +646,7 @@ mod tests {
             crate::tui::Tab::Settings
         );
 
-        // Go right to Browser
+        // Go right to Demo
         runtime.dispatch(Action::NavigateTabRight);
         assert_eq!(
             runtime.state().navigation.current_tab,

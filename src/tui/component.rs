@@ -102,6 +102,17 @@ pub enum Effect {
     Async(Pin<Box<dyn Future<Output = Action> + Send>>),
 }
 
+impl std::fmt::Debug for Effect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Effect::None => write!(f, "Effect::None"),
+            Effect::Action(action) => f.debug_tuple("Effect::Action").field(action).finish(),
+            Effect::Batch(effects) => f.debug_tuple("Effect::Batch").field(effects).finish(),
+            Effect::Async(_) => write!(f, "Effect::Async(<future>)"),
+        }
+    }
+}
+
 /// Trait for widgets that can be wrapped in the Element tree
 ///
 /// This is distinct from `widgets::StandaloneWidget` which is a simpler trait

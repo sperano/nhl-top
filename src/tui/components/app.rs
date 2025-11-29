@@ -1,25 +1,28 @@
 use crate::tui::component::{vertical, Component, Constraint, Element};
 use crate::tui::component_store::ComponentStateStore;
+use crate::tui::constants::{DEMO_TAB_PATH, SCORES_TAB_PATH, SETTINGS_TAB_PATH, STANDINGS_TAB_PATH};
 use crate::tui::state::{AppState, LoadingKey};
-//
+
 use super::{
-    boxscore_panel::{BoxscorePanel, BoxscorePanelProps, TeamView},
+    boxscore_document::{BoxscoreDocument, BoxscoreDocumentProps, TeamView},
     demo_tab::DemoTabProps,
-    player_detail_panel::PlayerDetailPanelProps,
+    player_detail_document::PlayerDetailDocumentProps,
     scores_tab::ScoresTabProps,
     settings_tab::SettingsTabProps,
     standings_tab::StandingsTabProps,
-    team_detail_panel::TeamDetailPanelProps,
-    BreadcrumbWidget, DemoTab, PlayerDetailPanel, ScoresTab, SettingsTab, StandingsTab, StatusBar,
-    TabItem, TabbedPanel, TabbedPanelProps, TeamDetailPanel,
+    team_detail_document::TeamDetailDocumentProps,
+    BreadcrumbWidget, DemoTab, PlayerDetailDocument, ScoresTab, SettingsTab, StandingsTab, StatusBar,
+    TabItem, TabbedPanel, TabbedPanelProps, TeamDetailDocument,
 };
-//
+use crate::tui::state::DocumentStackEntry;
+use crate::tui::types::StackedDocument;
+
 /// Root App component
 ///
 /// This is the top-level component that renders the entire application.
 /// It uses the global AppState as props and delegates rendering to child components.
 pub struct App;
-//
+
 impl Component for App {
     type Props = AppState;
     type State = ();
@@ -74,9 +77,9 @@ impl App {
             Tab::Demo => "demo",
         };
 
-        let (scores_content, standings_content, settings_content) =
-            if let Some(panel_state) = state.navigation.panel_stack.last() {
-                let panel_element = self.render_panel(state, panel_state);
+        let (scores_content, standings_content, settings_content, demo_content) =
+            if let Some(doc_entry) = state.navigation.document_stack.last() {
+                let doc_element = self.render_stacked_document(state, doc_entry);
                 let breadcrumb_element = self.render_breadcrumb(state);
 
                 let content_with_breadcrumb = vertical(
@@ -84,36 +87,33 @@ impl App {
                         Constraint::Length(1),
                         Constraint::Min(0),
                     ],
-                    vec![breadcrumb_element, panel_element],
+                    vec![breadcrumb_element, doc_element],
                 );
 
                 match state.navigation.current_tab {
-                    Tab::Scores => (content_with_breadcrumb, Element::None, Element::None),
-                    Tab::Standings => (Element::None, content_with_breadcrumb, Element::None),
-                    Tab::Settings => (Element::None, Element::None, content_with_breadcrumb),
-                    _ => (Element::None, Element::None, Element::None),
+                    Tab::Scores => (content_with_breadcrumb, Element::None, Element::None, Element::None),
+                    Tab::Standings => (Element::None, content_with_breadcrumb, Element::None, Element::None),
+                    Tab::Settings => (Element::None, Element::None, content_with_breadcrumb, Element::None),
+                    Tab::Demo => (Element::None, Element::None, Element::None, content_with_breadcrumb),
                 }
             } else {
                 (
                     self.render_scores_tab(state),
                     self.render_standings_tab(state),
                     self.render_settings_tab(state),
+                    DemoTab.view(
+                        &DemoTabProps {
+                            content_focused: state.navigation.content_focused,
+                            standings: state.data.standings.clone(),
+                        },
+                        &Default::default(),
+                    ),
                 )
             };
-
-        let demo_content = DemoTab.view(
-            &DemoTabProps {
-                content_focused: state.navigation.content_focused,
-                standings: state.data.standings.clone(),
-            },
-            &Default::default(),
-        );
 
         let tabs = vec![
             TabItem::new("scores", "Scores", scores_content),
             TabItem::new("standings", "Standings", standings_content),
-            TabItem::new("stats", "Stats", Element::None),
-            TabItem::new("players", "Players", Element::None),
             TabItem::new("settings", "Settings", settings_content),
             TabItem::new("demo", "Demo", demo_content),
         ];
@@ -123,7 +123,7 @@ impl App {
                 active_key: active_key.into(),
                 tabs,
                 focused: !state.navigation.content_focused
-                    && state.navigation.panel_stack.is_empty(),
+                    && state.navigation.document_stack.is_empty(),
             },
             &(),
         )
@@ -145,44 +145,42 @@ impl App {
             Tab::Demo => "demo",
         };
         //
-        // Determine content for active tab - if panel is open, show panel instead
-        let (scores_content, standings_content, settings_content) =
-            if let Some(panel_state) = state.navigation.panel_stack.last() {
-                // Panel is open - render it with breadcrumb in the active tab's content area
-                let panel_element = self.render_panel(state, panel_state);
+        // Determine content for active tab - if document is open, show document instead
+        let (scores_content, standings_content, settings_content, demo_content) =
+            if let Some(doc_entry) = state.navigation.document_stack.last() {
+                // Document is open - render it with breadcrumb in the active tab's content area
+                let doc_element = self.render_stacked_document(state, doc_entry);
                 let breadcrumb_element = self.render_breadcrumb(state);
 
-                // Wrap panel with breadcrumb
+                // Wrap document with breadcrumb
                 let content_with_breadcrumb = vertical(
                     [
                         Constraint::Length(1), // Breadcrumb (1 line)
-                        Constraint::Min(0),    // Panel content
+                        Constraint::Min(0),    // Document content
                     ],
-                    vec![breadcrumb_element, panel_element],
+                    vec![breadcrumb_element, doc_element],
                 );
 
                 match state.navigation.current_tab {
-                    Tab::Scores => (content_with_breadcrumb, Element::None, Element::None),
-                    Tab::Standings => (Element::None, content_with_breadcrumb, Element::None),
-                    Tab::Settings => (Element::None, Element::None, content_with_breadcrumb),
-                    _ => (Element::None, Element::None, Element::None),
+                    Tab::Scores => (content_with_breadcrumb, Element::None, Element::None, Element::None),
+                    Tab::Standings => (Element::None, content_with_breadcrumb, Element::None, Element::None),
+                    Tab::Settings => (Element::None, Element::None, content_with_breadcrumb, Element::None),
+                    Tab::Demo => (Element::None, Element::None, Element::None, content_with_breadcrumb),
                 }
             } else {
                 // No panel - render normal tab content
-                (
-                    self.render_scores_tab_with_states(state, component_states),
-                    self.render_standings_tab_with_states(state, component_states),
-                    self.render_settings_tab_with_states(state, component_states),
-                )
+                let scores = self.render_scores_tab_with_states(state, component_states);
+                let standings = self.render_standings_tab_with_states(state, component_states);
+                let settings = self.render_settings_tab_with_states(state, component_states);
+                // Build Demo tab content
+                let demo_props = DemoTabProps {
+                    content_focused: state.navigation.content_focused,
+                    standings: state.data.standings.clone(),
+                };
+                let demo_state = component_states.get_or_init::<DemoTab>(DEMO_TAB_PATH, &demo_props);
+                let demo = DemoTab.view(&demo_props, demo_state);
+                (scores, standings, settings, demo)
             };
-        //
-        // Build Demo tab content
-        let demo_props = DemoTabProps {
-            content_focused: state.navigation.content_focused,
-            standings: state.data.standings.clone(),
-        };
-        let demo_state = component_states.get_or_init::<DemoTab>("app/demo_tab", &demo_props);
-        let demo_content = DemoTab.view(&demo_props, demo_state);
 
         // Build tabs with their content
         let tabs = vec![
@@ -199,33 +197,31 @@ impl App {
                 active_key: active_key.into(),
                 tabs,
                 focused: !state.navigation.content_focused
-                    && state.navigation.panel_stack.is_empty(),
+                    && state.navigation.document_stack.is_empty(),
             },
             &(),
         )
     }
     //
-    /// Render a panel overlay
-    fn render_panel(
+    /// Render a stacked document overlay
+    fn render_stacked_document(
         &self,
         state: &AppState,
-        panel_state: &crate::tui::state::PanelState,
+        doc_entry: &DocumentStackEntry,
     ) -> Element {
-        use crate::tui::types::Panel;
-        //
-        match &panel_state.panel {
-            Panel::Boxscore { game_id } => {
-                let props = BoxscorePanelProps {
+        match &doc_entry.document {
+            StackedDocument::Boxscore { game_id } => {
+                let props = BoxscoreDocumentProps {
                     game_id: *game_id,
                     boxscore: state.data.boxscores.get(game_id).cloned(),
                     loading: state.data.loading.contains(&LoadingKey::Boxscore(*game_id)),
-                    team_view: TeamView::Away, // TODO: Store in panel state to allow switching
-                    selected_index: panel_state.selected_index,
-                    focused: true, // Panel has focus when it's on the stack
+                    team_view: TeamView::Away, // TODO: Store in doc_entry to allow switching
+                    selected_index: doc_entry.selected_index,
+                    focused: true, // Document has focus when it's on the stack
                 };
-                BoxscorePanel.view(&props, &())
+                BoxscoreDocument.view(&props, &())
             }
-            Panel::TeamDetail { abbrev } => {
+            StackedDocument::TeamDetail { abbrev } => {
                 // Find the standing for this team
                 let standing = state
                     .data
@@ -239,7 +235,7 @@ impl App {
                             .cloned()
                     });
                 //
-                let props = TeamDetailPanelProps {
+                let props = TeamDetailDocumentProps {
                     team_abbrev: abbrev.clone(),
                     standing,
                     club_stats: state.data.team_roster_stats.get(abbrev).cloned(),
@@ -247,21 +243,23 @@ impl App {
                         .data
                         .loading
                         .contains(&LoadingKey::TeamRosterStats(abbrev.clone())),
-                    selected_index: panel_state.selected_index,
+                    selected_index: doc_entry.selected_index,
+                    scroll_offset: doc_entry.scroll_offset,
                 };
-                TeamDetailPanel.view(&props, &())
+                TeamDetailDocument.view(&props, &())
             }
-            Panel::PlayerDetail { player_id } => {
-                let props = PlayerDetailPanelProps {
+            StackedDocument::PlayerDetail { player_id } => {
+                let props = PlayerDetailDocumentProps {
                     player_id: *player_id,
                     player_data: state.data.player_data.get(player_id).cloned(),
                     loading: state
                         .data
                         .loading
                         .contains(&LoadingKey::PlayerStats(*player_id)),
-                    selected_index: panel_state.selected_index,
+                    selected_index: doc_entry.selected_index,
+                    scroll_offset: doc_entry.scroll_offset,
                 };
-                PlayerDetailPanel.view(&props, &())
+                PlayerDetailDocument.view(&props, &())
             }
         }
     }
@@ -283,7 +281,7 @@ impl App {
 
         // Get or initialize component state from the component store
         let scores_state =
-            component_states.get_or_init::<ScoresTab>("app/scores_tab", &props);
+            component_states.get_or_init::<ScoresTab>(SCORES_TAB_PATH, &props);
         ScoresTab.view(&props, scores_state)
     }
 
@@ -312,13 +310,13 @@ impl App {
 
         let props = StandingsTabProps {
             standings: state.data.standings.clone(),
-            panel_stack: state.navigation.panel_stack.clone(),
+            document_stack: state.navigation.document_stack.clone(),
             focused: state.navigation.content_focused,
             config: state.system.config.clone(),
         };
 
         let standings_state =
-            component_states.get_or_init::<StandingsTab>("app/standings_tab", &props);
+            component_states.get_or_init::<StandingsTab>(STANDINGS_TAB_PATH, &props);
         StandingsTab.view(&props, standings_state)
     }
 
@@ -329,7 +327,7 @@ impl App {
 
         let props = StandingsTabProps {
             standings: state.data.standings.clone(),
-            panel_stack: state.navigation.panel_stack.clone(),
+            document_stack: state.navigation.document_stack.clone(),
             focused: state.navigation.content_focused,
             config: state.system.config.clone(),
         };
@@ -349,7 +347,7 @@ impl App {
             focused: state.navigation.content_focused,
         };
 
-        let settings_state = component_states.get_or_init::<SettingsTab>("app/settings_tab", &props);
+        let settings_state = component_states.get_or_init::<SettingsTab>(SETTINGS_TAB_PATH, &props);
         SettingsTab.view(&props, settings_state)
     }
 
@@ -369,7 +367,7 @@ impl App {
     fn render_breadcrumb(&self, state: &AppState) -> Element {
         Element::Widget(Box::new(BreadcrumbWidget::new(
             state.navigation.current_tab,
-            state.navigation.panel_stack.clone(),
+            state.navigation.document_stack.clone(),
         )))
     }
 }

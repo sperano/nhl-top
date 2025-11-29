@@ -1,6 +1,6 @@
 /// Breadcrumb component for showing navigation path
 ///
-/// Displays a breadcrumb trail showing the user's current location in the panel stack.
+/// Displays a breadcrumb trail showing the user's current location in the document stack.
 /// Example: "Standings > Team: TOR > Player: Sidney Crosby"
 use ratatui::{
     buffer::Buffer,
@@ -10,24 +10,24 @@ use ratatui::{
 };
 
 use crate::config::DisplayConfig;
-use crate::tui::{component::ElementWidget, state::PanelState, Panel, Tab};
+use crate::tui::{component::ElementWidget, state::DocumentStackEntry, StackedDocument, Tab};
 
 /// Breadcrumb widget that renders a navigation path
 #[derive(Clone)]
 pub struct BreadcrumbWidget {
     pub current_tab: Tab,
-    pub panel_stack: Vec<PanelState>,
+    pub document_stack: Vec<DocumentStackEntry>,
 }
 
 impl BreadcrumbWidget {
-    pub fn new(current_tab: Tab, panel_stack: Vec<PanelState>) -> Self {
+    pub fn new(current_tab: Tab, document_stack: Vec<DocumentStackEntry>) -> Self {
         Self {
             current_tab,
-            panel_stack,
+            document_stack,
         }
     }
 
-    /// Build breadcrumb text from tab and panel stack
+    /// Build breadcrumb text from tab and document stack
     fn build_breadcrumb_text(&self) -> Vec<Span<'_>> {
         let mut spans = Vec::new();
 
@@ -44,17 +44,17 @@ impl BreadcrumbWidget {
             Style::default().add_modifier(Modifier::BOLD),
         ));
 
-        // Add each panel in the stack
-        for panel_state in &self.panel_stack {
+        // Add each document in the stack
+        for doc_entry in &self.document_stack {
             spans.push(Span::raw(" > "));
 
-            let panel_text = match &panel_state.panel {
-                Panel::Boxscore { game_id } => format!("Boxscore: Game {}", game_id),
-                Panel::TeamDetail { abbrev } => format!("Team: {}", abbrev),
-                Panel::PlayerDetail { player_id } => format!("Player: {}", player_id),
+            let doc_text = match &doc_entry.document {
+                StackedDocument::Boxscore { game_id } => format!("Boxscore: Game {}", game_id),
+                StackedDocument::TeamDetail { abbrev } => format!("Team: {}", abbrev),
+                StackedDocument::PlayerDetail { player_id } => format!("Player: {}", player_id),
             };
 
-            spans.push(Span::raw(panel_text));
+            spans.push(Span::raw(doc_text));
         }
 
         spans
@@ -79,8 +79,8 @@ impl ElementWidget for BreadcrumbWidget {
     }
 
     fn preferred_height(&self) -> Option<u16> {
-        if self.panel_stack.is_empty() {
-            Some(0) // No breadcrumb if no panels are open
+        if self.document_stack.is_empty() {
+            Some(0) // No breadcrumb if no documents are open
         } else {
             Some(1) // 1 line for breadcrumb
         }
@@ -95,27 +95,28 @@ mod tests {
     use ratatui::layout::Rect;
 
     #[test]
-    fn test_breadcrumb_no_panels() {
+    fn test_breadcrumb_no_documents() {
         let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
         widget.render(buf.area, &mut buf, &config);
 
-        // With no panels, should just show the tab name
+        // With no documents, should just show the tab name
         assert_buffer(&buf, &["Scores"]);
     }
 
     #[test]
     fn test_breadcrumb_with_team_detail() {
-        let panel_stack = vec![PanelState {
-            panel: Panel::TeamDetail {
+        let document_stack = vec![DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
             selected_index: None,
+            scroll_offset: 0,
         }];
 
-        let widget = BreadcrumbWidget::new(Tab::Standings, panel_stack);
+        let widget = BreadcrumbWidget::new(Tab::Standings, document_stack);
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
@@ -126,14 +127,15 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_with_boxscore() {
-        let panel_stack = vec![PanelState {
-            panel: Panel::Boxscore {
+        let document_stack = vec![DocumentStackEntry {
+            document: StackedDocument::Boxscore {
                 game_id: 2024020001,
             },
             selected_index: None,
+            scroll_offset: 0,
         }];
 
-        let widget = BreadcrumbWidget::new(Tab::Scores, panel_stack);
+        let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
@@ -143,21 +145,23 @@ mod tests {
     }
 
     #[test]
-    fn test_breadcrumb_with_nested_panels() {
-        let panel_stack = vec![
-            PanelState {
-                panel: Panel::Boxscore {
+    fn test_breadcrumb_with_nested_documents() {
+        let document_stack = vec![
+            DocumentStackEntry {
+                document: StackedDocument::Boxscore {
                     game_id: 2024020001,
                 },
                 selected_index: None,
+                scroll_offset: 0,
             },
-            PanelState {
-                panel: Panel::PlayerDetail { player_id: 8471675 },
+            DocumentStackEntry {
+                document: StackedDocument::PlayerDetail { player_id: 8471675 },
                 selected_index: None,
+                scroll_offset: 0,
             },
         ];
 
-        let widget = BreadcrumbWidget::new(Tab::Scores, panel_stack);
+        let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
@@ -170,25 +174,14 @@ mod tests {
     }
 
     #[test]
-    fn test_breadcrumb_stats_tab() {
-        let widget = BreadcrumbWidget::new(Tab::Stats, Vec::new());
+    fn test_breadcrumb_standings_tab() {
+        let widget = BreadcrumbWidget::new(Tab::Standings, Vec::new());
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Stats"]);
-    }
-
-    #[test]
-    fn test_breadcrumb_players_tab() {
-        let widget = BreadcrumbWidget::new(Tab::Players, Vec::new());
-        let config = DisplayConfig::default();
-
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
-        widget.render(buf.area, &mut buf, &config);
-
-        assert_buffer(&buf, &["Players"]);
+        assert_buffer(&buf, &["Standings"]);
     }
 
     #[test]
@@ -249,31 +242,33 @@ mod tests {
     }
 
     #[test]
-    fn test_breadcrumb_preferred_height_with_panels() {
-        let panel_stack = vec![PanelState {
-            panel: Panel::TeamDetail {
+    fn test_breadcrumb_preferred_height_with_documents() {
+        let document_stack = vec![DocumentStackEntry {
+            document: StackedDocument::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
             selected_index: None,
+            scroll_offset: 0,
         }];
 
-        let widget = BreadcrumbWidget::new(Tab::Standings, panel_stack);
+        let widget = BreadcrumbWidget::new(Tab::Standings, document_stack);
         assert_eq!(widget.preferred_height(), Some(1));
     }
 
     #[test]
     fn test_breadcrumb_with_player_detail() {
-        let panel_stack = vec![PanelState {
-            panel: Panel::PlayerDetail { player_id: 8478402 },
+        let document_stack = vec![DocumentStackEntry {
+            document: StackedDocument::PlayerDetail { player_id: 8478402 },
             selected_index: None,
+            scroll_offset: 0,
         }];
 
-        let widget = BreadcrumbWidget::new(Tab::Players, panel_stack);
+        let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
 
         let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Players > Player: 8478402"]);
+        assert_buffer(&buf, &["Scores > Player: 8478402"]);
     }
 }
