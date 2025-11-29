@@ -217,6 +217,7 @@ impl App {
                     loading: state.data.loading.contains(&LoadingKey::Boxscore(*game_id)),
                     team_view: TeamView::Away, // TODO: Store in doc_entry to allow switching
                     selected_index: doc_entry.selected_index,
+                    scroll_offset: doc_entry.scroll_offset,
                     focused: true, // Document has focus when it's on the stack
                 };
                 BoxscoreDocument.view(&props, &())

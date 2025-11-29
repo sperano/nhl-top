@@ -1,19 +1,18 @@
+use std::sync::Arc;
+
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Tabs, Widget as RatatuiWidget},
+    layout::Rect,
+    widgets::{Block, Borders, Paragraph},
 };
 
-use nhl_api::Boxscore;
+use nhl_api::{Boxscore, GoalieStats, SkaterStats};
 
-use super::{GoalieStatsTableWidget, SkaterStatsTableWidget};
+use super::table::TableWidget;
 use crate::config::DisplayConfig;
 use crate::tui::component::{Component, Element, ElementWidget};
-
-/// Number of chrome lines per section (title + sep + blank + column headers + sep)
-const SECTION_CHROME_LINES: usize = 5;
+use crate::tui::document::{Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext};
+use crate::tui::{Alignment, CellValue, ColumnDef};
 
 /// View mode for boxscore panel
 #[derive(Clone, Debug, PartialEq)]
@@ -28,9 +27,10 @@ pub struct BoxscoreDocumentProps {
     pub game_id: i64,
     pub boxscore: Option<Boxscore>,
     pub loading: bool,
-    pub team_view: TeamView,           // For tabbed mode: which team to show
-    pub selected_index: Option<usize>, // Selected player index (across all players)
-    pub focused: bool,                 // Whether panel has focus for selection highlighting
+    pub team_view: TeamView,
+    pub selected_index: Option<usize>,
+    pub scroll_offset: u16,
+    pub focused: bool,
 }
 
 /// BoxscoreDocument component - displays detailed game statistics
@@ -48,81 +48,32 @@ impl Component for BoxscoreDocument {
             loading: props.loading,
             team_view: props.team_view.clone(),
             selected_index: props.selected_index,
+            scroll_offset: props.scroll_offset,
             focused: props.focused,
         }))
     }
 }
 
-/// Widget for rendering boxscore panel
-struct BoxscoreDocumentWidget {
-    game_id: i64,
-    boxscore: Option<Boxscore>,
-    loading: bool,
-    team_view: TeamView,
-    selected_index: Option<usize>,
-    focused: bool,
+/// Document content for boxscore view
+pub struct BoxscoreDocumentContent {
+    pub game_id: i64,
+    pub boxscore: Boxscore,
+    pub team_view: TeamView,
 }
 
-impl ElementWidget for BoxscoreDocumentWidget {
-    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(format!(" Boxscore - Game {} ", self.game_id))
-            .style(Style::default().fg(Color::White));
-
-        let inner = block.inner(area);
-        block.render(area, buf);
-
-        if self.loading {
-            let loading_text = Paragraph::new("Loading boxscore...");
-            loading_text.render(inner, buf);
-            return;
-        }
-
-        if let Some(boxscore) = &self.boxscore {
-            self.render_boxscore(boxscore, inner, buf, config);
-        } else {
-            let error_text = Paragraph::new("Boxscore not available");
-            error_text.render(inner, buf);
+impl BoxscoreDocumentContent {
+    pub fn new(game_id: i64, boxscore: Boxscore, team_view: TeamView) -> Self {
+        Self {
+            game_id,
+            boxscore,
+            team_view,
         }
     }
 
-    fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(BoxscoreDocumentWidget {
-            game_id: self.game_id,
-            boxscore: self.boxscore.clone(),
-            loading: self.loading,
-            team_view: self.team_view.clone(),
-            selected_index: self.selected_index,
-            focused: self.focused,
-        })
-    }
-}
+    /// Build header section with game info
+    fn build_header(&self) -> Vec<DocumentElement> {
+        let boxscore = &self.boxscore;
 
-impl BoxscoreDocumentWidget {
-    fn render_boxscore(
-        &self,
-        boxscore: &Boxscore,
-        area: Rect,
-        buf: &mut Buffer,
-        config: &DisplayConfig,
-    ) {
-        // Split area into sections
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(5), // Header info
-                Constraint::Length(4), // Score
-                Constraint::Min(0),    // Player stats
-            ])
-            .split(area);
-
-        self.render_header(boxscore, chunks[0], buf);
-        self.render_score(boxscore, chunks[1], buf);
-        self.render_player_stats(boxscore, chunks[2], buf, config);
-    }
-
-    fn render_header(&self, boxscore: &Boxscore, area: Rect, buf: &mut Buffer) {
         let title = format!(
             "{} @ {}",
             boxscore.away_team.common_name.default, boxscore.home_team.common_name.default
@@ -151,433 +102,289 @@ impl BoxscoreDocumentWidget {
             String::new()
         };
 
-        let lines = vec![
-            Line::from(Span::styled(
-                title,
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )),
-            Line::from(date_venue),
-            Line::from(status_period),
-            Line::from(time_info),
-        ];
-
-        let paragraph = Paragraph::new(lines);
-        paragraph.render(area, buf);
+        vec![
+            DocumentElement::heading(1, &title),
+            DocumentElement::text(&date_venue),
+            DocumentElement::text(&status_period),
+            DocumentElement::text(&time_info),
+        ]
     }
 
-    fn render_score(&self, boxscore: &Boxscore, area: Rect, buf: &mut Buffer) {
-        let lines = vec![
-            Line::from(Span::styled(
-                "SCORE",
-                Style::default().add_modifier(Modifier::BOLD),
-            )),
-            Line::from(format!(
-                "{:<6} {:>3}",
-                boxscore.away_team.abbrev, boxscore.away_team.score
-            )),
-            Line::from(format!(
-                "{:<6} {:>3}",
-                boxscore.home_team.abbrev, boxscore.home_team.score
-            )),
-        ];
+    /// Build score section
+    fn build_score(&self) -> Vec<DocumentElement> {
+        let boxscore = &self.boxscore;
 
-        let paragraph = Paragraph::new(lines);
-        paragraph.render(area, buf);
-    }
-
-    fn render_player_stats(
-        &self,
-        boxscore: &Boxscore,
-        area: Rect,
-        buf: &mut Buffer,
-        config: &DisplayConfig,
-    ) {
-        // Determine if we have enough width for split screen (both teams side-by-side)
-        const SPLIT_SCREEN_MIN_WIDTH: u16 = 160;
-        let use_split_screen = area.width >= SPLIT_SCREEN_MIN_WIDTH;
-
-        if use_split_screen {
-            self.render_split_screen_stats(boxscore, area, buf, config);
-        } else {
-            self.render_tabbed_stats(boxscore, area, buf, config);
-        }
-    }
-
-    fn render_split_screen_stats(
-        &self,
-        boxscore: &Boxscore,
-        area: Rect,
-        buf: &mut Buffer,
-        config: &DisplayConfig,
-    ) {
-        // Calculate maximum player counts across both teams for unified section heights
-        let away = &boxscore.player_by_game_stats.away_team;
-        let home = &boxscore.player_by_game_stats.home_team;
-
-        let max_forwards_count = away.forwards.len().max(home.forwards.len());
-        let max_defense_count = away.defense.len().max(home.defense.len());
-        let max_goalies_count = away.goalies.len().max(home.goalies.len());
-
-        // Split horizontally for away (left) and home (right)
-        let teams = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area);
-
-        // Away team starts at index 0
-        let away_base = 0;
-        self.render_team_stats(
-            away,
-            &boxscore.away_team.abbrev,
-            "Away",
-            teams[0],
-            buf,
-            config,
-            away_base,
-            max_forwards_count,
-            max_defense_count,
-            max_goalies_count,
+        let score_text = format!(
+            "{}: {}  |  {}: {}",
+            boxscore.away_team.abbrev,
+            boxscore.away_team.score,
+            boxscore.home_team.abbrev,
+            boxscore.home_team.score
         );
 
-        // Home team starts after all away players
-        let home_base = away.forwards.len() + away.defense.len() + away.goalies.len();
-        self.render_team_stats(
-            home,
-            &boxscore.home_team.abbrev,
-            "Home",
-            teams[1],
-            buf,
-            config,
-            home_base,
-            max_forwards_count,
-            max_defense_count,
-            max_goalies_count,
-        );
+        vec![
+            DocumentElement::heading(2, "SCORE"),
+            DocumentElement::text(&score_text),
+        ]
     }
 
-    fn render_tabbed_stats(
+    /// Build forwards table for a team
+    fn build_forwards_table(
         &self,
-        boxscore: &Boxscore,
-        area: Rect,
-        buf: &mut Buffer,
-        config: &DisplayConfig,
-    ) {
-        // Render tabs at the top
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Length(3), Constraint::Min(0)])
-            .split(area);
-
-        let tab_titles = vec![
-            format!("{} (Away)", boxscore.away_team.abbrev),
-            format!("{} (Home)", boxscore.home_team.abbrev),
-        ];
-        let selected_tab = match self.team_view {
-            TeamView::Away => 0,
-            TeamView::Home => 1,
-        };
-
-        let tabs = Tabs::new(tab_titles)
-            .select(selected_tab)
-            .style(Style::default())
-            .highlight_style(
-                Style::default()
-                    .fg(config.selection_fg)
-                    .add_modifier(Modifier::BOLD),
-            );
-
-        tabs.render(chunks[0], buf);
-
-        // Render selected team's stats
-        match self.team_view {
-            TeamView::Away => {
-                let away = &boxscore.player_by_game_stats.away_team;
-                // In tabbed mode, use the team's own counts as max
-                self.render_team_stats(
-                    away,
-                    &boxscore.away_team.abbrev,
-                    "Away",
-                    chunks[1],
-                    buf,
-                    config,
-                    0, // Away team starts at 0
-                    away.forwards.len(),
-                    away.defense.len(),
-                    away.goalies.len(),
-                );
-            }
-            TeamView::Home => {
-                // Home team starts after all away players
-                let away = &boxscore.player_by_game_stats.away_team;
-                let home = &boxscore.player_by_game_stats.home_team;
-                let home_base = away.forwards.len() + away.defense.len() + away.goalies.len();
-                self.render_team_stats(
-                    home,
-                    &boxscore.home_team.abbrev,
-                    "Home",
-                    chunks[1],
-                    buf,
-                    config,
-                    home_base,
-                    home.forwards.len(),
-                    home.defense.len(),
-                    home.goalies.len(),
-                );
-            }
-        }
-    }
-
-    fn render_team_stats(
-        &self,
-        team_stats: &nhl_api::TeamPlayerStats,
+        forwards: &[SkaterStats],
         team_abbrev: &str,
         label: &str,
-        area: Rect,
-        buf: &mut Buffer,
-        config: &DisplayConfig,
-        base_index: usize, // Starting index for this team in global player list
-        max_forwards_count: usize, // Max forwards across both teams (for alignment)
-        max_defense_count: usize, // Max defense across both teams
-        max_goalies_count: usize, // Max goalies across both teams
-    ) {
-        let forwards_count = team_stats.forwards.len();
-        let defense_count = team_stats.defense.len();
-        let goalies_count = team_stats.goalies.len();
-
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: selected_index={:?}",
-            team_abbrev,
-            self.selected_index
-        );
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: actual_counts=(F:{}, D:{}, G:{}), max_counts=(F:{}, D:{}, G:{})",
-            team_abbrev,
-            forwards_count,
-            defense_count,
-            goalies_count,
-            max_forwards_count,
-            max_defense_count,
-            max_goalies_count
-        );
-
-        // Calculate global indices for each section
-        let forwards_start = base_index;
-        let forwards_end = forwards_start + forwards_count;
-        let defense_start = forwards_end;
-        let defense_end = defense_start + defense_count;
-        let goalies_start = defense_end;
-        let goalies_end = goalies_start + goalies_count;
-
-        // Calculate total content height using MAX counts for unified alignment
-        // Each table has: title (1) + sep (1) + column headers (1) + sep (1) + N data rows
-        let forwards_height = if max_forwards_count > 0 {
-            max_forwards_count + SECTION_CHROME_LINES
-        } else {
-            0
-        };
-        let defense_height = if max_defense_count > 0 {
-            max_defense_count + SECTION_CHROME_LINES
-        } else {
-            0
-        };
-        let goalies_height = if max_goalies_count > 0 {
-            max_goalies_count + SECTION_CHROME_LINES
-        } else {
-            0
-        };
-        let total_content_height = forwards_height + defense_height + goalies_height;
-
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: section_heights=(F:{}, D:{}, G:{}), total={}",
-            team_abbrev,
-            forwards_height,
-            defense_height,
-            goalies_height,
-            total_content_height
-        );
-
-        // Render all sections - no windowing, just render everything
-        let forwards_visible = max_forwards_count > 0;
-        let forwards_window_start = 0;
-        let forwards_window_end = forwards_count;
-
-        let defense_visible = max_defense_count > 0;
-        let defense_window_start = 0;
-        let defense_window_end = defense_count;
-
-        let goalies_visible = max_goalies_count > 0;
-        let goalies_window_start = 0;
-        let goalies_window_end = goalies_count;
-
-        // Calculate dynamic layout based on what's visible
-        // IMPORTANT: Use MAX counts (not windowed counts) to ensure both columns have identical heights
-        let mut constraints = Vec::new();
-
-        if forwards_visible {
-            // Use max_forwards_count to ensure both teams get same constraint height
-            let height = max_forwards_count + SECTION_CHROME_LINES;
-            constraints.push(Constraint::Length(height as u16));
-        }
-        if defense_visible {
-            // Add spacing before defense section if forwards was visible
-            if forwards_visible {
-                constraints.push(Constraint::Length(1)); // 1 line spacing
-            }
-            // Use max_defense_count to ensure both teams get same constraint height
-            let height = max_defense_count + SECTION_CHROME_LINES;
-            constraints.push(Constraint::Length(height as u16));
-        }
-        if goalies_visible {
-            // Add spacing before goalies section if defense was visible
-            if defense_visible {
-                constraints.push(Constraint::Length(1)); // 1 line spacing
-            }
-            // Use max_goalies_count to ensure both teams get same constraint height
-            let height = max_goalies_count + SECTION_CHROME_LINES;
-            constraints.push(Constraint::Length(height as u16));
+        table_id: &str,
+        focus: &FocusContext,
+    ) -> Option<DocumentElement> {
+        if forwards.is_empty() {
+            return None;
         }
 
-        if constraints.is_empty() {
-            // Nothing visible
-            return;
-        }
+        let columns = game_skater_columns();
+        let table = TableWidget::from_data(&columns, forwards.to_vec())
+            .with_header(format!("{} {} - Forwards ({})", team_abbrev, label, forwards.len()))
+            .with_focused_row(focus.focused_table_row(table_id))
+            .with_margin(0);
 
-        tracing::debug!(
-            "BOXSCORE RENDER [{}]: constraint_heights={:?}",
-            team_abbrev,
-            constraints
-                .iter()
-                .map(|c| match c {
-                    Constraint::Length(h) => *h,
-                    _ => 0,
-                })
-                .collect::<Vec<_>>()
-        );
-
-        let sections = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(constraints)
-            .split(area);
-
-        let mut section_idx = 0;
-
-        // Render Forwards if visible
-        if forwards_visible && forwards_window_end > forwards_window_start {
-            let windowed_data: Vec<_> =
-                team_stats.forwards[forwards_window_start..forwards_window_end].to_vec();
-
-            let (selected_row, focused) = if let Some(idx) = self.selected_index {
-                if idx >= forwards_start && idx < forwards_end {
-                    let row_in_section = idx - forwards_start;
-                    if row_in_section >= forwards_window_start
-                        && row_in_section < forwards_window_end
-                    {
-                        (Some(row_in_section - forwards_window_start), self.focused)
-                    } else {
-                        (None, false)
-                    }
-                } else {
-                    (None, false)
-                }
-            } else {
-                (None, false)
-            };
-
-            // TODO: Re-enable focus when TableWidget focus refactoring is complete
-            let table = SkaterStatsTableWidget::from_game_stats(windowed_data)
-                .with_header(format!("{} {} - Forwards", team_abbrev, label));
-            // .with_focused(focused);
-            // if let Some(row) = selected_row {
-            //     let link_col = table.find_first_link_column().unwrap_or(0);
-            //     table = table.with_selection(row, link_col);
-            // }
-            let _ = (selected_row, focused); // Suppress unused variable warnings
-
-            table.render(sections[section_idx], buf, config);
-            section_idx += 1;
-        }
-
-        // Render Defense if visible
-        if defense_visible && defense_window_end > defense_window_start {
-            // Skip spacer if forwards was visible
-            if forwards_visible {
-                section_idx += 1; // Skip the spacer constraint
-            }
-
-            let windowed_data: Vec<_> =
-                team_stats.defense[defense_window_start..defense_window_end].to_vec();
-
-            let (selected_row, focused) = if let Some(idx) = self.selected_index {
-                if idx >= defense_start && idx < defense_end {
-                    let row_in_section = idx - defense_start;
-                    if row_in_section >= defense_window_start && row_in_section < defense_window_end
-                    {
-                        (Some(row_in_section - defense_window_start), self.focused)
-                    } else {
-                        (None, false)
-                    }
-                } else {
-                    (None, false)
-                }
-            } else {
-                (None, false)
-            };
-
-            // TODO: Re-enable focus when TableWidget focus refactoring is complete
-            let table = SkaterStatsTableWidget::from_game_stats(windowed_data)
-                .with_header(format!("{} {} - Defense", team_abbrev, label));
-            // .with_focused(focused);
-            // if let Some(row) = selected_row {
-            //     let link_col = table.find_first_link_column().unwrap_or(0);
-            //     table = table.with_selection(row, link_col);
-            // }
-            let _ = (selected_row, focused); // Suppress unused variable warnings
-
-            table.render(sections[section_idx], buf, config);
-            section_idx += 1;
-        }
-
-        // Render Goalies if visible
-        if goalies_visible && goalies_window_end > goalies_window_start {
-            // Skip spacer if defense was visible
-            if defense_visible {
-                section_idx += 1; // Skip the spacer constraint
-            }
-
-            let windowed_data: Vec<_> =
-                team_stats.goalies[goalies_window_start..goalies_window_end].to_vec();
-
-            let (selected_row, focused) = if let Some(idx) = self.selected_index {
-                if idx >= goalies_start && idx < goalies_end {
-                    let row_in_section = idx - goalies_start;
-                    if row_in_section >= goalies_window_start && row_in_section < goalies_window_end
-                    {
-                        (Some(row_in_section - goalies_window_start), self.focused)
-                    } else {
-                        (None, false)
-                    }
-                } else {
-                    (None, false)
-                }
-            } else {
-                (None, false)
-            };
-
-            // TODO: Re-enable focus when TableWidget focus refactoring is complete
-            let table = GoalieStatsTableWidget::from_game_stats(windowed_data)
-                .with_header(format!("{} {} - Goalies", team_abbrev, label));
-            // .with_focused(focused);
-            // if let Some(row) = selected_row {
-            //     let link_col = table.find_first_link_column().unwrap_or(0);
-            //     table = table.with_selection(row, link_col);
-            // }
-            let _ = (selected_row, focused); // Suppress unused variable warnings
-
-            table.render(sections[section_idx], buf, config);
-        }
+        Some(DocumentElement::table(table_id, table))
     }
+
+    /// Build defense table for a team
+    fn build_defense_table(
+        &self,
+        defense: &[SkaterStats],
+        team_abbrev: &str,
+        label: &str,
+        table_id: &str,
+        focus: &FocusContext,
+    ) -> Option<DocumentElement> {
+        if defense.is_empty() {
+            return None;
+        }
+
+        let columns = game_skater_columns();
+        let table = TableWidget::from_data(&columns, defense.to_vec())
+            .with_header(format!("{} {} - Defense ({})", team_abbrev, label, defense.len()))
+            .with_focused_row(focus.focused_table_row(table_id))
+            .with_margin(0);
+
+        Some(DocumentElement::table(table_id, table))
+    }
+
+    /// Build goalies table for a team
+    fn build_goalies_table(
+        &self,
+        goalies: &[GoalieStats],
+        team_abbrev: &str,
+        label: &str,
+        table_id: &str,
+        focus: &FocusContext,
+    ) -> Option<DocumentElement> {
+        if goalies.is_empty() {
+            return None;
+        }
+
+        let columns = game_goalie_columns();
+        let table = TableWidget::from_data(&columns, goalies.to_vec())
+            .with_header(format!("{} {} - Goalies ({})", team_abbrev, label, goalies.len()))
+            .with_focused_row(focus.focused_table_row(table_id))
+            .with_margin(0);
+
+        Some(DocumentElement::table(table_id, table))
+    }
+
+    /// Build player stats section for one team
+    fn build_team_stats(&self, focus: &FocusContext, is_away: bool) -> Vec<DocumentElement> {
+        let boxscore = &self.boxscore;
+        let (team_stats, team_abbrev, label, prefix) = if is_away {
+            (
+                &boxscore.player_by_game_stats.away_team,
+                &boxscore.away_team.abbrev,
+                "Away",
+                "away",
+            )
+        } else {
+            (
+                &boxscore.player_by_game_stats.home_team,
+                &boxscore.home_team.abbrev,
+                "Home",
+                "home",
+            )
+        };
+
+        let mut elements = Vec::new();
+
+        // Forwards
+        if let Some(table) = self.build_forwards_table(
+            &team_stats.forwards,
+            team_abbrev,
+            label,
+            &format!("{}_forwards", prefix),
+            focus,
+        ) {
+            elements.push(table);
+            elements.push(DocumentElement::spacer(1));
+        }
+
+        // Defense
+        if let Some(table) = self.build_defense_table(
+            &team_stats.defense,
+            team_abbrev,
+            label,
+            &format!("{}_defense", prefix),
+            focus,
+        ) {
+            elements.push(table);
+            elements.push(DocumentElement::spacer(1));
+        }
+
+        // Goalies
+        if let Some(table) = self.build_goalies_table(
+            &team_stats.goalies,
+            team_abbrev,
+            label,
+            &format!("{}_goalies", prefix),
+            focus,
+        ) {
+            elements.push(table);
+        }
+
+        elements
+    }
+}
+
+impl Document for BoxscoreDocumentContent {
+    fn build(&self, focus: &FocusContext) -> Vec<DocumentElement> {
+        let mut builder = DocumentBuilder::new();
+
+        // Header section
+        for elem in self.build_header() {
+            builder = builder.element(elem);
+        }
+        builder = builder.spacer(1);
+
+        // Score section
+        for elem in self.build_score() {
+            builder = builder.element(elem);
+        }
+        builder = builder.spacer(1);
+
+        // Player stats - show based on team_view (tabbed mode for narrow terminals)
+        // For now, show both teams stacked vertically
+        // Away team
+        builder = builder.heading(2, &format!("{} (Away)", self.boxscore.away_team.abbrev));
+        for elem in self.build_team_stats(focus, true) {
+            builder = builder.element(elem);
+        }
+        builder = builder.spacer(1);
+
+        // Home team
+        builder = builder.heading(2, &format!("{} (Home)", self.boxscore.home_team.abbrev));
+        for elem in self.build_team_stats(focus, false) {
+            builder = builder.element(elem);
+        }
+
+        builder.build()
+    }
+
+    fn title(&self) -> String {
+        format!(
+            "{} @ {} - Game {}",
+            self.boxscore.away_team.abbrev, self.boxscore.home_team.abbrev, self.game_id
+        )
+    }
+
+    fn id(&self) -> String {
+        format!("boxscore_{}", self.game_id)
+    }
+}
+
+/// Column definitions for game-level skater stats
+fn game_skater_columns() -> Vec<ColumnDef<SkaterStats>> {
+    vec![
+        ColumnDef::new("Player", 20, Alignment::Left, |s: &SkaterStats| {
+            CellValue::PlayerLink {
+                display: s.name.default.clone(),
+                player_id: s.player_id,
+            }
+        }),
+        ColumnDef::new("Pos", 3, Alignment::Center, |s: &SkaterStats| {
+            CellValue::Text(s.position.to_string())
+        }),
+        ColumnDef::new("G", 2, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.goals.to_string())
+        }),
+        ColumnDef::new("A", 2, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.assists.to_string())
+        }),
+        ColumnDef::new("PTS", 3, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.points.to_string())
+        }),
+        ColumnDef::new("+/-", 3, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(format!("{:+}", s.plus_minus))
+        }),
+        ColumnDef::new("SOG", 3, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.sog.to_string())
+        }),
+        ColumnDef::new("Hits", 4, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.hits.to_string())
+        }),
+        ColumnDef::new("Blk", 3, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.blocked_shots.to_string())
+        }),
+        ColumnDef::new("PIM", 3, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.pim.to_string())
+        }),
+        ColumnDef::new("FO%", 5, Alignment::Right, |s: &SkaterStats| {
+            if s.faceoff_winning_pctg > 0.0 {
+                CellValue::Text(format!("{:.1}", s.faceoff_winning_pctg * 100.0))
+            } else {
+                CellValue::Text("-".to_string())
+            }
+        }),
+        ColumnDef::new("TOI", 5, Alignment::Right, |s: &SkaterStats| {
+            CellValue::Text(s.toi.clone())
+        }),
+    ]
+}
+
+/// Column definitions for game-level goalie stats
+fn game_goalie_columns() -> Vec<ColumnDef<GoalieStats>> {
+    vec![
+        ColumnDef::new("Player", 20, Alignment::Left, |g: &GoalieStats| {
+            CellValue::PlayerLink {
+                display: g.name.default.clone(),
+                player_id: g.player_id,
+            }
+        }),
+        ColumnDef::new("SA", 3, Alignment::Right, |g: &GoalieStats| {
+            CellValue::Text(g.shots_against.to_string())
+        }),
+        ColumnDef::new("GA", 2, Alignment::Right, |g: &GoalieStats| {
+            CellValue::Text(g.goals_against.to_string())
+        }),
+        ColumnDef::new("SV", 3, Alignment::Right, |g: &GoalieStats| {
+            CellValue::Text(g.saves.to_string())
+        }),
+        ColumnDef::new("SV%", 5, Alignment::Right, |g: &GoalieStats| {
+            if let Some(pct) = g.save_pctg {
+                CellValue::Text(format!("{:.3}", pct))
+            } else {
+                CellValue::Text("-".to_string())
+            }
+        }),
+        ColumnDef::new("TOI", 6, Alignment::Right, |g: &GoalieStats| {
+            CellValue::Text(g.toi.clone())
+        }),
+        ColumnDef::new("PIM", 3, Alignment::Right, |g: &GoalieStats| {
+            if let Some(pim) = g.pim {
+                CellValue::Text(pim.to_string())
+            } else {
+                CellValue::Text("-".to_string())
+            }
+        }),
+    ]
 }
 
 fn format_game_state(state: &nhl_api::GameState) -> &str {
@@ -601,224 +408,166 @@ fn format_period_text(number: &i32, period_type: nhl_api::PeriodType) -> String 
     }
 }
 
+/// Widget for rendering boxscore document
+struct BoxscoreDocumentWidget {
+    game_id: i64,
+    boxscore: Option<Boxscore>,
+    loading: bool,
+    team_view: TeamView,
+    selected_index: Option<usize>,
+    scroll_offset: u16,
+    focused: bool,
+}
+
+impl ElementWidget for BoxscoreDocumentWidget {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+        if self.loading {
+            let text = format!("Loading boxscore for game {}...", self.game_id);
+            let widget = Paragraph::new(text)
+                .block(Block::default().borders(Borders::ALL).title("Boxscore"));
+            ratatui::widgets::Widget::render(widget, area, buf);
+            return;
+        }
+
+        let Some(boxscore) = &self.boxscore else {
+            let text = format!("Boxscore not available for game {}", self.game_id);
+            let widget = Paragraph::new(text)
+                .block(Block::default().borders(Borders::ALL).title("Boxscore"));
+            ratatui::widgets::Widget::render(widget, area, buf);
+            return;
+        };
+
+        // Render border/title
+        let title = format!(
+            "Game {} - ↑↓: Navigate | Enter: View Player | ESC: Back",
+            self.game_id
+        );
+        let block = Block::default().borders(Borders::ALL).title(title);
+        ratatui::widgets::Widget::render(block, area, buf);
+
+        // Create inner area (inside the border)
+        let inner_area = Rect::new(
+            area.x + 1,
+            area.y + 1,
+            area.width.saturating_sub(2),
+            area.height.saturating_sub(2),
+        );
+
+        if inner_area.width == 0 || inner_area.height == 0 {
+            return;
+        }
+
+        // Create document and render with DocumentView
+        let doc = BoxscoreDocumentContent::new(
+            self.game_id,
+            boxscore.clone(),
+            self.team_view.clone(),
+        );
+
+        let mut view = DocumentView::new(Arc::new(doc), inner_area.height);
+
+        // Apply focus state
+        if let Some(idx) = self.selected_index {
+            view.focus_by_index(idx);
+        }
+
+        // Apply scroll offset
+        view.set_scroll_offset(self.scroll_offset);
+
+        // Render the document
+        view.render(inner_area, buf, config);
+    }
+
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
+        Box::new(BoxscoreDocumentWidget {
+            game_id: self.game_id,
+            boxscore: self.boxscore.clone(),
+            loading: self.loading,
+            team_view: self.team_view.clone(),
+            selected_index: self.selected_index,
+            scroll_offset: self.scroll_offset,
+            focused: self.focused,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::widgets::testing::test_config;
+    use crate::tui::document::FocusContext;
     use nhl_api::{
-        Boxscore, BoxscoreTeam, GameClock, GameState, GoalieStats, LocalizedString,
+        Boxscore, BoxscoreTeam, GameClock, GameState, GoalieDecision, GoalieStats, LocalizedString,
         PeriodDescriptor, PeriodType, PlayerByGameStats, Position, SkaterStats, TeamPlayerStats,
     };
-    use ratatui::buffer::Buffer;
-    use ratatui::layout::Rect;
 
     /// Create a test skater with minimal data
     fn create_test_skater(name: &str, sweater_number: i32, position: Position) -> SkaterStats {
         SkaterStats {
-            player_id: 0,
+            player_id: sweater_number as i64,
             name: LocalizedString {
                 default: name.to_string(),
             },
             sweater_number,
             position,
-            goals: 0,
-            assists: 0,
-            points: 0,
-            plus_minus: 0,
-            pim: 0,
-            hits: 0,
+            goals: 1,
+            assists: 2,
+            points: 3,
+            plus_minus: 1,
+            pim: 2,
+            hits: 3,
             power_play_goals: 0,
-            sog: 0,
-            faceoff_winning_pctg: 0.0,
-            toi: "00:00".to_string(),
-            blocked_shots: 0,
-            shifts: 0,
-            giveaways: 0,
-            takeaways: 0,
+            sog: 4,
+            faceoff_winning_pctg: 0.5,
+            toi: "15:30".to_string(),
+            blocked_shots: 1,
+            shifts: 20,
+            giveaways: 1,
+            takeaways: 2,
         }
     }
 
     /// Create a test goalie with minimal data
     fn create_test_goalie(name: &str, sweater_number: i32) -> GoalieStats {
         GoalieStats {
-            player_id: 0,
+            player_id: sweater_number as i64,
             name: LocalizedString {
                 default: name.to_string(),
             },
             sweater_number,
             position: Position::Goalie,
-            even_strength_shots_against: "0".to_string(),
-            power_play_shots_against: "0".to_string(),
+            even_strength_shots_against: "20".to_string(),
+            power_play_shots_against: "5".to_string(),
             shorthanded_shots_against: "0".to_string(),
-            save_shots_against: "0".to_string(),
-            save_pctg: Some(0.0),
-            even_strength_goals_against: 0,
-            power_play_goals_against: 0,
+            save_shots_against: "25".to_string(),
+            save_pctg: Some(0.920),
+            even_strength_goals_against: 1,
+            power_play_goals_against: 1,
             shorthanded_goals_against: 0,
             pim: Some(0),
-            goals_against: 0,
-            toi: "00:00".to_string(),
-            starter: Some(false),
-            decision: None,
-            shots_against: 0,
-            saves: 0,
+            goals_against: 2,
+            toi: "60:00".to_string(),
+            starter: Some(true),
+            decision: Some(GoalieDecision::Win),
+            shots_against: 25,
+            saves: 23,
         }
     }
 
-    /// Regression test for constraint alignment bug
-    ///
-    /// Previously, the constraint heights were calculated using windowed row counts,
-    /// causing teams with different player counts to have misaligned sections.
-    ///
-    /// This test verifies that when NSH has 11 forwards and PIT has 12 forwards,
-    /// the "Defense" section header appears at the same Y coordinate in both columns.
-    #[test]
-    fn test_constraint_alignment_with_different_player_counts() {
-        // Create NSH with 11 forwards, 7 defense, 2 goalies
-        let nsh_forwards = (1..=11)
-            .map(|i| create_test_skater(&format!("NSH F{}", i), i, Position::LeftWing))
-            .collect();
-        let nsh_defense = (12..=18)
-            .map(|i| create_test_skater(&format!("NSH D{}", i - 11), i, Position::Defense))
-            .collect();
-        let nsh_goalies = vec![
-            create_test_goalie("NSH G1", 30),
-            create_test_goalie("NSH G2", 31),
-        ];
-
-        // Create PIT with 12 forwards, 6 defense, 2 goalies (different forward count!)
-        let pit_forwards = (1..=12)
-            .map(|i| create_test_skater(&format!("PIT F{}", i), i, Position::LeftWing))
-            .collect();
-        let pit_defense = (13..=18)
-            .map(|i| create_test_skater(&format!("PIT D{}", i - 12), i, Position::Defense))
-            .collect();
-        let pit_goalies = vec![
-            create_test_goalie("PIT G1", 30),
-            create_test_goalie("PIT G2", 31),
-        ];
-
-        let boxscore = Boxscore {
-            id: 2024020001,
-            season: 20242025,
-            game_type: nhl_api::GameType::RegularSeason,
-            limited_scoring: false,
-            game_date: "2024-10-04".to_string(),
-            venue: LocalizedString {
-                default: "Test Arena".to_string(),
-            },
-            venue_location: LocalizedString {
-                default: "Test City".to_string(),
-            },
-            start_time_utc: "2024-10-04T19:00:00Z".to_string(),
-            eastern_utc_offset: "-04:00".to_string(),
-            venue_utc_offset: "-04:00".to_string(),
-            tv_broadcasts: vec![],
-            game_state: GameState::Live,
-            game_schedule_state: "OK".to_string(),
-            period_descriptor: PeriodDescriptor {
-                number: 2,
-                period_type: PeriodType::Regulation,
-                max_regulation_periods: 3,
-            },
-            special_event: None,
-            away_team: BoxscoreTeam {
-                id: 18,
-                common_name: LocalizedString {
-                    default: "Predators".to_string(),
-                },
-                abbrev: "NSH".to_string(),
-                score: 2,
-                sog: 15,
-                logo: "".to_string(),
-                dark_logo: "".to_string(),
-                place_name: LocalizedString {
-                    default: "Nashville".to_string(),
-                },
-                place_name_with_preposition: LocalizedString {
-                    default: "Nashville".to_string(),
-                },
-            },
-            home_team: BoxscoreTeam {
-                id: 5,
-                common_name: LocalizedString {
-                    default: "Penguins".to_string(),
-                },
-                abbrev: "PIT".to_string(),
-                score: 3,
-                sog: 18,
-                logo: "".to_string(),
-                dark_logo: "".to_string(),
-                place_name: LocalizedString {
-                    default: "Pittsburgh".to_string(),
-                },
-                place_name_with_preposition: LocalizedString {
-                    default: "Pittsburgh".to_string(),
-                },
-            },
-            clock: GameClock {
-                time_remaining: "10:15".to_string(),
-                seconds_remaining: 615,
-                running: true,
-                in_intermission: false,
-            },
-            player_by_game_stats: PlayerByGameStats {
-                away_team: TeamPlayerStats {
-                    forwards: nsh_forwards,
-                    defense: nsh_defense,
-                    goalies: nsh_goalies,
-                },
-                home_team: TeamPlayerStats {
-                    forwards: pit_forwards,
-                    defense: pit_defense,
-                    goalies: pit_goalies,
-                },
-            },
-        };
-
-        // Render the panel to see the Forwards and Defense sections
-        let panel = BoxscoreDocument;
-        let props = BoxscoreDocumentProps {
-            game_id: 2024020001,
-            boxscore: Some(boxscore),
-            loading: false,
-            team_view: TeamView::Away,
-            selected_index: None,
-            focused: true,
-        };
-
-        let element = panel.view(&props, &());
-
-        // Extract widget and render to buffer
-        let widget = match element {
-            Element::Widget(w) => w,
-            _ => panic!("Expected Widget element"),
-        };
-
-        let mut buf = Buffer::empty(Rect::new(0, 0, 160, 50));
-        let config = test_config();
-
-        // The key regression test: this should NOT panic
-        // With the bug, teams with different player counts would create different constraint heights
-        // causing layout issues. After the fix, both teams use max_counts for constraints.
-        widget.render(buf.area, &mut buf, &config);
-
-        // Verify something was rendered (buffer is not empty)
-        let has_content = (0..50).any(|y| (0..160).any(|x| buf[(x, y)].symbol() != " "));
-
-        assert!(has_content, "Boxscore panel should render some content");
-    }
-}
-
-// TODO: Re-enable tests once we have proper test fixtures for Boxscore type
-// The nhl_api types have changed and these tests need to be updated
-/*
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use nhl_api::{BoxscoreTeam, GameClock, GameState, LocalizedString, PeriodDescriptor, PlayerByGameStats, TeamPlayerStats};
-
     fn create_test_boxscore() -> Boxscore {
+        let away_forwards = vec![
+            create_test_skater("A. Forward1", 10, Position::Center),
+            create_test_skater("A. Forward2", 11, Position::LeftWing),
+        ];
+        let away_defense = vec![create_test_skater("A. Defense1", 20, Position::Defense)];
+        let away_goalies = vec![create_test_goalie("A. Goalie", 30)];
+
+        let home_forwards = vec![
+            create_test_skater("H. Forward1", 12, Position::Center),
+            create_test_skater("H. Forward2", 13, Position::RightWing),
+        ];
+        let home_defense = vec![create_test_skater("H. Defense1", 21, Position::Defense)];
+        let home_goalies = vec![create_test_goalie("H. Goalie", 31)];
+
         Boxscore {
             id: 2024020001,
             season: 20242025,
@@ -835,10 +584,10 @@ mod tests {
             eastern_utc_offset: "-04:00".to_string(),
             venue_utc_offset: "-04:00".to_string(),
             tv_broadcasts: vec![],
-            game_state: GameState::Live,
+            game_state: GameState::Final,
             game_schedule_state: "OK".to_string(),
             period_descriptor: PeriodDescriptor {
-                number: 2,
+                number: 3,
                 period_type: PeriodType::Regulation,
                 max_regulation_periods: 3,
             },
@@ -849,10 +598,10 @@ mod tests {
                     default: "Devils".to_string(),
                 },
                 abbrev: "NJD".to_string(),
-                score: 2,
-                sog: 15,
-                logo: "".to_string(),
-                dark_logo: "".to_string(),
+                score: 3,
+                sog: 30,
+                logo: String::new(),
+                dark_logo: String::new(),
                 place_name: LocalizedString {
                     default: "New Jersey".to_string(),
                 },
@@ -866,10 +615,10 @@ mod tests {
                     default: "Sabres".to_string(),
                 },
                 abbrev: "BUF".to_string(),
-                score: 1,
-                sog: 12,
-                logo: "".to_string(),
-                dark_logo: "".to_string(),
+                score: 2,
+                sog: 25,
+                logo: String::new(),
+                dark_logo: String::new(),
                 place_name: LocalizedString {
                     default: "Buffalo".to_string(),
                 },
@@ -878,62 +627,124 @@ mod tests {
                 },
             },
             clock: GameClock {
-                time_remaining: "10:15".to_string(),
-                seconds_remaining: 615,
-                running: true,
+                time_remaining: "00:00".to_string(),
+                seconds_remaining: 0,
+                running: false,
                 in_intermission: false,
             },
             player_by_game_stats: PlayerByGameStats {
                 away_team: TeamPlayerStats {
-                    forwards: vec![],
-                    defense: vec![],
-                    goalies: vec![],
+                    forwards: away_forwards,
+                    defense: away_defense,
+                    goalies: away_goalies,
                 },
                 home_team: TeamPlayerStats {
-                    forwards: vec![],
-                    defense: vec![],
-                    goalies: vec![],
+                    forwards: home_forwards,
+                    defense: home_defense,
+                    goalies: home_goalies,
                 },
             },
         }
     }
 
     #[test]
-    fn test_boxscore_document_renders() {
-        let document = BoxscoreDocument;
-        let props = BoxscoreDocumentProps {
-            game_id: 2024020001,
-            boxscore: Some(create_test_boxscore()),
-            loading: false,
-        };
+    fn test_document_builds_with_data() {
+        let boxscore = create_test_boxscore();
+        let doc = BoxscoreDocumentContent::new(2024020001, boxscore, TeamView::Away);
 
-        let element = document.view(&props, &());
+        let elements = doc.build(&FocusContext::default());
 
-        match element {
-            Element::Widget(_) => {
-                // Widget created successfully
-            }
-            _ => panic!("Expected widget element"),
-        }
+        // Should have header, score, and player stats sections
+        assert!(!elements.is_empty());
     }
 
     #[test]
-    fn test_boxscore_document_loading() {
-        let document = BoxscoreDocument;
-        let props = BoxscoreDocumentProps {
+    fn test_document_metadata() {
+        let boxscore = create_test_boxscore();
+        let doc = BoxscoreDocumentContent::new(2024020001, boxscore, TeamView::Away);
+
+        assert_eq!(doc.title(), "NJD @ BUF - Game 2024020001");
+        assert_eq!(doc.id(), "boxscore_2024020001");
+    }
+
+    #[test]
+    fn test_focusable_positions() {
+        let boxscore = create_test_boxscore();
+        let doc = BoxscoreDocumentContent::new(2024020001, boxscore, TeamView::Away);
+
+        let positions = doc.focusable_positions();
+
+        // Should have focusable positions for all players
+        // Away: 2 forwards + 1 defense + 1 goalie = 4
+        // Home: 2 forwards + 1 defense + 1 goalie = 4
+        // Total = 8
+        assert_eq!(positions.len(), 8);
+    }
+
+    #[test]
+    fn test_loading_state_renders() {
+        let widget = BoxscoreDocumentWidget {
             game_id: 2024020001,
             boxscore: None,
             loading: true,
+            team_view: TeamView::Away,
+            selected_index: None,
+            scroll_offset: 0,
+            focused: true,
         };
 
-        let element = document.view(&props, &());
+        let area = Rect::new(0, 0, 80, 30);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
 
-        match element {
-            Element::Widget(_) => {
-                // Widget created successfully
-            }
-            _ => panic!("Expected widget element"),
-        }
+        widget.render(area, &mut buf, &config);
+
+        // Should render without panic
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_no_boxscore_renders() {
+        let widget = BoxscoreDocumentWidget {
+            game_id: 2024020001,
+            boxscore: None,
+            loading: false,
+            team_view: TeamView::Away,
+            selected_index: None,
+            scroll_offset: 0,
+            focused: true,
+        };
+
+        let area = Rect::new(0, 0, 80, 30);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &config);
+
+        // Should render without panic
+        assert_eq!(*buf.area(), area);
+    }
+
+    #[test]
+    fn test_boxscore_renders() {
+        let boxscore = create_test_boxscore();
+        let widget = BoxscoreDocumentWidget {
+            game_id: 2024020001,
+            boxscore: Some(boxscore),
+            loading: false,
+            team_view: TeamView::Away,
+            selected_index: None,
+            scroll_offset: 0,
+            focused: true,
+        };
+
+        let area = Rect::new(0, 0, 100, 50);
+        let mut buf = Buffer::empty(area);
+        let config = DisplayConfig::default();
+
+        widget.render(area, &mut buf, &config);
+
+        // Should render without panic
+        assert_eq!(*buf.area(), area);
     }
 }
-*/
