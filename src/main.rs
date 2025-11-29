@@ -135,7 +135,8 @@ fn init_logging(log_level: &str, log_file: &str) {
     };
     let file = match std::fs::OpenOptions::new()
         .create(true)
-        .append(true)
+        .write(true)
+        .truncate(true)
         .open(log_file)
     {
         Ok(f) => f,
