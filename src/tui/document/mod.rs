@@ -811,12 +811,12 @@ mod tests {
 
         view.render(area, &mut buf, &config);
 
-        // Unfocused link has no prefix
+        // Unfocused link has "  " prefix for alignment
         assert_buffer(
             &buf,
             &[
                 "Before",
-                "Click Me",
+                "  Click Me",
                 "After",
             ],
         );

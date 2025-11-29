@@ -14,11 +14,11 @@ use crate::config::DisplayConfig;
 use crate::layout_constants::SCORE_BOX_WIDTH;
 use crate::tui::action::{Action, ComponentMessageTrait};
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
-use crate::tui::document::{Document, FocusContext};
+//use crate::tui::document::{Document};
 use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::widgets::{GameBox, GameState as WidgetGameState};
 
-use super::scores_grid_document::ScoresGridDocument;
+//use super::scores_grid_document::ScoresGridDocument;
 //
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 //

@@ -1,24 +1,89 @@
-use crate::config::Config;
-use crate::tui::widgets::{ListModalWidget, SettingsListWidget};
-use crate::tui::{
-    component::{Component, Element},
-    SettingsCategory,
-};
+//! Settings tab component - displays configuration settings
+//!
+//! Uses the document system to display settings as focusable links.
+//! Settings can be toggled (booleans) or edited (strings/numbers).
 
-use super::{TabItem, TabbedPanel, TabbedPanelProps};
+use std::any::Any;
+use std::sync::Arc;
+
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use tracing::debug;
+
+use crate::config::{Config, DisplayConfig};
+use crate::tui::action::ComponentMessageTrait;
+use crate::tui::component::{Component, Effect, Element, ElementWidget};
+use crate::tui::components::{SettingsDocument, TabItem, TabbedPanel, TabbedPanelProps};
+use crate::tui::document::{DocumentView, FocusableId};
+use crate::tui::document_nav::DocumentNavState;
+use crate::tui::settings_helpers::ModalOption;
+use crate::tui::SettingsCategory;
 
 /// Props for SettingsTab component
 #[derive(Clone)]
 pub struct SettingsTabProps {
     pub config: Config,
     pub selected_category: SettingsCategory,
-    pub selected_setting_index: usize,
-    pub settings_mode: bool,
     pub focused: bool,
-    pub editing: bool,
-    pub edit_buffer: String,
-    pub modal_open: bool,
-    pub modal_selected_index: usize,
+}
+
+/// Modal navigation messages
+#[derive(Clone, Debug, PartialEq)]
+pub enum ModalMsg {
+    Up,
+    Down,
+    Confirm,
+    Cancel,
+}
+
+/// Modal state for list selections (log_level, theme)
+#[derive(Debug, Clone)]
+pub struct ModalState {
+    pub options: Vec<ModalOption>,
+    pub selected_index: usize,
+    pub setting_key: String,
+    pub position_x: u16,
+    pub position_y: u16,
+}
+
+/// State for SettingsTab component
+#[derive(Debug, Clone, Default)]
+pub struct SettingsTabState {
+    /// Document navigation state for the current category
+    pub doc_nav: DocumentNavState,
+    /// Modal state for list selections (log_level, theme)
+    pub modal: Option<ModalState>,
+}
+
+/// Messages that can be sent to the Settings tab
+#[derive(Clone, Debug)]
+pub enum SettingsTabMsg {
+    /// Document navigation
+    DocNav(crate::tui::document_nav::DocumentNavMsg),
+    /// Update viewport height
+    UpdateViewportHeight(u16),
+    /// Change category (triggered by tab navigation)
+    SetCategory(SettingsCategory),
+    /// Activate the currently focused setting (includes config for modal initialization)
+    ActivateSetting(Config),
+    /// Modal navigation
+    Modal(ModalMsg),
+}
+
+impl ComponentMessageTrait for SettingsTabMsg {
+    fn apply(&self, state: &mut dyn Any) -> Effect {
+        if let Some(settings_state) = state.downcast_mut::<SettingsTabState>() {
+            let mut component = SettingsTab;
+            let msg = self.clone();
+            component.update(msg, settings_state)
+        } else {
+            Effect::None
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
+        Box::new(self.clone())
+    }
 }
 
 /// SettingsTab component - displays settings with category tabs
@@ -26,56 +91,184 @@ pub struct SettingsTab;
 
 impl Component for SettingsTab {
     type Props = SettingsTabProps;
-    type State = ();
-    type Message = ();
+    type State = SettingsTabState;
+    type Message = SettingsTabMsg;
 
-    fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        let base = self.render_category_tabs(props);
+    fn init(props: &Self::Props) -> Self::State {
+        use crate::tui::components::SettingsDocument;
+        use crate::tui::document::Document;
 
-        // If modal is open, wrap with overlay
-        if props.modal_open {
-            self.render_with_modal(base, props)
-        } else {
-            base
+        // Create document and populate focusable metadata
+        let doc = SettingsDocument::new(props.selected_category, props.config.clone());
+        let mut state = SettingsTabState::default();
+        state.doc_nav.focusable_positions = doc.focusable_positions();
+        state.doc_nav.focusable_ids = doc.focusable_ids();
+        state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
+        state
+    }
+
+    fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
+        use crate::tui::action::{Action, SettingsAction};
+        use crate::tui::document::FocusableId;
+
+        match msg {
+            SettingsTabMsg::DocNav(nav_msg) => {
+                crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
+            }
+            SettingsTabMsg::UpdateViewportHeight(height) => {
+                state.doc_nav.viewport_height = height;
+                Effect::None
+            }
+            SettingsTabMsg::SetCategory(_category) => {
+//                use crate::tui::components::SettingsDocument;
+
+                // Category changed - reset document state and rebuild focusable metadata
+                state.doc_nav = DocumentNavState::default();
+
+                // Need to get config - but we don't have props here!
+                // This will be populated by the reducer which has access to the config
+                // For now, just reset the state - the reducer will trigger a re-init
+                Effect::None
+            }
+            SettingsTabMsg::ActivateSetting(config) => {
+                use crate::tui::settings_helpers::{find_initial_modal_index, get_setting_modal_options};
+
+                // Get the currently focused setting link
+                if let Some(focus_idx) = state.doc_nav.focus_index {
+                    if let Some(FocusableId::Link(link_id)) = state.doc_nav.focusable_ids.get(focus_idx) {
+                        // Parse the link ID which is the setting key (e.g., "log_level", "theme")
+
+                        // Determine if this is a toggle, modal, or other action based on the setting
+                        match link_id.as_str() {
+                            "use_unicode" | "western_teams_first" => {
+                                // Boolean settings - toggle them
+                                return Effect::Action(Action::SettingsAction(SettingsAction::ToggleBoolean(link_id.clone())));
+                            }
+                            "log_level" | "theme" => {
+                                // List selection settings - open modal
+                                let options = get_setting_modal_options(link_id);
+                                let selected_index = find_initial_modal_index(&config, link_id);
+
+                                // Calculate modal position (center of focused item)
+                                let position_y = state.doc_nav.focusable_positions
+                                    .get(focus_idx)
+                                    .copied()
+                                    .unwrap_or(0);
+                                let position_x = 10; // Fixed x position for now
+
+                                state.modal = Some(ModalState {
+                                    options,
+                                    selected_index,
+                                    setting_key: link_id.clone(),
+                                    position_x,
+                                    position_y,
+                                });
+
+                                return Effect::None;
+                            }
+                            _ => {
+                                // Other settings - TODO: implement text editing
+                                debug!("TODO: Implement editing for setting: {}", link_id);
+                                return Effect::None;
+                            }
+                        }
+                    }
+                }
+                Effect::None
+            }
+            SettingsTabMsg::Modal(modal_msg) => {
+                if let Some(modal) = &mut state.modal {
+                    match modal_msg {
+                        ModalMsg::Up => {
+                            modal.selected_index = modal.selected_index.saturating_sub(1);
+                            Effect::None
+                        }
+                        ModalMsg::Down => {
+                            modal.selected_index = (modal.selected_index + 1).min(modal.options.len().saturating_sub(1));
+                            Effect::None
+                        }
+                        ModalMsg::Cancel => {
+                            state.modal = None;
+                            Effect::None
+                        }
+                        ModalMsg::Confirm => {
+                            // Get the selected option's ID (not display name)
+                            let selected_id = modal.options.get(modal.selected_index)
+                                .map(|opt| opt.id.clone())
+                                .unwrap_or_default();
+                            let setting_key = modal.setting_key.clone();
+
+                            // Close the modal
+                            state.modal = None;
+
+                            // Dispatch action to update the setting
+                            Effect::Action(Action::SettingsAction(SettingsAction::UpdateSetting {
+                                key: setting_key,
+                                value: selected_id,
+                            }))
+                        }
+                    }
+                } else {
+                    Effect::None
+                }
+            }
         }
     }
-}
 
-impl SettingsTab {
-    /// Render category tabs using TabbedPanel
-    fn render_category_tabs(&self, props: &SettingsTabProps) -> Element {
+    fn view(&self, props: &Self::Props, state: &Self::State) -> Element {
         // Create tabs for each category
         let tabs = vec![
             TabItem::new(
                 "logging",
                 "Logging",
-                self.render_settings_list(SettingsCategory::Logging, props),
+                self.render_settings_document(SettingsCategory::Logging, props, state),
             ),
             TabItem::new(
                 "display",
                 "Display",
-                self.render_settings_list(SettingsCategory::Display, props),
+                self.render_settings_document(SettingsCategory::Display, props, state),
             ),
             TabItem::new(
                 "data",
                 "Data",
-                self.render_settings_list(SettingsCategory::Data, props),
+                self.render_settings_document(SettingsCategory::Data, props, state),
             ),
         ];
 
         // Active key based on selected category
         let active_key = self.category_to_key(props.selected_category);
 
-        TabbedPanel.view(
+        // Create the base element (tabbed panel)
+        let base_element = TabbedPanel.view(
             &TabbedPanelProps {
                 active_key,
                 tabs,
-                focused: props.focused && !props.settings_mode,
+                focused: props.focused,
             },
             &(),
-        )
-    }
+        );
 
+        // If modal is open, wrap in a widget that renders both the base and the modal
+        if let Some(modal) = &state.modal {
+            // Extract display names for the modal widget
+            let display_names: Vec<String> = modal.options.iter()
+                .map(|opt| opt.display_name.clone())
+                .collect();
+
+            Element::Widget(Box::new(SettingsTabWithModal {
+                base_element,
+                modal_options: display_names,
+                modal_selected_index: modal.selected_index,
+                modal_position_x: modal.position_x,
+                modal_position_y: modal.position_y,
+            }))
+        } else {
+            base_element
+        }
+    }
+}
+
+impl SettingsTab {
     /// Convert category to tab key
     fn category_to_key(&self, category: SettingsCategory) -> String {
         match category {
@@ -85,77 +278,142 @@ impl SettingsTab {
         }
     }
 
-    /// Render the settings list for a category
-    fn render_settings_list(
+    /// Render the settings document for a category
+    fn render_settings_document(
         &self,
         category: SettingsCategory,
         props: &SettingsTabProps,
+        state: &SettingsTabState,
     ) -> Element {
-        let selected_index = if props.settings_mode && category == props.selected_category {
-            Some(props.selected_setting_index)
-        } else {
-            None
-        };
-
-        Element::Widget(Box::new(SettingsListWidget::new(
+        Element::Widget(Box::new(SettingsTabWidget {
             category,
-            props.config.clone(),
-            2, // Left margin
-            selected_index,
-            props.settings_mode,
-            props.editing,
-            props.edit_buffer.clone(),
-        )))
+            config: props.config.clone(),
+            focus_index: state.doc_nav.focus_index,
+            scroll_offset: state.doc_nav.scroll_offset,
+            viewport_height: state.doc_nav.viewport_height,
+        }))
+    }
+}
+
+/// Widget for rendering the Settings tab with modal overlay
+struct SettingsTabWithModal {
+    base_element: Element,
+    modal_options: Vec<String>,
+    modal_selected_index: usize,
+    modal_position_x: u16,
+    modal_position_y: u16,
+}
+
+impl ElementWidget for SettingsTabWithModal {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+        use crate::tui::renderer::Renderer;
+        use crate::tui::widgets::ListModalWidget;
+
+        // Render the base element first
+        let mut renderer = Renderer::new();
+        renderer.render(self.base_element.clone(), area, buf, config);
+
+        // Render the modal on top
+        let modal = ListModalWidget::new(
+            self.modal_options.clone(),
+            self.modal_selected_index,
+            self.modal_position_x,
+            self.modal_position_y,
+        );
+        modal.render(area, buf, config);
     }
 
-    /// Render with modal overlay
-    fn render_with_modal(&self, base: Element, props: &SettingsTabProps) -> Element {
-        use crate::tui::settings_helpers;
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
+        Box::new(SettingsTabWithModal {
+            base_element: self.base_element.clone(),
+            modal_options: self.modal_options.clone(),
+            modal_selected_index: self.modal_selected_index,
+            modal_position_x: self.modal_position_x,
+            modal_position_y: self.modal_position_y,
+        })
+    }
 
-        // Get the setting key to determine what we're editing
-        let setting_key = settings_helpers::get_editable_setting_key(
-            props.selected_category,
-            props.selected_setting_index,
-        );
+    fn preferred_height(&self) -> Option<u16> {
+        None // Fills available space
+    }
+}
 
-        if let Some(key) = setting_key {
-            let options = settings_helpers::get_setting_display_values(&key);
+/// Widget for rendering the Settings tab content
+struct SettingsTabWidget {
+    category: SettingsCategory,
+    config: Config,
+    focus_index: Option<usize>,
+    scroll_offset: u16,
+    viewport_height: u16,
+}
 
-            // Calculate modal position to align with value column of selected setting
-            const MARGIN: u16 = 2;
-            const SELECTOR_WIDTH: u16 = 2;
-            const TOP_MARGIN: u16 = 1;
-            const TAB_BAR_HEIGHT: u16 = 2; // Tab labels line + separator line
-            const NUM_TAB_BARS: u16 = 2; // Main tabs + settings category tabs
+impl ElementWidget for SettingsTabWidget {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
+        // Create document for the current category
+        let doc = Arc::new(SettingsDocument::new(self.category, self.config.clone()));
+        let mut view = DocumentView::new(doc, area.height);
 
-            let max_key_len =
-                settings_helpers::get_max_key_length(props.selected_category, &props.config) as u16;
-            let position_x = MARGIN + SELECTOR_WIDTH + max_key_len + 1 + 2; // +1 for colon, +2 for spacing
-            let position_y =
-                TAB_BAR_HEIGHT * NUM_TAB_BARS + TOP_MARGIN + props.selected_setting_index as u16;
-
-            let modal = Element::Widget(Box::new(ListModalWidget::new(
-                options,
-                props.modal_selected_index,
-                position_x,
-                position_y,
-            )));
-
-            Element::Overlay {
-                base: Box::new(base),
-                overlay: Box::new(modal),
-            }
-        } else {
-            // No valid setting key, just return base without modal
-            base
+        // Apply focus state
+        if let Some(idx) = self.focus_index {
+            view.focus_by_index(idx);
         }
+
+        // Apply scroll offset
+        view.set_scroll_offset(self.scroll_offset);
+
+        view.render(area, buf, config);
+    }
+
+    fn clone_box(&self) -> Box<dyn ElementWidget> {
+        Box::new(SettingsTabWidget {
+            category: self.category,
+            config: self.config.clone(),
+            focus_index: self.focus_index,
+            scroll_offset: self.scroll_offset,
+            viewport_height: self.viewport_height,
+        })
+    }
+
+    fn preferred_height(&self) -> Option<u16> {
+        None // Fills available space
+    }
+}
+
+/// Helper to get focusable IDs for a settings category (for testing/debugging)
+pub fn get_focusable_ids_for_category(category: SettingsCategory) -> Vec<FocusableId> {
+    match category {
+        SettingsCategory::Logging => vec![
+            FocusableId::Link("log_level".to_string()),
+            FocusableId::Link("log_file".to_string()),
+        ],
+        SettingsCategory::Display => vec![
+            FocusableId::Link("theme".to_string()),
+            FocusableId::Link("use_unicode".to_string()),
+        ],
+        SettingsCategory::Data => vec![
+            FocusableId::Link("refresh_interval".to_string()),
+            FocusableId::Link("western_teams_first".to_string()),
+            FocusableId::Link("time_format".to_string()),
+        ],
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+
+    #[test]
+    fn test_settings_tab_init() {
+        let props = SettingsTabProps {
+            config: Config::default(),
+            selected_category: SettingsCategory::Logging,
+            focused: false,
+        };
+        let state = SettingsTab::init(&props);
+
+        assert_eq!(state.doc_nav.focus_index, None);
+        assert_eq!(state.doc_nav.scroll_offset, 0);
+    }
 
     #[test]
     fn test_settings_tab_renders() {
@@ -163,16 +421,11 @@ mod tests {
         let props = SettingsTabProps {
             config: Config::default(),
             selected_category: SettingsCategory::Logging,
-            selected_setting_index: 0,
-            settings_mode: false,
             focused: false,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: false,
-            modal_selected_index: 0,
         };
+        let state = SettingsTabState::default();
 
-        let element = settings_tab.view(&props, &());
+        let element = settings_tab.view(&props, &state);
 
         // Should create a container element (from TabbedPanel's vertical layout)
         match element {
@@ -182,76 +435,6 @@ mod tests {
             }
             _ => panic!("Expected container element"),
         }
-    }
-
-    #[test]
-    fn test_settings_tab_has_three_categories() {
-        let settings_tab = SettingsTab;
-        let props = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Display,
-            selected_setting_index: 0,
-            settings_mode: false,
-            focused: false,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: false,
-            modal_selected_index: 0,
-        };
-
-        // Render all three categories and verify each has content
-        let logging_list = settings_tab.render_settings_list(SettingsCategory::Logging, &props);
-        let display_list = settings_tab.render_settings_list(SettingsCategory::Display, &props);
-        let data_list = settings_tab.render_settings_list(SettingsCategory::Data, &props);
-
-        // All should be Widget elements
-        match logging_list {
-            Element::Widget(_) => {}
-            _ => panic!("Expected Widget element for Logging category"),
-        }
-        match display_list {
-            Element::Widget(_) => {}
-            _ => panic!("Expected Widget element for Display category"),
-        }
-        match data_list {
-            Element::Widget(_) => {}
-            _ => panic!("Expected Widget element for Data category"),
-        }
-    }
-
-    #[test]
-    fn test_settings_mode_changes_selection() {
-        let settings_tab = SettingsTab;
-
-        // Not in settings mode
-        let props_unfocused = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Logging,
-            selected_setting_index: 1,
-            settings_mode: false,
-            focused: false,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: false,
-            modal_selected_index: 0,
-        };
-
-        // In settings mode
-        let props_focused = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Logging,
-            selected_setting_index: 1,
-            settings_mode: true,
-            focused: true,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: false,
-            modal_selected_index: 0,
-        };
-
-        // Both should render without panicking
-        let _ = settings_tab.view(&props_unfocused, &());
-        let _ = settings_tab.view(&props_focused, &());
     }
 
     #[test]
@@ -270,125 +453,72 @@ mod tests {
     }
 
     #[test]
-    fn test_modal_open_renders_overlay() {
-        let settings_tab = SettingsTab;
-        let props = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Logging,
-            selected_setting_index: 0, // log_level setting
-            settings_mode: true,
-            focused: true,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: true,
-            modal_selected_index: 0,
-        };
+    fn test_doc_nav_message_handling() {
+        use crate::tui::document_nav::DocumentNavMsg;
 
-        let element = settings_tab.view(&props, &());
+        let mut component = SettingsTab;
+        let mut state = SettingsTabState::default();
 
-        // Should create an overlay element
-        match element {
-            Element::Overlay { .. } => {
-                // Overlay created successfully
-            }
-            _ => panic!("Expected overlay element when modal_open=true"),
-        }
+        // Set up some focusable elements
+        state.doc_nav.focusable_positions = vec![0, 2, 4];
+        state.doc_nav.focus_index = Some(0);
+
+        let effect = component.update(
+            SettingsTabMsg::DocNav(DocumentNavMsg::FocusNext),
+            &mut state,
+        );
+
+        assert_eq!(state.doc_nav.focus_index, Some(1));
+        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
-    fn test_modal_with_invalid_setting_returns_base() {
-        let settings_tab = SettingsTab;
-        let props = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Display,
-            selected_setting_index: 1, // Index 1 is "Use Unicode" which is not editable
-            settings_mode: true,
-            focused: true,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: true,
-            modal_selected_index: 0,
-        };
+    fn test_update_viewport_height() {
+        let mut component = SettingsTab;
+        let mut state = SettingsTabState::default();
 
-        let element = settings_tab.view(&props, &());
+        let effect = component.update(SettingsTabMsg::UpdateViewportHeight(50), &mut state);
 
-        // Should return base element (Container), not overlay, since index 1 is not editable
-        match element {
-            Element::Container { .. } => {
-                // Base element returned as expected
-            }
-            _ => panic!("Expected container element when no valid setting"),
-        }
+        assert_eq!(state.doc_nav.viewport_height, 50);
+        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
-    fn test_render_with_modal_logging_category() {
-        let settings_tab = SettingsTab;
-        let base = Element::Widget(Box::new(crate::tui::widgets::SettingsListWidget::new(
-            SettingsCategory::Logging,
-            Config::default(),
-            2,
-            None,
-            false,
-            false,
-            String::new(),
-        )));
+    fn test_set_category_resets_state() {
+        let mut component = SettingsTab;
+        let mut state = SettingsTabState::default();
 
-        let props = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Logging,
-            selected_setting_index: 0, // log_level
-            settings_mode: true,
-            focused: true,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: true,
-            modal_selected_index: 2,
-        };
+        // Set some state
+        state.doc_nav.focus_index = Some(2);
+        state.doc_nav.scroll_offset = 10;
 
-        let result = settings_tab.render_with_modal(base, &props);
+        let effect = component.update(
+            SettingsTabMsg::SetCategory(SettingsCategory::Display),
+            &mut state,
+        );
 
-        // Should return an overlay
-        match result {
-            Element::Overlay { .. } => {}
-            _ => panic!("Expected overlay element"),
-        }
+        // State should be reset
+        assert_eq!(state.doc_nav.focus_index, None);
+        assert_eq!(state.doc_nav.scroll_offset, 0);
+        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
-    fn test_render_with_modal_data_category() {
-        let settings_tab = SettingsTab;
-        let base = Element::Widget(Box::new(crate::tui::widgets::SettingsListWidget::new(
-            SettingsCategory::Data,
-            Config::default(),
-            2,
-            None,
-            false,
-            false,
-            String::new(),
-        )));
+    fn test_get_focusable_ids_logging() {
+        let ids = get_focusable_ids_for_category(SettingsCategory::Logging);
+        assert_eq!(ids.len(), 2);
+        assert!(matches!(ids[0], FocusableId::Link(_)));
+    }
 
-        let props = SettingsTabProps {
-            config: Config::default(),
-            selected_category: SettingsCategory::Data,
-            selected_setting_index: 0, // refresh_interval
-            settings_mode: true,
-            focused: true,
-            editing: false,
-            edit_buffer: String::new(),
-            modal_open: true,
-            modal_selected_index: 0,
-        };
+    #[test]
+    fn test_get_focusable_ids_display() {
+        let ids = get_focusable_ids_for_category(SettingsCategory::Display);
+        assert_eq!(ids.len(), 2);
+    }
 
-        let result = settings_tab.render_with_modal(base.clone(), &props);
-
-        // Data category settings that aren't list-based should return base
-        // (refresh_interval is not a list setting, only log_level is)
-        // Actually, get_setting_values returns empty vec for non-list settings
-        // So this should still create overlay with empty options
-        match result {
-            Element::Overlay { .. } => {}
-            _ => panic!("Should handle refresh_interval"),
-        }
+    #[test]
+    fn test_get_focusable_ids_data() {
+        let ids = get_focusable_ids_for_category(SettingsCategory::Data);
+        assert_eq!(ids.len(), 3);
     }
 }

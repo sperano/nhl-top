@@ -12,7 +12,7 @@ use crate::commands::scores_format::PeriodScores;
 use crate::tui::document::{Document, DocumentBuilder, DocumentElement, FocusContext, FocusableId};
 
 /// Constant for game box height
-const GAME_BOX_HEIGHT: u16 = 7;
+//const GAME_BOX_HEIGHT: u16 = 7;
 
 /// Document that displays games in a grid layout using Row elements
 pub struct ScoresGridDocument {

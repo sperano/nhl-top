@@ -70,8 +70,6 @@ impl App {
         let active_key = match state.navigation.current_tab {
             Tab::Scores => "scores",
             Tab::Standings => "standings",
-            Tab::Stats => "stats",
-            Tab::Players => "players",
             Tab::Settings => "settings",
             Tab::Demo => "demo",
         };
@@ -143,8 +141,6 @@ impl App {
         let active_key = match state.navigation.current_tab {
             Tab::Scores => "scores",
             Tab::Standings => "standings",
-            Tab::Stats => "stats",
-            Tab::Players => "players",
             Tab::Settings => "settings",
             Tab::Demo => "demo",
         };
@@ -176,7 +172,7 @@ impl App {
                 (
                     self.render_scores_tab_with_states(state, component_states),
                     self.render_standings_tab_with_states(state, component_states),
-                    self.render_settings_tab(state),
+                    self.render_settings_tab_with_states(state, component_states),
                 )
             };
         //
@@ -341,20 +337,32 @@ impl App {
         StandingsTab.view(&props, &component_state)
     }
     //
-    /// Render Settings tab content
-    fn render_settings_tab(&self, state: &AppState) -> Element {
+    /// Render Settings tab content with component state management
+    fn render_settings_tab_with_states(
+        &self,
+        state: &AppState,
+        component_states: &mut ComponentStateStore,
+    ) -> Element {
         let props = SettingsTabProps {
             config: state.system.config.clone(),
             selected_category: state.ui.settings.selected_category,
-            selected_setting_index: state.ui.settings.selected_setting_index,
-            settings_mode: state.ui.settings.settings_mode,
             focused: state.navigation.content_focused,
-            editing: state.ui.settings.editing,
-            edit_buffer: state.ui.settings.edit_buffer.clone(),
-            modal_open: state.ui.settings.modal_open,
-            modal_selected_index: state.ui.settings.modal_selected_index,
         };
-        SettingsTab.view(&props, &())
+
+        let settings_state = component_states.get_or_init::<SettingsTab>("app/settings_tab", &props);
+        SettingsTab.view(&props, settings_state)
+    }
+
+    /// Render Settings tab content (legacy - without state management)
+    fn render_settings_tab(&self, state: &AppState) -> Element {
+        use crate::tui::components::SettingsTabState;
+        let props = SettingsTabProps {
+            config: state.system.config.clone(),
+            selected_category: state.ui.settings.selected_category,
+            focused: state.navigation.content_focused,
+        };
+        let component_state = SettingsTabState::default();
+        SettingsTab.view(&props, &component_state)
     }
     //
     /// Render breadcrumb navigation

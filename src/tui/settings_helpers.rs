@@ -48,32 +48,49 @@ pub fn get_setting_values(key: &str) -> Vec<&'static str> {
     }
 }
 
-/// Get the list of display values for a setting (for showing in modals)
-pub fn get_setting_display_values(key: &str) -> Vec<String> {
+/// Modal option with ID and display name
+#[derive(Debug, Clone)]
+pub struct ModalOption {
+    pub id: String,
+    pub display_name: String,
+}
+
+/// Get modal options (ID + display name pairs) for a setting
+pub fn get_setting_modal_options(key: &str) -> Vec<ModalOption> {
     match key {
-        "log_level" => vec!["trace", "debug", "info", "warn", "error"]
-            .into_iter()
-            .map(String::from)
-            .collect(),
+        "log_level" => vec![
+            ModalOption { id: "trace".to_string(), display_name: "Trace".to_string() },
+            ModalOption { id: "debug".to_string(), display_name: "Debug".to_string() },
+            ModalOption { id: "info".to_string(), display_name: "Info".to_string() },
+            ModalOption { id: "warn".to_string(), display_name: "Warn".to_string() },
+            ModalOption { id: "error".to_string(), display_name: "Error".to_string() },
+        ],
         "theme" => {
-            use crate::config::{
-                THEME_BLUE, THEME_CYAN, THEME_GREEN, THEME_ORANGE, THEME_PURPLE, THEME_RED,
-                THEME_WHITE, THEME_YELLOW,
-            };
-            vec![
-                "none".to_string(),
-                THEME_ORANGE.name.to_string(),
-                THEME_GREEN.name.to_string(),
-                THEME_BLUE.name.to_string(),
-                THEME_PURPLE.name.to_string(),
-                THEME_WHITE.name.to_string(),
-                THEME_RED.name.to_string(),
-                THEME_YELLOW.name.to_string(),
-                THEME_CYAN.name.to_string(),
-            ]
+            use crate::config::THEMES;
+            let mut options = vec![
+                ModalOption { id: "none".to_string(), display_name: "None".to_string() },
+            ];
+            // Add options from THEMES map in a consistent order
+            for id in ["orange", "green", "blue", "purple", "white", "red", "yellow", "cyan"] {
+                if let Some(theme) = THEMES.get(id) {
+                    options.push(ModalOption {
+                        id: id.to_string(),
+                        display_name: theme.name.to_string(),
+                    });
+                }
+            }
+            options
         }
         _ => vec![], // Empty for non-list settings
     }
+}
+
+/// Get the list of display values for a setting (for showing in modals)
+pub fn get_setting_display_values(key: &str) -> Vec<String> {
+    get_setting_modal_options(key)
+        .into_iter()
+        .map(|opt| opt.display_name)
+        .collect()
 }
 
 /// Get the current value of a setting from the config

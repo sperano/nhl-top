@@ -40,7 +40,7 @@ pub struct DocumentNavState {
 ///
 /// Components that use DocumentNavState can include these messages in their
 /// own message enum to handle document navigation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DocumentNavMsg {
     FocusNext,
     FocusPrev,

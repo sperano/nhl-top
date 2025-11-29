@@ -150,12 +150,6 @@ impl Default for ScoresUiState {
 #[derive(Debug, Clone, Default)]
 pub struct SettingsUiState {
     pub selected_category: SettingsCategory,
-    pub selected_setting_index: usize,
-    pub settings_mode: bool, // true = navigating settings, false = navigating categories
-    pub editing: bool,       // true = editing a setting value, false = not editing
-    pub edit_buffer: String, // Buffer for editing string/int values
-    pub modal_open: bool,    // true = list selection modal is open
-    pub modal_selected_index: usize, // Selected index within the modal
 }
 
 /// Default help message shown in the status bar

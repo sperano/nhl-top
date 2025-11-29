@@ -36,9 +36,7 @@ fn navigate_tab_left(state: AppState) -> (AppState, Effect) {
     new_state.navigation.current_tab = match new_state.navigation.current_tab {
         Tab::Scores => Tab::Demo,
         Tab::Standings => Tab::Scores,
-        Tab::Stats => Tab::Standings,
-        Tab::Players => Tab::Stats,
-        Tab::Settings => Tab::Players,
+        Tab::Settings => Tab::Standings,
         Tab::Demo => Tab::Settings,
     };
     new_state.navigation.panel_stack.clear();
@@ -50,9 +48,7 @@ fn navigate_tab_right(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
     new_state.navigation.current_tab = match new_state.navigation.current_tab {
         Tab::Scores => Tab::Standings,
-        Tab::Standings => Tab::Stats,
-        Tab::Stats => Tab::Players,
-        Tab::Players => Tab::Settings,
+        Tab::Standings => Tab::Settings,
         Tab::Settings => Tab::Demo,
         Tab::Demo => Tab::Scores,
     };
@@ -89,9 +85,6 @@ fn exit_content_focus(state: AppState) -> (AppState, Effect) {
     }
 
     new_state.navigation.content_focused = false;
-
-    // Also exit any tab-specific modes when returning to tab bar
-    new_state.ui.settings.settings_mode = false;
 
     (new_state, Effect::None)
 }
@@ -134,16 +127,7 @@ mod tests {
         assert_eq!(state.navigation.current_tab, Tab::Standings);
     }
 
-    #[test]
-    fn test_content_focus_resets_tab_modes() {
-        let mut state = AppState::default();
-        state.ui.settings.settings_mode = true;
-
-        let (new_state, _) = exit_content_focus(state);
-
-        assert!(!new_state.ui.settings.settings_mode);
-        assert!(!new_state.navigation.content_focused);
-    }
+    // TODO: Obsolete test removed - settings_mode no longer exists
 
     // Phase 8: Demo tab focus tests removed - now managed by component state
 }

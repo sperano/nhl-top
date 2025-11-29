@@ -35,8 +35,6 @@ impl BreadcrumbWidget {
         let tab_name = match self.current_tab {
             Tab::Scores => "Scores",
             Tab::Standings => "Standings",
-            Tab::Stats => "Stats",
-            Tab::Players => "Players",
             Tab::Settings => "Settings",
             Tab::Demo => "Demo",
         };

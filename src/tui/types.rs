@@ -8,8 +8,6 @@
 pub enum Tab {
     Scores,
     Standings,
-    Stats,
-    Players,
     Settings,
     Demo,
 }

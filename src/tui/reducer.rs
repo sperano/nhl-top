@@ -3,7 +3,7 @@ use tracing::debug;
 use super::action::{Action, SettingsAction};
 use super::component::Effect;
 use super::component_store::ComponentStateStore;
-use super::settings_helpers::find_initial_modal_index;
+//use super::settings_helpers::find_initial_modal_index;
 use super::state::AppState;
 use super::types::SettingsCategory;
 use crate::config::Config;
@@ -84,7 +84,7 @@ pub fn reduce(
     match action {
         Action::ScoresAction(scores_action) => reduce_scores(state, scores_action),
         Action::StandingsAction(standings_action) => reduce_standings(state, standings_action),
-        Action::SettingsAction(settings_action) => reduce_settings(state, settings_action),
+        Action::SettingsAction(settings_action) => reduce_settings(state, settings_action, component_states),
 
         // // Special cases that don't fit cleanly into sub-modules
         // Action::SelectPlayer(player_id) => {
@@ -148,58 +148,55 @@ pub fn reduce(
 
 /// Sub-reducer for settings tab
 /// TODO: Move this to its own module once refactoring is complete
-fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect) {
+fn reduce_settings(
+    state: AppState,
+    action: SettingsAction,
+    component_states: &mut ComponentStateStore,
+) -> (AppState, Effect) {
     match action {
         SettingsAction::NavigateCategoryLeft => {
+            use crate::tui::components::{SettingsDocument, SettingsTabState};
+            use crate::tui::document::Document;
             let mut new_state = state;
-            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category
-            {
+            let old_category = new_state.ui.settings.selected_category;
+            new_state.ui.settings.selected_category = match old_category {
                 SettingsCategory::Logging => SettingsCategory::Data,
                 SettingsCategory::Display => SettingsCategory::Logging,
                 SettingsCategory::Data => SettingsCategory::Display,
             };
-            new_state.ui.settings.selected_setting_index = 0; // Reset selection
+
+            // Update focusable metadata in component state
+            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>("app/settings_tab") {
+                let doc = SettingsDocument::new(new_state.ui.settings.selected_category, new_state.system.config.clone());
+                settings_state.doc_nav = Default::default(); // Reset navigation
+                settings_state.doc_nav.focusable_positions = doc.focusable_positions();
+                settings_state.doc_nav.focusable_ids = doc.focusable_ids();
+                settings_state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
+            }
+
             (new_state, Effect::None)
         }
 
         SettingsAction::NavigateCategoryRight => {
+            use crate::tui::components::{SettingsDocument, SettingsTabState};
+            use crate::tui::document::Document;
             let mut new_state = state;
-            new_state.ui.settings.selected_category = match new_state.ui.settings.selected_category
-            {
+            let old_category = new_state.ui.settings.selected_category;
+            new_state.ui.settings.selected_category = match old_category {
                 SettingsCategory::Logging => SettingsCategory::Display,
                 SettingsCategory::Display => SettingsCategory::Data,
                 SettingsCategory::Data => SettingsCategory::Logging,
             };
-            new_state.ui.settings.selected_setting_index = 0; // Reset selection
-            (new_state, Effect::None)
-        }
 
-        SettingsAction::EnterSettingsMode => {
-            debug!("SETTINGS: Entering settings mode");
-            let mut new_state = state;
-            new_state.ui.settings.settings_mode = true;
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::ExitSettingsMode => {
-            debug!("SETTINGS: Exiting settings mode");
-            let mut new_state = state;
-            new_state.ui.settings.settings_mode = false;
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::MoveSelectionUp => {
-            let mut new_state = state;
-            if new_state.ui.settings.selected_setting_index > 0 {
-                new_state.ui.settings.selected_setting_index -= 1;
+            // Update focusable metadata in component state
+            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>("app/settings_tab") {
+                let doc = SettingsDocument::new(new_state.ui.settings.selected_category, new_state.system.config.clone());
+                settings_state.doc_nav = Default::default(); // Reset navigation
+                settings_state.doc_nav.focusable_positions = doc.focusable_positions();
+                settings_state.doc_nav.focusable_ids = doc.focusable_ids();
+                settings_state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
             }
-            (new_state, Effect::None)
-        }
 
-        SettingsAction::MoveSelectionDown => {
-            let mut new_state = state;
-            // We'll validate max in the UI layer
-            new_state.ui.settings.selected_setting_index += 1;
             (new_state, Effect::None)
         }
 
@@ -229,176 +226,44 @@ fn reduce_settings(state: AppState, action: SettingsAction) -> (AppState, Effect
             (new_state, effect)
         }
 
-        SettingsAction::StartEditing(key) => {
-            debug!("SETTINGS: Starting edit for setting: {}", key);
+        SettingsAction::UpdateSetting { key, value } => {
+            debug!("SETTINGS: Updating setting: {} = {}", key, value);
             let mut new_state = state;
-
-            // Check if this is a list-based setting (opens modal)
-            let values = crate::tui::settings_helpers::get_setting_values(&key);
-            if !values.is_empty() {
-                // Open modal for list-based settings (e.g., log_level, theme)
-                new_state.ui.settings.modal_open = true;
-                new_state.ui.settings.modal_selected_index =
-                    find_initial_modal_index(&new_state.system.config, &key);
-            } else {
-                // Start inline editing for text/number settings (e.g., log_file, refresh_interval, time_format)
-                new_state.ui.settings.editing = true;
-                // Initialize edit buffer with current value
-                new_state.ui.settings.edit_buffer = match key.as_str() {
-                    "log_file" => new_state.system.config.log_file.clone(),
-                    "refresh_interval" => new_state.system.config.refresh_interval.to_string(),
-                    "time_format" => new_state.system.config.time_format.clone(),
-                    _ => String::new(),
-                };
-            }
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::CancelEditing => {
-            debug!("SETTINGS: Canceling edit");
-            let mut new_state = state;
-            new_state.ui.settings.editing = false;
-            new_state.ui.settings.edit_buffer.clear();
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::AppendChar(ch) => {
-            let mut new_state = state;
-            new_state.ui.settings.edit_buffer.push(ch);
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::DeleteChar => {
-            let mut new_state = state;
-            new_state.ui.settings.edit_buffer.pop();
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::CommitEdit(key) => {
-            debug!("SETTINGS: Committing edit for: {}", key);
-            let mut new_state = state;
-            let buffer = &new_state.ui.settings.edit_buffer;
-
-            // Apply the edit to the config
             match key.as_str() {
-                "log_file" => {
-                    new_state.system.config.log_file = buffer.clone();
+                "log_level" => {
+                    new_state.system.config.log_level = value;
                 }
-                "refresh_interval" => {
-                    if let Ok(value) = buffer.parse::<u32>() {
-                        new_state.system.config.refresh_interval = value;
+                "theme" => {
+                    if value == "none" {
+                        new_state.system.config.display.theme_name = None;
+                        new_state.system.config.display.theme = None;
                     } else {
-                        debug!("SETTINGS: Invalid refresh_interval value: {}", buffer);
+                        use crate::config::{
+                            THEME_BLUE, THEME_CYAN, THEME_GREEN, THEME_ORANGE, THEME_PURPLE,
+                            THEME_RED, THEME_WHITE, THEME_YELLOW,
+                        };
+                        let theme = match value.as_str() {
+                            "orange" => Some(THEME_ORANGE.clone()),
+                            "green" => Some(THEME_GREEN.clone()),
+                            "blue" => Some(THEME_BLUE.clone()),
+                            "purple" => Some(THEME_PURPLE.clone()),
+                            "white" => Some(THEME_WHITE.clone()),
+                            "red" => Some(THEME_RED.clone()),
+                            "yellow" => Some(THEME_YELLOW.clone()),
+                            "cyan" => Some(THEME_CYAN.clone()),
+                            _ => None,
+                        };
+                        new_state.system.config.display.theme_name = Some(value);
+                        new_state.system.config.display.theme = theme;
                     }
-                }
-                "time_format" => {
-                    new_state.system.config.time_format = buffer.clone();
                 }
                 _ => {
                     debug!("SETTINGS: Unknown setting key: {}", key);
                 }
             }
-
-            // Clear editing state
-            new_state.ui.settings.editing = false;
-            new_state.ui.settings.edit_buffer.clear();
-
             let config = new_state.system.config.clone();
             let effect = save_config_effect(config);
             (new_state, effect)
-        }
-
-        SettingsAction::ModalMoveUp => {
-            let mut new_state = state;
-            let setting_key = crate::tui::settings_helpers::get_editable_setting_key(
-                new_state.ui.settings.selected_category,
-                new_state.ui.settings.selected_setting_index,
-            );
-
-            if let Some(key) = setting_key {
-                let values = crate::tui::settings_helpers::get_setting_values(&key);
-                if !values.is_empty() {
-                    if new_state.ui.settings.modal_selected_index == 0 {
-                        // Wrap to bottom
-                        new_state.ui.settings.modal_selected_index = values.len() - 1;
-                    } else {
-                        new_state.ui.settings.modal_selected_index -= 1;
-                    }
-                }
-            }
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::ModalMoveDown => {
-            let mut new_state = state;
-            let setting_key = crate::tui::settings_helpers::get_editable_setting_key(
-                new_state.ui.settings.selected_category,
-                new_state.ui.settings.selected_setting_index,
-            );
-
-            if let Some(key) = setting_key {
-                let values = crate::tui::settings_helpers::get_setting_values(&key);
-                if !values.is_empty() {
-                    if new_state.ui.settings.modal_selected_index >= values.len() - 1 {
-                        // Wrap to top
-                        new_state.ui.settings.modal_selected_index = 0;
-                    } else {
-                        new_state.ui.settings.modal_selected_index += 1;
-                    }
-                }
-            }
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::ModalConfirm => {
-            debug!("SETTINGS: Confirming modal selection");
-            let mut new_state = state;
-
-            // Get the setting key for the current selection
-            let setting_key = crate::tui::settings_helpers::get_editable_setting_key(
-                new_state.ui.settings.selected_category,
-                new_state.ui.settings.selected_setting_index,
-            );
-
-            if let Some(key) = setting_key {
-                let values = crate::tui::settings_helpers::get_setting_values(&key);
-                let selected_index = new_state.ui.settings.modal_selected_index;
-
-                if selected_index < values.len() {
-                    let selected_value = values[selected_index];
-
-                    // Apply the selection to the config
-                    match key.as_str() {
-                        "log_level" => {
-                            new_state.system.config.log_level = selected_value.to_string();
-                        }
-                        "theme" => {
-                            new_state.system.config.display.theme_name =
-                                Some(selected_value.to_string());
-                            new_state.system.config.display.apply_theme();
-                        }
-                        _ => {
-                            debug!("SETTINGS: Unknown list setting: {}", key);
-                        }
-                    }
-                }
-            }
-
-            // Close modal
-            new_state.ui.settings.modal_open = false;
-            new_state.ui.settings.modal_selected_index = 0;
-
-            let config = new_state.system.config.clone();
-            let effect = save_config_effect(config);
-            (new_state, effect)
-        }
-
-        SettingsAction::ModalCancel => {
-            debug!("SETTINGS: Canceling modal");
-            let mut new_state = state;
-            new_state.ui.settings.modal_open = false;
-            new_state.ui.settings.modal_selected_index = 0;
-            (new_state, Effect::None)
         }
 
         SettingsAction::UpdateConfig(config) => {
@@ -581,24 +446,20 @@ mod tests {
     fn test_settings_navigate_category_left_from_logging() {
         let mut state = AppState::default();
         state.ui.settings.selected_category = SettingsCategory::Logging;
-        state.ui.settings.selected_setting_index = 2;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
-        let (new_state, effect) = test_reduce(state, action);
+        let (new_state, _effect) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
             SettingsCategory::Data
         );
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0); // Reset to 0
-        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
     fn test_settings_navigate_category_left_from_display() {
         let mut state = AppState::default();
         state.ui.settings.selected_category = SettingsCategory::Display;
-        state.ui.settings.selected_setting_index = 1;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
         let (new_state, _) = test_reduce(state, action);
@@ -607,14 +468,12 @@ mod tests {
             new_state.ui.settings.selected_category,
             SettingsCategory::Logging
         );
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
     #[test]
     fn test_settings_navigate_category_left_from_data() {
         let mut state = AppState::default();
         state.ui.settings.selected_category = SettingsCategory::Data;
-        state.ui.settings.selected_setting_index = 1;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryLeft);
         let (new_state, _) = test_reduce(state, action);
@@ -623,24 +482,20 @@ mod tests {
             new_state.ui.settings.selected_category,
             SettingsCategory::Display
         );
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
     #[test]
     fn test_settings_navigate_category_right_from_logging() {
         let mut state = AppState::default();
         state.ui.settings.selected_category = SettingsCategory::Logging;
-        state.ui.settings.selected_setting_index = 2;
 
         let action = Action::SettingsAction(SettingsAction::NavigateCategoryRight);
-        let (new_state, effect) = test_reduce(state, action);
+        let (new_state, _effect) = test_reduce(state, action);
 
         assert_eq!(
             new_state.ui.settings.selected_category,
             SettingsCategory::Display
         );
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
-        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
@@ -655,7 +510,6 @@ mod tests {
             new_state.ui.settings.selected_category,
             SettingsCategory::Data
         );
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
     #[test]
@@ -670,87 +524,10 @@ mod tests {
             new_state.ui.settings.selected_category,
             SettingsCategory::Logging
         );
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
     }
 
-    #[test]
-    fn test_settings_enter_settings_mode() {
-        let mut state = AppState::default();
-        state.ui.settings.settings_mode = false;
-
-        let action = Action::SettingsAction(SettingsAction::EnterSettingsMode);
-        let (new_state, effect) = test_reduce(state, action);
-
-        assert!(new_state.ui.settings.settings_mode);
-        assert!(matches!(effect, Effect::None));
-    }
-
-    #[test]
-    fn test_settings_exit_settings_mode() {
-        let mut state = AppState::default();
-        state.ui.settings.settings_mode = true;
-
-        let action = Action::SettingsAction(SettingsAction::ExitSettingsMode);
-        let (new_state, effect) = test_reduce(state, action);
-
-        assert!(!new_state.ui.settings.settings_mode);
-        assert!(matches!(effect, Effect::None));
-    }
-
-    #[test]
-    fn test_settings_move_selection_up_from_middle() {
-        let mut state = AppState::default();
-        state.ui.settings.selected_setting_index = 2;
-
-        let action = Action::SettingsAction(SettingsAction::MoveSelectionUp);
-        let (new_state, effect) = test_reduce(state, action);
-
-        assert_eq!(new_state.ui.settings.selected_setting_index, 1);
-        assert!(matches!(effect, Effect::None));
-    }
-
-    #[test]
-    fn test_settings_move_selection_up_from_top() {
-        let mut state = AppState::default();
-        state.ui.settings.selected_setting_index = 0;
-
-        let action = Action::SettingsAction(SettingsAction::MoveSelectionUp);
-        let (new_state, _) = test_reduce(state, action);
-
-        // Should stay at 0
-        assert_eq!(new_state.ui.settings.selected_setting_index, 0);
-    }
-
-    #[test]
-    fn test_settings_move_selection_down() {
-        let mut state = AppState::default();
-        state.ui.settings.selected_setting_index = 1;
-
-        let action = Action::SettingsAction(SettingsAction::MoveSelectionDown);
-        let (new_state, effect) = test_reduce(state, action);
-
-        assert_eq!(new_state.ui.settings.selected_setting_index, 2);
-        assert!(matches!(effect, Effect::None));
-    }
-
-    #[test]
-    fn test_settings_unhandled_action_does_nothing() {
-        let state = AppState::default();
-        let action = Action::SettingsAction(SettingsAction::ModalMoveUp);
-
-        let (new_state, effect) = test_reduce(state.clone(), action);
-
-        // State should remain unchanged
-        assert_eq!(
-            new_state.ui.settings.selected_category,
-            state.ui.settings.selected_category
-        );
-        assert_eq!(
-            new_state.ui.settings.selected_setting_index,
-            state.ui.settings.selected_setting_index
-        );
-        assert!(matches!(effect, Effect::None));
-    }
+    // TODO: Obsolete tests removed - settings now use document system
+    // These tests were for the old modal/editing/selection system which has been replaced
 
     #[test]
     fn test_set_status_message_with_error() {
@@ -859,156 +636,5 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_commit_edit_returns_save_effect() {
-        let mut state = AppState::default();
-        state.ui.settings.edit_buffer = "120".to_string();
-
-        let action =
-            Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
-
-        let (new_state, effect) = test_reduce(state, action);
-
-        // Config should be updated
-        assert_eq!(new_state.system.config.refresh_interval, 120);
-        // Editing state should be cleared
-        assert!(!new_state.ui.settings.editing);
-        assert!(new_state.ui.settings.edit_buffer.is_empty());
-
-        // Should return an Async effect (save_config_effect)
-        assert!(matches!(effect, Effect::Async(_)));
-    }
-
-    #[test]
-    fn test_commit_edit_log_file() {
-        let mut state = AppState::default();
-        state.ui.settings.edit_buffer = "/tmp/test.log".to_string();
-
-        let action = Action::SettingsAction(SettingsAction::CommitEdit("log_file".to_string()));
-
-        let (new_state, _) = test_reduce(state, action);
-
-        assert_eq!(new_state.system.config.log_file, "/tmp/test.log");
-    }
-
-    #[test]
-    fn test_commit_edit_time_format() {
-        let mut state = AppState::default();
-        state.ui.settings.edit_buffer = "%Y-%m-%d".to_string();
-
-        let action = Action::SettingsAction(SettingsAction::CommitEdit("time_format".to_string()));
-
-        let (new_state, _) = test_reduce(state, action);
-
-        assert_eq!(new_state.system.config.time_format, "%Y-%m-%d");
-    }
-
-    #[test]
-    fn test_commit_edit_invalid_refresh_interval() {
-        let mut state = AppState::default();
-        state.ui.settings.edit_buffer = "invalid".to_string();
-        state.system.config.refresh_interval = 60;
-
-        let action =
-            Action::SettingsAction(SettingsAction::CommitEdit("refresh_interval".to_string()));
-
-        let (new_state, _) = test_reduce(state, action);
-
-        // Should not change on invalid value
-        assert_eq!(new_state.system.config.refresh_interval, 60);
-    }
-
-    #[test]
-    fn test_modal_confirm_returns_save_effect() {
-        let mut state = AppState::default();
-        state.ui.settings.selected_category = SettingsCategory::Logging;
-        state.ui.settings.selected_setting_index = 0; // log_level
-        state.ui.settings.modal_selected_index = 2; // "info"
-        state.ui.settings.modal_open = true;
-
-        let action = Action::SettingsAction(SettingsAction::ModalConfirm);
-
-        let (new_state, effect) = test_reduce(state, action);
-
-        // Config should be updated
-        assert_eq!(new_state.system.config.log_level, "info");
-        // Modal should be closed
-        assert!(!new_state.ui.settings.modal_open);
-        assert_eq!(new_state.ui.settings.modal_selected_index, 0);
-
-        // Should return an Async effect (save_config_effect)
-        assert!(matches!(effect, Effect::Async(_)));
-    }
-
-    #[test]
-    fn test_modal_confirm_theme_selection() {
-        let mut state = AppState::default();
-        state.ui.settings.selected_category = SettingsCategory::Display;
-        state.ui.settings.selected_setting_index = 0; // theme
-        state.ui.settings.modal_selected_index = 1; // "orange"
-        state.ui.settings.modal_open = true;
-
-        let action = Action::SettingsAction(SettingsAction::ModalConfirm);
-
-        let (new_state, _) = test_reduce(state, action);
-
-        assert_eq!(
-            new_state.system.config.display.theme_name,
-            Some("orange".to_string())
-        );
-    }
-
-    #[test]
-    fn test_modal_initialized_with_current_theme() {
-        let mut state = AppState::default();
-        state.system.config.display.theme_name = Some("purple".to_string());
-        state.ui.settings.selected_category = SettingsCategory::Display;
-        state.ui.settings.selected_setting_index = 0; // theme
-
-        let action = Action::SettingsAction(SettingsAction::StartEditing("theme".to_string()));
-
-        let (new_state, _) = test_reduce(state, action);
-
-        // Modal should be open
-        assert!(new_state.ui.settings.modal_open);
-        // Theme values: ["none", "orange", "green", "blue", "purple", "white"]
-        // "purple" is at index 4
-        assert_eq!(new_state.ui.settings.modal_selected_index, 4);
-    }
-
-    #[test]
-    fn test_modal_initialized_with_current_log_level() {
-        let mut state = AppState::default();
-        state.system.config.log_level = "warn".to_string();
-        state.ui.settings.selected_category = SettingsCategory::Logging;
-        state.ui.settings.selected_setting_index = 0; // log_level
-
-        let action = Action::SettingsAction(SettingsAction::StartEditing("log_level".to_string()));
-
-        let (new_state, _) = test_reduce(state, action);
-
-        // Modal should be open
-        assert!(new_state.ui.settings.modal_open);
-        // Log level values: ["trace", "debug", "info", "warn", "error"]
-        // "warn" is at index 3
-        assert_eq!(new_state.ui.settings.modal_selected_index, 3);
-    }
-
-    #[test]
-    fn test_modal_initialized_at_zero_for_none_theme() {
-        let mut state = AppState::default();
-        state.system.config.display.theme_name = None;
-        state.ui.settings.selected_category = SettingsCategory::Display;
-        state.ui.settings.selected_setting_index = 0; // theme
-
-        let action = Action::SettingsAction(SettingsAction::StartEditing("theme".to_string()));
-
-        let (new_state, _) = test_reduce(state, action);
-
-        // Modal should be open
-        assert!(new_state.ui.settings.modal_open);
-        // Theme values: ["none", "orange", "green", "blue", "purple", "white"]
-        // "none" is at index 0
-        assert_eq!(new_state.ui.settings.modal_selected_index, 0);
-    }
+    // TODO: Obsolete editing/modal tests removed - settings now use document system
 }

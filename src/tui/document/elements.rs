@@ -538,7 +538,8 @@ fn render_link(display: &str, focused: bool, area: Rect, buf: &mut Buffer, confi
         let style = base_style.add_modifier(SELECTION_STYLE_MODIFIER);
         (prefix, style)
     } else {
-        (String::new(), base_style)
+        // Use spaces to align with focused items
+        ("  ".to_string(), base_style)
     };
 
     let prefix_len = prefix.chars().count() as u16;
@@ -757,9 +758,11 @@ mod tests {
 
         elem.render(Rect::new(0, 0, 20, 5), &mut buf, &config);
 
-        // Unfocused links have no prefix, text starts at position 0
-        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), "C");
-        assert_eq!(buf.cell((1, 0)).unwrap().symbol(), "l");
+        // Unfocused links have "  " prefix for alignment
+        assert_eq!(buf.cell((0, 0)).unwrap().symbol(), " ");
+        assert_eq!(buf.cell((1, 0)).unwrap().symbol(), " ");
+        assert_eq!(buf.cell((2, 0)).unwrap().symbol(), "C");
+        assert_eq!(buf.cell((3, 0)).unwrap().symbol(), "l");
         // Style uses fg2 from theme (or default if no theme)
         // No specific color assertion since we use theme.fg2
     }
