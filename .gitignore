@@ -27,3 +27,4 @@ target
 nhl.log
 tarpaulin-report.html
 .prompts
+nhl-screenshot-*.txt
