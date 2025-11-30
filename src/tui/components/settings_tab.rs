@@ -3,22 +3,21 @@
 //! Uses the document system to display settings as focusable links.
 //! Settings can be toggled (booleans) or edited (strings/numbers).
 
-use std::any::Any;
 use std::sync::Arc;
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use tracing::debug;
 
 use crate::config::{Config, DisplayConfig};
-use crate::tui::action::ComponentMessageTrait;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::{SettingsDocument, TabItem, TabbedPanel, TabbedPanelProps};
 use crate::tui::document::{DocumentView, FocusableId};
 use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::settings_helpers::ModalOption;
+use crate::tui::tab_component::{CommonTabMessage, TabMessage, TabState, handle_common_message};
 use crate::tui::SettingsCategory;
+use crate::component_message_impl;
 
 /// Props for SettingsTab component
 #[derive(Clone)]
@@ -56,6 +55,16 @@ pub struct SettingsTabState {
     pub modal: Option<ModalState>,
 }
 
+impl TabState for SettingsTabState {
+    fn doc_nav(&self) -> &DocumentNavState {
+        &self.doc_nav
+    }
+
+    fn doc_nav_mut(&mut self) -> &mut DocumentNavState {
+        &mut self.doc_nav
+    }
+}
+
 /// Messages that can be sent to the Settings tab
 #[derive(Clone, Debug)]
 pub enum SettingsTabMsg {
@@ -77,23 +86,26 @@ pub enum SettingsTabMsg {
     Modal(ModalMsg),
 }
 
-impl ComponentMessageTrait for SettingsTabMsg {
-    fn apply(&self, state: &mut dyn Any) -> Effect {
-        if let Some(settings_state) = state.downcast_mut::<SettingsTabState>() {
-            let mut component = SettingsTab;
-            let msg = self.clone();
-            component.update(msg, settings_state)
-        } else {
-            Effect::None
+impl TabMessage for SettingsTabMsg {
+    fn as_common(&self) -> Option<CommonTabMessage<'_>> {
+        match self {
+            Self::DocNav(msg) => Some(CommonTabMessage::DocNav(msg)),
+            Self::UpdateViewportHeight(h) => Some(CommonTabMessage::UpdateViewportHeight(*h)),
+            // Note: NavigateUp is NOT handled by common - SettingsTab has special modal logic
+            _ => None,
         }
     }
 
-    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
-        Box::new(self.clone())
+    fn from_doc_nav(msg: DocumentNavMsg) -> Self {
+        Self::DocNav(msg)
     }
 }
 
+// Use macro to eliminate ComponentMessageTrait boilerplate
+component_message_impl!(SettingsTabMsg, SettingsTab, SettingsTabState);
+
 /// SettingsTab component - displays settings with category tabs
+#[derive(Default)]
 pub struct SettingsTab;
 
 impl Component for SettingsTab {
@@ -116,8 +128,14 @@ impl Component for SettingsTab {
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
         use crate::tui::action::{Action, SettingsAction};
-        use crate::tui::document::FocusableId;
 
+        // Handle common tab messages (DocNav, UpdateViewportHeight)
+        // Note: NavigateUp is NOT in common for SettingsTab due to special modal handling
+        if let Some(effect) = handle_common_message(msg.as_common(), state) {
+            return effect;
+        }
+
+        // Handle tab-specific messages
         match msg {
             SettingsTabMsg::Key(key) => self.handle_key(key, state),
 
@@ -128,27 +146,17 @@ impl Component for SettingsTab {
                     return Effect::Handled;
                 }
                 // Priority 2: Exit browse mode if active
-                if state.doc_nav.focus_index.is_some() {
-                    state.doc_nav.focus_index = None;
-                    state.doc_nav.scroll_offset = 0;
+                if state.is_browse_mode() {
+                    state.exit_browse_mode();
                     return Effect::Handled;
                 }
                 // Otherwise let it bubble up
                 Effect::None
             }
 
-            SettingsTabMsg::DocNav(nav_msg) => {
-                crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
-            }
-            SettingsTabMsg::UpdateViewportHeight(height) => {
-                state.doc_nav.viewport_height = height;
-                Effect::None
-            }
             SettingsTabMsg::SetCategory(_category) => {
-//                use crate::tui::components::SettingsDocument;
-
                 // Category changed - reset document state and rebuild focusable metadata
-                state.doc_nav = DocumentNavState::default();
+                *state.doc_nav_mut() = DocumentNavState::default();
 
                 // Need to get config - but we don't have props here!
                 // This will be populated by the reducer which has access to the config
@@ -159,8 +167,8 @@ impl Component for SettingsTab {
                 use crate::tui::settings_helpers::{find_initial_modal_index, get_setting_modal_options};
 
                 // Get the currently focused setting link
-                if let Some(focus_idx) = state.doc_nav.focus_index {
-                    if let Some(FocusableId::Link(link_id)) = state.doc_nav.focusable_ids.get(focus_idx) {
+                if let Some(focus_idx) = state.doc_nav().focus_index {
+                    if let Some(FocusableId::Link(link_id)) = state.doc_nav().focusable_ids.get(focus_idx) {
                         // Parse the link ID which is the setting key (e.g., "log_level", "theme")
 
                         let effect = match link_id.as_str() {
@@ -171,7 +179,7 @@ impl Component for SettingsTab {
                                 let options = get_setting_modal_options(link_id);
                                 let selected_index = find_initial_modal_index(&config, link_id);
 
-                                let position_y = state.doc_nav.focusable_positions
+                                let position_y = state.doc_nav().focusable_positions
                                     .get(focus_idx)
                                     .copied()
                                     .unwrap_or(0);
@@ -229,6 +237,11 @@ impl Component for SettingsTab {
                 } else {
                     Effect::None
                 }
+            }
+
+            // Common messages already handled above
+            SettingsTabMsg::DocNav(_) | SettingsTabMsg::UpdateViewportHeight(_) => {
+                unreachable!("Common messages should be handled by handle_common_message")
             }
         }
     }

@@ -7,34 +7,11 @@ use super::component_store::ComponentStateStore;
 use super::constants::{SCORES_TAB_PATH, STANDINGS_TAB_PATH};
 use super::reducers::reduce_settings;
 use super::state::AppState;
-use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
 use crate::tui::reducers::{
     reduce_data_loading, reduce_document_stack, reduce_navigation, reduce_scores, reduce_standings,
 };
-
-/// Create an effect to save config to disk asynchronously
-fn save_config_effect(config: Config) -> Effect {
-    Effect::Async(Box::pin(async move {
-        match crate::config::write(&config) {
-            Ok(_) => {
-                debug!("CONFIG: Successfully saved to disk");
-                Action::SetStatusMessage {
-                    message: "Configuration saved".to_string(),
-                    is_error: false,
-                }
-            }
-            Err(e) => {
-                debug!("CONFIG: Failed to save: {}", e);
-                Action::SetStatusMessage {
-                    message: format!("Failed to save config: {}", e),
-                    is_error: true,
-                }
-            }
-        }
-    }))
-}
 
 /// Pure state reducer - like Redux reducer
 ///
@@ -86,44 +63,6 @@ pub fn reduce(
         Action::ScoresAction(scores_action) => reduce_scores(state, scores_action),
         Action::StandingsAction(standings_action) => reduce_standings(state, standings_action, component_states),
         Action::SettingsAction(settings_action) => reduce_settings(state, settings_action, component_states),
-
-        // // Special cases that don't fit cleanly into sub-modules
-        // Action::SelectPlayer(player_id) => {
-        //     debug!(
-        //         "PLAYER: Opening player detail panel for player_id={}",
-        //         player_id
-        //     );
-        //     let mut new_state = state;
-        //
-        //     // Push PlayerDetail document onto stack
-        //     new_state
-        //         .navigation
-        //         .document_stack
-        //         .push(super::state::DocumentStackEntry {
-        //             document: StackedDocument::PlayerDetail { player_id },
-        //             selected_index: Some(0), // Start with first season selected
-        //         });
-        //
-        //     (new_state, Effect::None)
-        // }
-
-        // Action::SelectTeam(team_abbrev) => {
-        //     debug!("TEAM: Opening team detail document for team={}", team_abbrev);
-        //     let mut new_state = state;
-        //
-        //     // Push TeamDetail document onto stack
-        //     new_state
-        //         .navigation
-        //         .document_stack
-        //         .push(super::state::DocumentStackEntry {
-        //             document: StackedDocument::TeamDetail {
-        //                 abbrev: team_abbrev,
-        //             },
-        //             selected_index: Some(0), // Start with first player selected
-        //         });
-        //
-        //     (new_state, Effect::None)
-        // }
 
         Action::SetStatusMessage { message, is_error } => {
             let mut new_state = state;
@@ -232,42 +171,6 @@ mod tests {
 
         assert!(new_state.system.last_refresh.is_some());
     }
-
-    // #[test]
-    // fn test_select_player_opens_panel() {
-    //     let state = AppState::default();
-    //     let action = Action::SelectPlayer(8471214);
-    //
-    //     let (new_state, effect) = test_reduce(state, action);
-    //
-    //     assert_eq!(new_state.navigation.document_stack.len(), 1);
-    //     match &new_state.navigation.document_stack[0].document {
-    //         StackedDocument::PlayerDetail { player_id } => {
-    //             assert_eq!(*player_id, 8471214);
-    //         }
-    //         _ => panic!("Expected PlayerDetail document"),
-    //     }
-    //     assert_eq!(new_state.navigation.document_stack[0].selected_index, Some(0));
-    //     assert!(matches!(effect, Effect::None));
-    // }
-    //
-    // #[test]
-    // fn test_select_team_opens_document() {
-    //     let state = AppState::default();
-    //     let action = Action::SelectTeam("BOS".to_string());
-    //
-    //     let (new_state, effect) = test_reduce(state, action);
-    //
-    //     assert_eq!(new_state.navigation.document_stack.len(), 1);
-    //     match &new_state.navigation.document_stack[0].document {
-    //         StackedDocument::TeamDetail { abbrev } => {
-    //             assert_eq!(abbrev, "BOS");
-    //         }
-    //         _ => panic!("Expected TeamDetail document"),
-    //     }
-    //     assert_eq!(new_state.navigation.document_stack[0].selected_index, Some(0));
-    //     assert!(matches!(effect, Effect::None));
-    // }
 
     #[test]
     fn test_quit_action_does_nothing_to_state() {

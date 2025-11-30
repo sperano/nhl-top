@@ -18,6 +18,7 @@ pub struct BoxChars {
     pub connector2: String,
     pub connector3: String,
     pub selector: String,
+    pub breadcrumb_separator: String,
 }
 
 impl BoxChars {
@@ -38,6 +39,7 @@ impl BoxChars {
             connector2: "┴".to_string(),
             connector3: "┬".to_string(),
             selector: "▶".to_string(),
+            breadcrumb_separator: "▶".to_string(),
         }
     }
 
@@ -58,6 +60,7 @@ impl BoxChars {
             connector2: "-".to_string(),
             connector3: "-".to_string(),
             selector: ">".to_string(),
+            breadcrumb_separator: ">".to_string(),
         }
     }
 

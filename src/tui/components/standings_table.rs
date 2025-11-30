@@ -48,35 +48,20 @@ pub fn standings_columns() -> &'static Vec<ColumnDef<Standing>> {
 ///
 /// # Arguments
 /// * `standings` - The standings data to display
-/// * `header` - Optional header text for the table
-pub fn create_standings_table(standings: Vec<Standing>, header: Option<&str>) -> TableWidget {
-    let table = TableWidget::from_data(standings_columns(), standings).with_margin(0);
-
-    match header {
-        Some(h) => table.with_header(h),
-        None => table,
-    }
+pub fn create_standings_table(standings: Vec<Standing>) -> TableWidget {
+    TableWidget::from_data(standings_columns(), standings)
 }
 
 /// Create a standings table widget with focus on a specific row
 ///
 /// # Arguments
 /// * `standings` - The standings data to display
-/// * `header` - Optional header text for the table
 /// * `focused_row` - Which row is focused (None for no focus)
 pub fn create_standings_table_with_selection(
     standings: Vec<Standing>,
-    header: Option<&str>,
     focused_row: Option<usize>,
 ) -> TableWidget {
-    let table = TableWidget::from_data(standings_columns(), standings)
-        .with_focused_row(focused_row)
-        .with_margin(0);
-
-    match header {
-        Some(h) => table.with_header(h),
-        None => table,
-    }
+    TableWidget::from_data(standings_columns(), standings).with_focused_row(focused_row)
 }
 
 #[cfg(test)]
@@ -108,20 +93,12 @@ mod tests {
     }
 
     #[test]
-    fn test_create_standings_table_no_header() {
+    fn test_create_standings_table() {
         let standings = create_test_standings();
-        let table = create_standings_table(standings.clone(), None);
+        let table = create_standings_table(standings.clone());
 
         // Should have correct row count
         assert_eq!(table.row_count(), standings.len());
-    }
-
-    #[test]
-    fn test_create_standings_table_with_header() {
-        let standings = create_test_standings();
-        let table = create_standings_table(standings, Some("Test Header"));
-
-        assert!(table.has_header());
     }
 
     #[test]
@@ -129,7 +106,7 @@ mod tests {
         let standings = create_test_standings();
         // Take just first 4 teams for a compact test
         let standings: Vec<_> = standings.into_iter().take(4).collect();
-        let table = create_standings_table(standings, None);
+        let table = create_standings_table(standings);
 
         let height = table.preferred_height().unwrap();
         let buf = render_widget(&table, 60, height);
@@ -145,35 +122,10 @@ mod tests {
     }
 
     #[test]
-    fn test_create_standings_table_with_header_renders_correctly() {
-        let standings = create_test_standings();
-        // Take just first 2 teams for a compact test
-        let standings: Vec<_> = standings.into_iter().take(2).collect();
-        let table = create_standings_table(standings, Some("Atlantic"));
-
-        let height = table.preferred_height().unwrap();
-        let buf = render_widget(&table, 60, height);
-
-        assert_buffer(&buf, &[
-            "  Atlantic",
-            "  ════════",
-            "",
-            "  Team                        GP    W     L    OT   PTS",
-            "  ───────────────────────────────────────────────────────",
-            "  Panthers                      19    14    3    2     30",
-            "  Bruins                        18    13    4    1     27",
-        ]);
-    }
-
-    #[test]
     fn test_create_standings_table_with_selection() {
         let standings = create_test_standings();
         let standings: Vec<_> = standings.into_iter().take(3).collect();
-        let table = create_standings_table_with_selection(
-            standings,
-            None,
-            Some(1), // Focus row 1
-        );
+        let table = create_standings_table_with_selection(standings, Some(1));
 
         let height = table.preferred_height().unwrap();
         let buf = render_widget(&table, 60, height);

@@ -15,9 +15,6 @@ use crate::tui::widgets::{GameBox, StandaloneWidget};
 use super::focus::{FocusableElement, FocusableId, RowPosition};
 use super::link::LinkTarget;
 
-/// Height of table header section (header text + underline + blank line)
-pub(crate) const TABLE_HEADER_HEIGHT: u16 = 3;
-
 /// Height of column headers section (column names + separator)
 pub(crate) const TABLE_COLUMN_HEADER_HEIGHT: u16 = 2;
 
@@ -34,6 +31,20 @@ pub enum DocumentElement {
     Heading {
         level: u8, // 1-6
         content: String,
+    },
+
+    /// Section title (for division/conference names)
+    ///
+    /// Renders as bold text, optionally with underline, always followed by blank line:
+    /// ```text
+    /// Atlantic
+    /// ════════
+    /// (blank)
+    /// ```
+    /// Height is 2 (no underline) or 3 (with underline).
+    SectionTitle {
+        content: String,
+        underline: bool,
     },
 
     /// A link that can be focused and activated
@@ -106,6 +117,17 @@ pub enum DocumentElement {
         /// Whether this game box is currently focused
         focused: bool,
     },
+
+    /// Wrapper that adds left margin to any element
+    ///
+    /// Renders the inner element with the specified left margin (in characters).
+    /// Height is the same as the inner element.
+    Indented {
+        /// The element to render with margin
+        element: Box<DocumentElement>,
+        /// Left margin in characters
+        margin: u16,
+    },
 }
 
 impl std::fmt::Debug for DocumentElement {
@@ -120,6 +142,11 @@ impl std::fmt::Debug for DocumentElement {
                 .debug_struct("Heading")
                 .field("level", level)
                 .field("content", content)
+                .finish(),
+            Self::SectionTitle { content, underline } => f
+                .debug_struct("SectionTitle")
+                .field("content", content)
+                .field("underline", underline)
                 .finish(),
             Self::Link {
                 display,
@@ -162,6 +189,11 @@ impl std::fmt::Debug for DocumentElement {
                 .field("game_id", game_id)
                 .field("focused", focused)
                 .finish(),
+            Self::Indented { element, margin } => f
+                .debug_struct("Indented")
+                .field("element", element)
+                .field("margin", margin)
+                .finish(),
         }
     }
 }
@@ -182,6 +214,10 @@ impl DocumentElement {
                     1
                 }
             }
+            Self::SectionTitle { underline, .. } => {
+                // title + optional underline + blank line
+                if *underline { 3 } else { 2 }
+            }
             Self::Link { .. } => 1,
             Self::Separator => 1,
             Self::Spacer { height } => *height,
@@ -195,6 +231,10 @@ impl DocumentElement {
             Self::GameBoxElement { game_box, .. } => {
                 // GameBox has fixed height of 7
                 game_box.preferred_height().unwrap_or(7)
+            }
+            Self::Indented { element, .. } => {
+                // Same height as inner element
+                element.height()
             }
         }
     }
@@ -274,6 +314,10 @@ impl DocumentElement {
                     row_position: None,
                 });
             }
+            Self::Indented { element, .. } => {
+                // Delegate to inner element (margin doesn't affect focusable collection)
+                element.collect_focusable(out, y_offset);
+            }
             _ => {}
         }
     }
@@ -308,6 +352,9 @@ impl DocumentElement {
             Self::GameBoxElement { game_id, .. } => {
                 out.push(FocusableId::game_link(*game_id));
             }
+            Self::Indented { element, .. } => {
+                element.collect_focusable_ids(out, y_offset);
+            }
             _ => {}
         }
     }
@@ -320,6 +367,9 @@ impl DocumentElement {
             }
             Self::Heading { level, content } => {
                 render_heading(*level, content, area, buf, config);
+            }
+            Self::SectionTitle { content, underline } => {
+                render_section_title(content, *underline, area, buf, config);
             }
             Self::Link {
                 display, focused, ..
@@ -350,6 +400,18 @@ impl DocumentElement {
                 box_to_render.selected = *focused;
                 box_to_render.render(area, buf, config);
             }
+            Self::Indented { element, margin } => {
+                // Render inner element with adjusted area (shifted right by margin)
+                if area.width > *margin {
+                    let indented_area = Rect::new(
+                        area.x + margin,
+                        area.y,
+                        area.width - margin,
+                        area.height,
+                    );
+                    element.render(indented_area, buf, config);
+                }
+            }
         }
     }
 
@@ -374,6 +436,16 @@ impl DocumentElement {
         Self::Heading {
             level: level.clamp(1, 6),
             content: content.into(),
+        }
+    }
+
+    /// Create a section title element (bold text with optional underline)
+    ///
+    /// Used for division/conference names in standings tables.
+    pub fn section_title(content: impl Into<String>, underline: bool) -> Self {
+        Self::SectionTitle {
+            content: content.into(),
+            underline,
         }
     }
 
@@ -427,6 +499,16 @@ impl DocumentElement {
         }
     }
 
+    /// Wrap an element with left margin
+    ///
+    /// The inner element is rendered with the specified left margin in characters.
+    pub fn indented(element: DocumentElement, margin: u16) -> Self {
+        Self::Indented {
+            element: Box::new(element),
+            margin,
+        }
+    }
+
     /// Create a table element from a TableWidget
     ///
     /// Extracts focusable elements from link cells in the table.
@@ -442,14 +524,8 @@ impl DocumentElement {
         let mut focusable = Vec::new();
 
         // Calculate the y-offset where data rows start:
-        // - Optional header (TABLE_HEADER_HEIGHT lines: header + underline + blank)
-        // - Column headers + separator (TABLE_COLUMN_HEADER_HEIGHT lines)
-        let header_offset: u16 = if widget.has_header() {
-            TABLE_HEADER_HEIGHT
-        } else {
-            0
-        };
-        let data_start_y = header_offset + TABLE_COLUMN_HEADER_HEIGHT;
+        // Column headers + separator (TABLE_COLUMN_HEADER_HEIGHT lines)
+        let data_start_y = TABLE_COLUMN_HEADER_HEIGHT;
 
         // Extract focusable elements from link cells
         // Use TableCell IDs for row tracking, LinkTarget for activation data
@@ -592,6 +668,39 @@ fn render_heading(level: u8, content: &str, area: Rect, buf: &mut Buffer, config
                 cell.set_style(underline_style);
             }
         }
+    }
+}
+
+fn render_section_title(
+    content: &str,
+    underline: bool,
+    area: Rect,
+    buf: &mut Buffer,
+    config: &DisplayConfig,
+) {
+    use ratatui::style::Modifier;
+
+    // Bold style with theme fg1 color if available
+    let style = if let Some(theme) = &config.theme {
+        Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().add_modifier(Modifier::BOLD)
+    };
+
+    // Render title text
+    buf.set_string(area.x, area.y, content, style);
+
+    // Render underline if enabled
+    if underline && area.height > 1 {
+        let underline_style = if let Some(theme) = &config.theme {
+            Style::default().fg(theme.fg2)
+        } else {
+            Style::default()
+        };
+
+        //TODO: use Boxchar instead of hardcoded unicode character
+        let underline_str: String = "═".repeat(content.chars().count());
+        buf.set_string(area.x, area.y + 1, &underline_str, underline_style);
     }
 }
 

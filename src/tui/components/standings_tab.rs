@@ -18,11 +18,12 @@ use crate::tui::{
 
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 
-use crate::tui::action::{Action, ComponentMessageTrait};
+use crate::tui::action::Action;
 use crate::tui::component::Effect;
 use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
+use crate::tui::tab_component::{CommonTabMessage, TabMessage, TabState, handle_common_message};
 use crate::tui::types::StackedDocument;
-use std::any::Any;
+use crate::component_message_impl;
 
 /// Component state for StandingsTab - managed by the component itself
 #[derive(Clone, Debug)]
@@ -42,10 +43,13 @@ impl Default for StandingsTabState {
     }
 }
 
-impl StandingsTabState {
-    /// Check if browse mode is active (derived from focus_index)
-    pub fn is_browse_mode(&self) -> bool {
-        self.doc_nav.focus_index.is_some()
+impl TabState for StandingsTabState {
+    fn doc_nav(&self) -> &DocumentNavState {
+        &self.doc_nav
+    }
+
+    fn doc_nav_mut(&mut self) -> &mut DocumentNavState {
+        &mut self.doc_nav
     }
 }
 
@@ -73,20 +77,23 @@ pub enum StandingsTabMsg {
     ActivateTeam,
 }
 
-impl ComponentMessageTrait for StandingsTabMsg {
-    fn apply(&self, state: &mut dyn Any) -> Effect {
-        if let Some(standings_state) = state.downcast_mut::<StandingsTabState>() {
-            let mut component = StandingsTab;
-            component.update(self.clone(), standings_state)
-        } else {
-            Effect::None
+impl TabMessage for StandingsTabMsg {
+    fn as_common(&self) -> Option<CommonTabMessage<'_>> {
+        match self {
+            Self::DocNav(msg) => Some(CommonTabMessage::DocNav(msg)),
+            Self::UpdateViewportHeight(h) => Some(CommonTabMessage::UpdateViewportHeight(*h)),
+            Self::NavigateUp => Some(CommonTabMessage::NavigateUp),
+            _ => None,
         }
     }
 
-    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
-        Box::new(self.clone())
+    fn from_doc_nav(msg: DocumentNavMsg) -> Self {
+        Self::DocNav(msg)
     }
 }
+
+// Use macro to eliminate ComponentMessageTrait boilerplate
+component_message_impl!(StandingsTabMsg, StandingsTab, StandingsTabState);
 
 /// Props for StandingsTab component
 #[derive(Clone)]
@@ -101,6 +108,7 @@ pub struct StandingsTabProps {
 }
 
 /// StandingsTab component - renders standings with view selector
+#[derive(Default)]
 pub struct StandingsTab;
 
 impl Component for StandingsTab {
@@ -113,19 +121,14 @@ impl Component for StandingsTab {
     }
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
+        // Handle common tab messages (DocNav, UpdateViewportHeight, NavigateUp)
+        if let Some(effect) = handle_common_message(msg.as_common(), state) {
+            return effect;
+        }
+
+        // Handle tab-specific messages
         match msg {
             StandingsTabMsg::Key(key) => self.handle_key(key, state),
-
-            StandingsTabMsg::NavigateUp => {
-                // Exit browse mode if active, otherwise let it bubble up
-                if state.is_browse_mode() {
-                    state.doc_nav.focus_index = None;
-                    state.doc_nav.scroll_offset = 0;
-                    Effect::Handled
-                } else {
-                    Effect::None // Let it bubble up to exit content focus
-                }
-            }
 
             StandingsTabMsg::CycleViewLeft => {
                 state.view = match state.view {
@@ -135,8 +138,7 @@ impl Component for StandingsTab {
                     GroupBy::League => GroupBy::Conference,
                 };
                 // Reset focus/scroll when changing views
-                state.doc_nav.focus_index = None;
-                state.doc_nav.scroll_offset = 0;
+                state.exit_browse_mode();
                 // Signal that focusable metadata needs to be rebuilt
                 Effect::Action(crate::tui::action::Action::StandingsAction(
                     crate::tui::action::StandingsAction::RebuildFocusableMetadata,
@@ -150,38 +152,24 @@ impl Component for StandingsTab {
                     GroupBy::League => GroupBy::Wildcard,
                 };
                 // Reset focus/scroll when changing views
-                state.doc_nav.focus_index = None;
-                state.doc_nav.scroll_offset = 0;
+                state.exit_browse_mode();
                 // Signal that focusable metadata needs to be rebuilt
                 Effect::Action(crate::tui::action::Action::StandingsAction(
                     crate::tui::action::StandingsAction::RebuildFocusableMetadata,
                 ))
             }
             StandingsTabMsg::EnterBrowseMode => {
-                // Initialize focus to first element if available
-                if !state.doc_nav.focusable_positions.is_empty() && state.doc_nav.focus_index.is_none() {
-                    state.doc_nav.focus_index = Some(0);
-                }
+                state.enter_browse_mode();
                 Effect::None
             }
             StandingsTabMsg::ExitBrowseMode => {
-                state.doc_nav.focus_index = None;
-                state.doc_nav.scroll_offset = 0;
-                Effect::None
-            }
-
-            StandingsTabMsg::DocNav(nav_msg) => {
-                crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
-            }
-
-            StandingsTabMsg::UpdateViewportHeight(height) => {
-                state.doc_nav.viewport_height = height;
+                state.exit_browse_mode();
                 Effect::None
             }
 
             StandingsTabMsg::ActivateTeam => {
                 // Get the team abbreviation from the focused element's link target
-                if let Some(link_target) = state.doc_nav.focused_link_target() {
+                if let Some(link_target) = state.doc_nav().focused_link_target() {
                     if let crate::tui::document::LinkTarget::Action(action) = link_target {
                         // Parse "team:TOR" format
                         if let Some(abbrev) = action.strip_prefix("team:") {
@@ -194,6 +182,11 @@ impl Component for StandingsTab {
                     }
                 }
                 Effect::None
+            }
+
+            // Common messages already handled above
+            StandingsTabMsg::DocNav(_) | StandingsTabMsg::UpdateViewportHeight(_) | StandingsTabMsg::NavigateUp => {
+                unreachable!("Common messages should be handled by handle_common_message")
             }
         }
     }
@@ -569,11 +562,11 @@ mod tests {
         // Division view now uses document system with two Groups in a Row
         // Layout: Atlantic + Metropolitan on left, Central + Pacific on right
         // (when western_first = false, which is the default)
+        // Section titles have no underline
         assert_buffer(&buf, &[
             "Wildcard │ Division │ Conference │ League",
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
             "  Atlantic                                                     Central",
-            "  ════════                                                     ═══════",
             "",
             "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
@@ -587,7 +580,6 @@ mod tests {
             "  Sabres                        18     6   10    2     14      Coyotes                       18     4   13    1      9",
             "",
             "  Metropolitan                                                 Pacific",
-            "  ════════════                                                 ═══════",
             "",
             "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
@@ -599,6 +591,8 @@ mod tests {
             "  Islanders                     18     9    7    2     20      Flames                        19     9    8    2     20",
             "  Flyers                        18     8    9    1     17      Ducks                         19     7   10    2     16",
             "  Blue Jackets                  18     5   11    2     12      Sharks                        18     5   12    1     11",
+            "",
+            "",
             "",
             "",
             "",
@@ -639,7 +633,6 @@ mod tests {
             "Wildcard │ Division │ Conference │ League",
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
             "  Eastern                                                      Western",
-            "  ═══════                                                      ═══════",
             "",
             "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
@@ -659,6 +652,7 @@ mod tests {
             "  Flyers                        18     8    9    1     17      Blackhawks                    18     7   10    1     15",
             "  Sabres                        18     6   10    2     14      Sharks                        18     5   12    1     11",
             "  Blue Jackets                  18     5   11    2     12      Coyotes                       18     4   13    1      9",
+            "",
             "",
             "",
             "",
@@ -698,7 +692,6 @@ mod tests {
             "Wildcard │ Division │ Conference │ League",
             "─────────┴──────────┴────────────┴──────────────────────────────────────────────────────────────────────────────────────",
             "  Atlantic                                                     Central",
-            "  ════════                                                     ═══════",
             "",
             "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
@@ -707,7 +700,6 @@ mod tests {
             "  Maple Leafs                   19    12    5    2     26      Jets                          19    13    5    1     27",
             "",
             "  Metropolitan                                                 Pacific",
-            "  ════════════                                                 ═══════",
             "",
             "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
@@ -716,7 +708,6 @@ mod tests {
             "  Rangers                       18    12    5    1     25      Kings                         19    12    6    1     25",
             "",
             "  Wildcard                                                     Wildcard",
-            "  ════════                                                     ════════",
             "",
             "  Team                        GP    W     L    OT   PTS        Team                        GP    W     L    OT   PTS",
             "  ───────────────────────────────────────────────────────      ───────────────────────────────────────────────────────",
@@ -730,6 +721,9 @@ mod tests {
             "  Flyers                        18     8    9    1     17      Blackhawks                    18     7   10    1     15",
             "  Sabres                        18     6   10    2     14      Sharks                        18     5   12    1     11",
             "  Blue Jackets                  18     5   11    2     12      Coyotes                       18     4   13    1      9",
+            "",
+            "",
+            "",
             "",
             "",
             "",

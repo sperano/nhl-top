@@ -78,13 +78,15 @@ impl TeamDetailDocumentContent {
         let mut sorted_skaters = stats.skaters.clone();
         sorted_skaters.sort_by_points_desc();
 
+        let title = format!("SKATERS ({}) - Regular Season", stats.skaters.len());
         let columns = skater_columns();
         let table = TableWidget::from_data(&columns, sorted_skaters)
-            .with_header(format!("SKATERS ({}) - Regular Season", stats.skaters.len()))
-            .with_focused_row(focus.focused_table_row("skaters"))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row("skaters"));
 
-        Some(DocumentElement::table("skaters", table))
+        Some(DocumentElement::group(vec![
+            DocumentElement::section_title(title, true),
+            DocumentElement::table("skaters", table),
+        ]))
     }
 
     /// Build goalie stats table
@@ -97,13 +99,15 @@ impl TeamDetailDocumentContent {
         let mut sorted_goalies = stats.goalies.clone();
         sorted_goalies.sort_by_games_played_desc();
 
+        let title = format!("GOALIES ({}) - Regular Season", stats.goalies.len());
         let columns = goalie_columns();
         let table = TableWidget::from_data(&columns, sorted_goalies)
-            .with_header(format!("GOALIES ({}) - Regular Season", stats.goalies.len()))
-            .with_focused_row(focus.focused_table_row("goalies"))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row("goalies"));
 
-        Some(DocumentElement::table("goalies", table))
+        Some(DocumentElement::group(vec![
+            DocumentElement::section_title(title, true),
+            DocumentElement::table("goalies", table),
+        ]))
     }
 }
 

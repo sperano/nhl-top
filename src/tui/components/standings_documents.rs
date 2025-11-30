@@ -35,8 +35,7 @@ impl Document for LeagueStandingsDocument {
         let focused_row = focus.focused_table_row("league_standings");
 
         let table = TableWidget::from_data(standings_columns(), self.standings.as_ref().clone())
-            .with_focused_row(focused_row)
-            .with_margin(0);
+            .with_focused_row(focused_row);
 
         DocumentBuilder::new()
             .table("league_standings", table)
@@ -107,21 +106,25 @@ impl Document for ConferenceStandingsDocument {
 
         // Create left table
         let left_table = TableWidget::from_data(standings_columns(), left_teams)
-            .with_header(left_header)
-            .with_focused_row(focus.focused_table_row(LEFT_TABLE))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row(LEFT_TABLE));
 
         // Create right table
         let right_table = TableWidget::from_data(standings_columns(), right_teams)
-            .with_header(right_header)
-            .with_focused_row(focus.focused_table_row(RIGHT_TABLE))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row(RIGHT_TABLE));
 
-        // Use Row element to place tables side-by-side
+        // Use Row element to place tables side-by-side with section titles
+        // Section titles are indented by 2 to align with table content (after selector space)
+        const MARGIN: u16 = 2;
         DocumentBuilder::new()
             .row(vec![
-                DocumentElement::table(LEFT_TABLE, left_table),
-                DocumentElement::table(RIGHT_TABLE, right_table),
+                DocumentElement::group(vec![
+                    DocumentElement::indented(DocumentElement::section_title(left_header, false), MARGIN),
+                    DocumentElement::table(LEFT_TABLE, left_table),
+                ]),
+                DocumentElement::group(vec![
+                    DocumentElement::indented(DocumentElement::section_title(right_header, false), MARGIN),
+                    DocumentElement::table(RIGHT_TABLE, right_table),
+                ]),
             ])
             .build()
     }
@@ -196,14 +199,20 @@ impl DivisionStandingsDocument {
         table_prefix: &str,
         focus: &FocusContext,
     ) -> DocumentElement {
+        const MARGIN: u16 = 2;
         let mut children = Vec::new();
 
         for (idx, (div_name, teams)) in divisions.iter().enumerate() {
             let table_name = format!("{}_{}", table_prefix, div_name.to_lowercase());
+
+            // Add section title for division name (indented to align with table content)
+            children.push(DocumentElement::indented(
+                DocumentElement::section_title(*div_name, false),
+                MARGIN,
+            ));
+
             let table = TableWidget::from_data(standings_columns(), teams.clone())
-                .with_header(*div_name)
-                .with_focused_row(focus.focused_table_row(&table_name))
-                .with_margin(0);
+                .with_focused_row(focus.focused_table_row(&table_name));
 
             children.push(DocumentElement::table(table_name, table));
 
@@ -309,16 +318,19 @@ impl WildcardStandingsDocument {
         table_prefix: &str,
         focus: &FocusContext,
     ) -> DocumentElement {
+        const MARGIN: u16 = 2;
         let mut children = Vec::new();
 
         // Division 1 - top 3 teams
         let div1_top3: Vec<_> = div1_teams.iter().take(3).cloned().collect();
         if !div1_top3.is_empty() {
             let table_name = format!("{}_{}", table_prefix, div1_name.to_lowercase());
+            children.push(DocumentElement::indented(
+                DocumentElement::section_title(div1_name, false),
+                MARGIN,
+            ));
             let table = TableWidget::from_data(standings_columns(), div1_top3)
-                .with_header(div1_name)
-                .with_focused_row(focus.focused_table_row(&table_name))
-                .with_margin(0);
+                .with_focused_row(focus.focused_table_row(&table_name));
             children.push(DocumentElement::table(table_name, table));
             children.push(DocumentElement::spacer(1));
         }
@@ -327,10 +339,12 @@ impl WildcardStandingsDocument {
         let div2_top3: Vec<_> = div2_teams.iter().take(3).cloned().collect();
         if !div2_top3.is_empty() {
             let table_name = format!("{}_{}", table_prefix, div2_name.to_lowercase());
+            children.push(DocumentElement::indented(
+                DocumentElement::section_title(div2_name, false),
+                MARGIN,
+            ));
             let table = TableWidget::from_data(standings_columns(), div2_top3)
-                .with_header(div2_name)
-                .with_focused_row(focus.focused_table_row(&table_name))
-                .with_margin(0);
+                .with_focused_row(focus.focused_table_row(&table_name));
             children.push(DocumentElement::table(table_name, table));
             children.push(DocumentElement::spacer(1));
         }
@@ -344,10 +358,12 @@ impl WildcardStandingsDocument {
 
         if !wildcard_teams.is_empty() {
             let table_name = format!("{}_wildcard", table_prefix);
+            children.push(DocumentElement::indented(
+                DocumentElement::section_title("Wildcard", false),
+                MARGIN,
+            ));
             let table = TableWidget::from_data(standings_columns(), wildcard_teams)
-                .with_header("Wildcard")
-                .with_focused_row(focus.focused_table_row(&table_name))
-                .with_margin(0);
+                .with_focused_row(focus.focused_table_row(&table_name));
             children.push(DocumentElement::table(table_name, table));
         }
 
@@ -627,23 +643,31 @@ mod tests {
         // Build with no focus
         let elements = doc.build(&FocusContext::default());
 
-        // Should have one element: a Row containing two tables
+        // Should have one element: a Row containing two groups
         assert_eq!(elements.len(), 1);
 
         // Check that it's a Row element
         match &elements[0] {
             DocumentElement::Row { children, .. } => {
-                // Should have 2 children (left and right conference tables)
+                // Should have 2 children (left and right conference groups)
                 assert_eq!(children.len(), 2);
 
-                // Both children should be tables
+                // Both children should be groups containing [Indented(SectionTitle), Table]
                 for child in children {
                     match child {
-                        DocumentElement::Table { widget, .. } => {
-                            // Each conference should have 16 teams
-                            assert_eq!(widget.row_count(), 16);
+                        DocumentElement::Group { children, .. } => {
+                            assert_eq!(children.len(), 2);
+                            // First child should be Indented(SectionTitle)
+                            assert!(matches!(&children[0], DocumentElement::Indented { .. }));
+                            // Second child should be Table with 16 teams
+                            match &children[1] {
+                                DocumentElement::Table { widget, .. } => {
+                                    assert_eq!(widget.row_count(), 16);
+                                }
+                                _ => panic!("Expected Table element in Group"),
+                            }
                         }
-                        _ => panic!("Expected Table element in Row"),
+                        _ => panic!("Expected Group element in Row"),
                     }
                 }
             }
@@ -674,16 +698,18 @@ mod tests {
 
         // With Row layout, left column elements are collected first, then right column.
         // Both columns have the SAME y-positions because they're rendered side-by-side.
-        // Left column (16 teams): positions 5, 6, 7, ... 20
-        // Right column (16 teams): positions 5, 6, 7, ... 20
+        // Section title (no underline) = 2 lines, then table column headers = 2 lines
+        // So data starts at y=4
+        // Left column (16 teams): positions 4, 5, 6, ... 19
+        // Right column (16 teams): positions 4, 5, 6, ... 19
 
         // First 16 positions are left column
         for i in 0..16 {
-            assert_eq!(positions[i], 5 + i as u16, "Left column position {} should be {}", i, 5 + i);
+            assert_eq!(positions[i], 4 + i as u16, "Left column position {} should be {}", i, 4 + i);
         }
         // Second 16 positions are right column - SAME y values as left
         for i in 0..16 {
-            assert_eq!(positions[16 + i], 5 + i as u16, "Right column position {} should be {}", i, 5 + i);
+            assert_eq!(positions[16 + i], 4 + i as u16, "Right column position {} should be {}", i, 4 + i);
         }
     }
 
@@ -727,10 +753,10 @@ mod tests {
         // Verify Row structure
         match &elements[0] {
             DocumentElement::Row { children, .. } => {
-                // Should have 2 table children
+                // Should have 2 Group children
                 assert_eq!(children.len(), 2);
-                assert!(matches!(children[0], DocumentElement::Table { .. }));
-                assert!(matches!(children[1], DocumentElement::Table { .. }));
+                assert!(matches!(children[0], DocumentElement::Group { .. }));
+                assert!(matches!(children[1], DocumentElement::Group { .. }));
             }
             _ => panic!("Expected Row element"),
         }
@@ -744,10 +770,10 @@ mod tests {
         // Verify Row structure (same structure, different internal ordering)
         match &elements[0] {
             DocumentElement::Row { children, .. } => {
-                // Should have 2 table children
+                // Should have 2 Group children
                 assert_eq!(children.len(), 2);
-                assert!(matches!(children[0], DocumentElement::Table { .. }));
-                assert!(matches!(children[1], DocumentElement::Table { .. }));
+                assert!(matches!(children[0], DocumentElement::Group { .. }));
+                assert!(matches!(children[1], DocumentElement::Group { .. }));
             }
             _ => panic!("Expected Row element"),
         }
@@ -773,15 +799,19 @@ mod tests {
                 // Should have 2 children (left and right columns)
                 assert_eq!(children.len(), 2);
 
-                // Each child should be a Group containing tables
+                // Each child should be a Group containing:
+                // [Indented(SectionTitle), Table, Spacer, Indented(SectionTitle), Table]
                 for child in children {
                     match child {
                         DocumentElement::Group { children: group_children, .. } => {
-                            // Each group should have 3 children: table, spacer, table
-                            assert_eq!(group_children.len(), 3);
-                            assert!(matches!(group_children[0], DocumentElement::Table { .. }));
-                            assert!(matches!(group_children[1], DocumentElement::Spacer { .. }));
-                            assert!(matches!(group_children[2], DocumentElement::Table { .. }));
+                            // Each group should have 5 children:
+                            // Indented(SectionTitle), Table, Spacer, Indented(SectionTitle), Table
+                            assert_eq!(group_children.len(), 5);
+                            assert!(matches!(group_children[0], DocumentElement::Indented { .. }));
+                            assert!(matches!(group_children[1], DocumentElement::Table { .. }));
+                            assert!(matches!(group_children[2], DocumentElement::Spacer { .. }));
+                            assert!(matches!(group_children[3], DocumentElement::Indented { .. }));
+                            assert!(matches!(group_children[4], DocumentElement::Table { .. }));
                         }
                         _ => panic!("Expected Group element in Row"),
                     }

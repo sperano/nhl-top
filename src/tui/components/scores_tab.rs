@@ -1,6 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{buffer::Buffer, layout::Rect};
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -8,10 +7,12 @@ use nhl_api::{DailySchedule, GameDate, GameMatchup};
 
 use crate::commands::scores_format::PeriodScores;
 use crate::config::DisplayConfig;
-use crate::tui::action::{Action, ComponentMessageTrait};
+use crate::tui::action::Action;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::document::{Document, DocumentView};
 use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
+use crate::tui::tab_component::{CommonTabMessage, TabMessage, TabState, handle_common_message};
+use crate::component_message_impl;
 
 use super::scores_grid_document::ScoresGridDocument;
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
@@ -37,10 +38,13 @@ impl Default for ScoresTabState {
     }
 }
 
-impl ScoresTabState {
-    /// Check if browse mode is active (derived from focus_index)
-    pub fn is_browse_mode(&self) -> bool {
-        self.doc_nav.focus_index.is_some()
+impl TabState for ScoresTabState {
+    fn doc_nav(&self) -> &DocumentNavState {
+        &self.doc_nav
+    }
+
+    fn doc_nav_mut(&mut self) -> &mut DocumentNavState {
+        &mut self.doc_nav
     }
 }
 
@@ -72,20 +76,23 @@ pub enum ScoresTabMsg {
     ActivateGame,
 }
 
-impl ComponentMessageTrait for ScoresTabMsg {
-    fn apply(&self, state: &mut dyn Any) -> Effect {
-        if let Some(scores_state) = state.downcast_mut::<ScoresTabState>() {
-            let mut component = ScoresTab;
-            component.update(self.clone(), scores_state)
-        } else {
-            Effect::None
+impl TabMessage for ScoresTabMsg {
+    fn as_common(&self) -> Option<CommonTabMessage<'_>> {
+        match self {
+            Self::DocNav(msg) => Some(CommonTabMessage::DocNav(msg)),
+            Self::UpdateViewportHeight(h) => Some(CommonTabMessage::UpdateViewportHeight(*h)),
+            Self::NavigateUp => Some(CommonTabMessage::NavigateUp),
+            _ => None,
         }
     }
 
-    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
-        Box::new(self.clone())
+    fn from_doc_nav(msg: DocumentNavMsg) -> Self {
+        Self::DocNav(msg)
     }
 }
+
+// Use macro to eliminate ComponentMessageTrait boilerplate
+component_message_impl!(ScoresTabMsg, ScoresTab, ScoresTabState);
 
 /// Props for ScoresTab component (data from parent)
 ///
@@ -104,6 +111,7 @@ pub struct ScoresTabProps {
 }
 //
 /// ScoresTab component - renders scores with date selector
+#[derive(Default)]
 pub struct ScoresTab;
 //
 impl Component for ScoresTab {
@@ -116,19 +124,14 @@ impl Component for ScoresTab {
     }
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
+        // Handle common tab messages (DocNav, UpdateViewportHeight, NavigateUp)
+        if let Some(effect) = handle_common_message(msg.as_common(), state) {
+            return effect;
+        }
+
+        // Handle tab-specific messages
         match msg {
             ScoresTabMsg::Key(key) => self.handle_key(key, state),
-
-            ScoresTabMsg::NavigateUp => {
-                // Exit browse mode if active, otherwise let it bubble up
-                if state.is_browse_mode() {
-                    state.doc_nav.focus_index = None;
-                    state.doc_nav.scroll_offset = 0;
-                    Effect::Handled
-                } else {
-                    Effect::None // Let it bubble up to exit content focus
-                }
-            }
 
             ScoresTabMsg::NavigateLeft => {
                 // Navigate left in the date window
@@ -160,32 +163,18 @@ impl Component for ScoresTab {
                 Effect::Action(Action::RefreshSchedule(state.game_date.clone()))
             }
             ScoresTabMsg::EnterBoxSelection => {
-                // Initialize focus to first element if available
-                if !state.doc_nav.focusable_positions.is_empty() && state.doc_nav.focus_index.is_none() {
-                    state.doc_nav.focus_index = Some(0);
-                }
+                state.enter_browse_mode();
                 Effect::None
             }
             ScoresTabMsg::ExitBoxSelection => {
-                state.doc_nav.focus_index = None;
-                state.doc_nav.scroll_offset = 0;
-                Effect::None
-            }
-
-            // Document navigation (delegated to generic handler)
-            ScoresTabMsg::DocNav(nav_msg) => {
-                crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
-            }
-
-            ScoresTabMsg::UpdateViewportHeight(h) => {
-                state.doc_nav.viewport_height = h;
+                state.exit_browse_mode();
                 Effect::None
             }
 
             // Game activation
             ScoresTabMsg::ActivateGame => {
-                if let Some(focus_idx) = state.doc_nav.focus_index {
-                    if let Some(id) = state.doc_nav.focusable_ids.get(focus_idx) {
+                if let Some(focus_idx) = state.doc_nav().focus_index {
+                    if let Some(id) = state.doc_nav().focusable_ids.get(focus_idx) {
                         if let crate::tui::document::FocusableId::Link(link_id) = id {
                             // Parse "game_12345" -> 12345
                             if let Some(game_id) = link_id.strip_prefix("game_")
@@ -198,6 +187,11 @@ impl Component for ScoresTab {
                     }
                 }
                 Effect::None
+            }
+
+            // Common messages already handled above
+            ScoresTabMsg::DocNav(_) | ScoresTabMsg::UpdateViewportHeight(_) | ScoresTabMsg::NavigateUp => {
+                unreachable!("Common messages should be handled by handle_common_message")
             }
         }
     }

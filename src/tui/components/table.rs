@@ -81,8 +81,7 @@
 /// let table = TableWidget::from_data(&columns, rows)
 ///     .with_selection(props.selected_row.unwrap_or(0), props.selected_col.unwrap_or(0))
 ///     .with_focused(props.table_focused)
-///     .with_header("Player Statistics")
-///     .with_margin(2);
+///     ;
 ///
 /// // 5. Wrap in Element::Widget for component tree
 /// Element::Widget(Box::new(table))
@@ -115,8 +114,7 @@
 /// let table = TableWidget::from_data(&columns, standings)
 ///     .with_selection(selected_row, selected_col)
 ///     .with_focused(focused)
-///     .with_header("NHL Standings")
-///     .with_margin(2);
+///     ;
 /// ```
 ///
 /// # Link Activation
@@ -144,7 +142,6 @@
 /// - **Focused selection**: Uses `config.selection_fg` (bright color)
 /// - **Unfocused selection**: Uses `config.unfocused_selection_fg()` (dim color)
 /// - **Unselected cells**: No special styling (Text and Link look identical)
-/// - **Table header**: Bold text with double-line underline (═)
 /// - **Column headers**: Bold + underlined
 ///
 /// # Navigation Helpers
@@ -197,8 +194,6 @@ pub struct TableWidget {
     column_widths: Vec<usize>,
     column_aligns: Vec<Alignment>,
     cell_data: Vec<Vec<CellValue>>,
-    header: Option<String>,
-    margin: u16,
     /// Which row is focused (externally managed)
     focused_row: Option<usize>,
 }
@@ -223,22 +218,8 @@ impl TableWidget {
             column_widths,
             column_aligns,
             cell_data,
-            header: None,
-            margin: 0,
             focused_row: None,
         }
-    }
-
-    /// Set the table header
-    pub fn with_header(mut self, header: impl Into<String>) -> Self {
-        self.header = Some(header.into());
-        self
-    }
-
-    /// Set the left margin
-    pub fn with_margin(mut self, margin: u16) -> Self {
-        self.margin = margin;
-        self
     }
 
     /// Set which row is focused (externally managed)
@@ -309,57 +290,11 @@ impl TableWidget {
             return;
         }
 
-        let margin = self.margin as usize;
         let mut y = area.y;
-
-        // Render header if present
-        if let Some(ref header_text) = self.header {
-            if y < area.bottom() {
-                let header_line = format!(
-                    "{}{}{}",
-                    " ".repeat(margin),
-                    " ".repeat(SELECTOR_WIDTH),
-                    header_text
-                );
-
-                let header_style = if let Some(theme) = &config.theme {
-                    Style::default().fg(theme.fg2).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().add_modifier(Modifier::BOLD)
-                };
-
-                buf.set_string(area.x, y, &header_line, header_style);
-                y += 1;
-            }
-
-            // Underline
-            if y < area.bottom() {
-                let underline = format!(
-                    "{}{}{}",
-                    " ".repeat(margin),
-                    " ".repeat(SELECTOR_WIDTH),
-                    "═".repeat(header_text.chars().count())
-                );
-
-                let underline_style = if let Some(theme) = &config.theme {
-                    Style::default().fg(theme.fg2)
-                } else {
-                    Style::default()
-                };
-
-                buf.set_string(area.x, y, &underline, underline_style);
-                y += 1;
-            }
-
-            // Blank line after header
-            if y < area.bottom() {
-                y += 1;
-            }
-        }
 
         // Render column headers
         if y < area.bottom() {
-            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
+            let mut x = area.x + SELECTOR_WIDTH as u16;
 
             let col_header_style = if let Some(theme) = &config.theme {
                 Style::default().fg(theme.fg2).add_modifier(Modifier::BOLD)
@@ -382,12 +317,7 @@ impl TableWidget {
                 + (self.column_widths.len().saturating_sub(1) * 2);
 
             let separator = config.box_chars.horizontal.repeat(total_width);
-            let separator_line = format!(
-                "{}{}{}",
-                " ".repeat(margin),
-                " ".repeat(SELECTOR_WIDTH),
-                separator
-            );
+            let separator_line = format!("{}{}", " ".repeat(SELECTOR_WIDTH), separator);
 
             let separator_style = if let Some(theme) = &config.theme {
                 Style::default().fg(theme.fg3)
@@ -414,21 +344,16 @@ impl TableWidget {
                 " ".repeat(SELECTOR_WIDTH)
             };
 
-            // Render margin first
-            if margin > 0 {
-                buf.set_string(area.x, y, &" ".repeat(margin), Style::default());
-            }
-
             // Render selector
             let selector_style = if let Some(theme) = &config.theme {
                 Style::default().fg(theme.fg2)
             } else {
                 Style::default()
             };
-            buf.set_string(area.x + margin as u16, y, &selector, selector_style);
+            buf.set_string(area.x, y, &selector, selector_style);
 
             // Render cells
-            let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
+            let mut x = area.x + SELECTOR_WIDTH as u16;
             for (col_idx, cell_value) in row_cells.iter().enumerate() {
                 let width = self.column_widths[col_idx];
                 let align = self.column_aligns[col_idx];
@@ -519,11 +444,6 @@ impl TableWidget {
     pub fn column_count(&self) -> usize {
         self.column_headers.len()
     }
-
-    /// Check if the table has a header
-    pub fn has_header(&self) -> bool {
-        self.header.is_some()
-    }
 }
 
 impl ElementWidget for TableWidget {
@@ -536,11 +456,10 @@ impl ElementWidget for TableWidget {
     }
 
     fn preferred_height(&self) -> Option<u16> {
-        let header_height = if self.header.is_some() { 3 } else { 0 };
         let col_header_height = if !self.column_headers.is_empty() { 1 } else { 0 };
         let separator_height = if !self.column_headers.is_empty() { 1 } else { 0 };
         let rows_height = self.cell_data.len() as u16;
-        Some(header_height + col_header_height + separator_height + rows_height)
+        Some(col_header_height + separator_height + rows_height)
     }
 
     fn preferred_width(&self) -> Option<u16> {
@@ -550,7 +469,7 @@ impl ElementWidget for TableWidget {
 
         let cols_width: usize = self.column_widths.iter().sum();
         let spacing = (self.column_widths.len() - 1) * 2;
-        Some((self.margin as usize + cols_width + spacing) as u16)
+        Some((SELECTOR_WIDTH + cols_width + spacing) as u16)
     }
 }
 
@@ -673,62 +592,6 @@ mod tests {
     }
 
     #[test]
-    fn test_table_with_header() {
-        let rows = vec![TestRow {
-            name: "Test".to_string(),
-            id: 1,
-            value: 5,
-        }];
-
-        let columns = vec![ColumnDef::new(
-            "Name",
-            10,
-            Alignment::Left,
-            |r: &TestRow| CellValue::Text(r.name.clone()),
-        )];
-
-        let widget = TableWidget::from_data(&columns, rows).with_header("Test Table");
-        let config = test_config();
-        let height = widget.preferred_height().unwrap();
-        let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
-
-        assert_buffer(
-            &buf,
-            &[
-                "  Test Table",
-                "  ══════════",
-                "",
-                "  Name",
-                "  ──────────",
-                "  Test",
-            ],
-        );
-    }
-
-    #[test]
-    fn test_table_with_margin() {
-        let rows = vec![TestRow {
-            name: "Test".to_string(),
-            id: 1,
-            value: 5,
-        }];
-
-        let columns = vec![ColumnDef::new(
-            "Name",
-            10,
-            Alignment::Left,
-            |r: &TestRow| CellValue::Text(r.name.clone()),
-        )];
-
-        let widget = TableWidget::from_data(&columns, rows).with_margin(2);
-        let config = test_config();
-        let height = widget.preferred_height().unwrap();
-        let buf = render_framework_widget(&widget, RENDER_WIDTH, height, &config);
-
-        assert_buffer(&buf, &["    Name", "    ──────────", "    Test"]);
-    }
-
-    #[test]
     fn test_table_alignment() {
         let rows = vec![TestRow {
             name: "X".to_string(),
@@ -791,13 +654,13 @@ mod tests {
         let rows = create_test_rows();
         let columns = create_test_columns();
 
-        let widget = TableWidget::from_data(&columns, rows).with_header("Stats");
+        let widget = TableWidget::from_data(&columns, rows);
 
-        // Height: header(1) + underline(1) + blank(1) + col_header(1) + separator(1) + 3 rows = 8
-        assert_eq!(widget.preferred_height(), Some(8));
+        // Height: col_header(1) + separator(1) + 3 rows = 5
+        assert_eq!(widget.preferred_height(), Some(5));
 
-        // Width: margin(0) + col1(20) + spacing(2) + col2(4) = 26
-        assert_eq!(widget.preferred_width(), Some(26));
+        // Width: selector(2) + col1(20) + spacing(2) + col2(4) = 28
+        assert_eq!(widget.preferred_width(), Some(28));
     }
 
     #[test]
@@ -1026,13 +889,13 @@ mod tests {
             }),
         ];
 
-        let widget = TableWidget::from_data(&columns, rows).with_header("Player Stats");
+        let widget = TableWidget::from_data(&columns, rows);
         let config = test_config();
         let height = widget.preferred_height().unwrap();
         render_framework_widget(&widget, 50, height, &config);
 
         // Just verify it renders without panicking
-        assert_eq!(height, 8); // header(3) + col_header(1) + separator(1) + 3 rows
+        assert_eq!(height, 5); // col_header(1) + separator(1) + 3 rows
     }
 
     #[test]

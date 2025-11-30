@@ -141,13 +141,15 @@ impl BoxscoreDocumentContent {
             return None;
         }
 
+        let title = format!("{} {} - Forwards ({})", team_abbrev, label, forwards.len());
         let columns = game_skater_columns();
         let table = TableWidget::from_data(&columns, forwards.to_vec())
-            .with_header(format!("{} {} - Forwards ({})", team_abbrev, label, forwards.len()))
-            .with_focused_row(focus.focused_table_row(table_id))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row(table_id));
 
-        Some(DocumentElement::table(table_id, table))
+        Some(DocumentElement::group(vec![
+            DocumentElement::section_title(title, true),
+            DocumentElement::table(table_id, table),
+        ]))
     }
 
     /// Build defense table for a team
@@ -163,13 +165,15 @@ impl BoxscoreDocumentContent {
             return None;
         }
 
+        let title = format!("{} {} - Defense ({})", team_abbrev, label, defense.len());
         let columns = game_skater_columns();
         let table = TableWidget::from_data(&columns, defense.to_vec())
-            .with_header(format!("{} {} - Defense ({})", team_abbrev, label, defense.len()))
-            .with_focused_row(focus.focused_table_row(table_id))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row(table_id));
 
-        Some(DocumentElement::table(table_id, table))
+        Some(DocumentElement::group(vec![
+            DocumentElement::section_title(title, true),
+            DocumentElement::table(table_id, table),
+        ]))
     }
 
     /// Build goalies table for a team
@@ -185,13 +189,15 @@ impl BoxscoreDocumentContent {
             return None;
         }
 
+        let title = format!("{} {} - Goalies ({})", team_abbrev, label, goalies.len());
         let columns = game_goalie_columns();
         let table = TableWidget::from_data(&columns, goalies.to_vec())
-            .with_header(format!("{} {} - Goalies ({})", team_abbrev, label, goalies.len()))
-            .with_focused_row(focus.focused_table_row(table_id))
-            .with_margin(0);
+            .with_focused_row(focus.focused_table_row(table_id));
 
-        Some(DocumentElement::table(table_id, table))
+        Some(DocumentElement::group(vec![
+            DocumentElement::section_title(title, true),
+            DocumentElement::table(table_id, table),
+        ]))
     }
 
     /// Build player stats section for one team

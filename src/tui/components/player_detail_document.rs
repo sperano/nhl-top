@@ -259,12 +259,13 @@ impl Document for PlayerDetailDocumentContent {
             let focused_row = focus.focused_table_row("season_stats");
             let total_seasons = seasons.len();
 
+            let title = format!("SEASON BY SEASON ({} NHL seasons)", total_seasons);
             let table = TableWidget::from_data(&columns, seasons)
-                .with_focused_row(focused_row)
-                .with_header(format!("SEASON BY SEASON ({} NHL seasons)", total_seasons))
-                .with_margin(0);
+                .with_focused_row(focused_row);
 
-            builder = builder.table("season_stats", table);
+            builder = builder
+                .element(DocumentElement::section_title(title, true))
+                .table("season_stats", table);
         }
 
         builder.build()

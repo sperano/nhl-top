@@ -23,7 +23,7 @@ pub use app::App;
 pub use boxscore_document::{BoxscoreDocument, BoxscoreDocumentProps};
 pub use breadcrumb::BreadcrumbWidget;
 pub use demo_tab::{DemoTab, DemoTabProps};
-pub use goalie_stats_table::GoalieStatsTableWidget;
+//pub use goalie_stats_table::GoalieStatsTableWidget;
 pub use player_detail_document::{PlayerDetailDocument, PlayerDetailDocumentProps};
 pub use scores_tab::{ScoresTab, ScoresTabProps};
 pub use settings_tab::{SettingsTab, SettingsTabMsg, SettingsTabProps, SettingsTabState};

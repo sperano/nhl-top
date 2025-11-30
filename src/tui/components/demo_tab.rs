@@ -15,8 +15,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::config::DisplayConfig;
-use crate::tui::action::{Action, ComponentMessageTrait};
-use crate::tui::document_nav::DocumentNavMsg;
+use crate::tui::action::Action;
+use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
 use crate::tui::components::TableWidget;
@@ -24,8 +24,10 @@ use crate::tui::document::{
     Document, DocumentBuilder, DocumentElement, DocumentView, FocusContext, LinkTarget,
 };
 use crate::tui::helpers::StandingsSorting;
+use crate::tui::tab_component::{CommonTabMessage, TabMessage, handle_common_message};
 use crate::tui::types::StackedDocument;
 use crate::tui::{Alignment, CellValue, ColumnDef};
+use crate::component_message_impl;
 
 /// Demo player data for the sample player table
 #[derive(Clone)]
@@ -135,23 +137,26 @@ pub enum DemoTabMessage {
     ActivateLink,
 }
 
-impl ComponentMessageTrait for DemoTabMessage {
-    fn apply(&self, state: &mut dyn std::any::Any) -> Effect {
-        if let Some(demo_state) = state.downcast_mut::<crate::tui::document_nav::DocumentNavState>() {
-            let mut component = DemoTab;
-            let msg = self.clone();
-            component.update(msg, demo_state)
-        } else {
-            Effect::None
+impl TabMessage for DemoTabMessage {
+    fn as_common(&self) -> Option<CommonTabMessage<'_>> {
+        match self {
+            Self::DocNav(msg) => Some(CommonTabMessage::DocNav(msg)),
+            Self::UpdateViewportHeight(h) => Some(CommonTabMessage::UpdateViewportHeight(*h)),
+            Self::NavigateUp => Some(CommonTabMessage::NavigateUp),
+            _ => None,
         }
     }
 
-    fn clone_box(&self) -> Box<dyn ComponentMessageTrait> {
-        Box::new(self.clone())
+    fn from_doc_nav(msg: DocumentNavMsg) -> Self {
+        Self::DocNav(msg)
     }
 }
 
+// Use macro to eliminate ComponentMessageTrait boilerplate
+component_message_impl!(DemoTabMessage, DemoTab, DocumentNavState);
+
 /// Demo tab component
+#[derive(Default)]
 pub struct DemoTab;
 
 impl Component for DemoTab {
@@ -174,27 +179,15 @@ impl Component for DemoTab {
     }
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
+        // Handle common tab messages (DocNav, UpdateViewportHeight, NavigateUp)
+        if let Some(effect) = handle_common_message(msg.as_common(), state) {
+            return effect;
+        }
+
+        // Handle tab-specific messages
         match msg {
             DemoTabMessage::Key(key) => self.handle_key(key, state),
 
-            DemoTabMessage::NavigateUp => {
-                // Exit browse mode if active, otherwise let it bubble up
-                if state.focus_index.is_some() {
-                    state.focus_index = None;
-                    state.scroll_offset = 0;
-                    Effect::Handled
-                } else {
-                    Effect::None // Let it bubble up to exit content focus
-                }
-            }
-
-            DemoTabMessage::DocNav(nav_msg) => {
-                crate::tui::document_nav::handle_message(state, &nav_msg)
-            }
-            DemoTabMessage::UpdateViewportHeight(height) => {
-                state.viewport_height = height;
-                Effect::None
-            }
             DemoTabMessage::ActivateLink => {
                 // Get the link target from the focused element
                 if let Some(link_target) = state.focused_link_target() {
@@ -216,6 +209,11 @@ impl Component for DemoTab {
                     }
                 }
                 Effect::None
+            }
+
+            // Common messages already handled above
+            DemoTabMessage::DocNav(_) | DemoTabMessage::UpdateViewportHeight(_) | DemoTabMessage::NavigateUp => {
+                unreachable!("Common messages should be handled by handle_common_message")
             }
         }
     }
@@ -329,7 +327,6 @@ impl DemoDocument {
                 // Use the shared standings table component with focus state
                 let table = create_standings_table_with_selection(
                     sorted,
-                    None,
                     focus.focused_table_row(TABLE_NAME),
                 );
 

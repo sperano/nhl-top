@@ -19,10 +19,8 @@ use nhl_api::{GoalieDecision, GoalieStats};
 /// let goalies: Vec<GoalieStats> = boxscore.player_by_game_stats.away_team.goalies;
 ///
 /// let table = GoalieStatsTableWidget::from_game_stats(goalies)
-///     .with_header("Away - Goalies")
-///     .with_selection(0, 0)
-///     .with_focused(true)
-///     .build();
+///     .with_focused_row(Some(0))
+///     ;
 ///
 /// table.render(area, buf, config);
 /// ```
@@ -100,21 +98,9 @@ impl GoalieStatsTableWidget {
         Self { inner }
     }
 
-    /// Set the table header text
-    pub fn with_header(mut self, header: impl Into<String>) -> Self {
-        self.inner = self.inner.with_header(header);
-        self
-    }
-
     /// Set which row is focused (externally managed)
     pub fn with_focused_row(mut self, row: Option<usize>) -> Self {
         self.inner = self.inner.with_focused_row(row);
-        self
-    }
-
-    /// Set left margin (spaces before table content)
-    pub fn with_margin(mut self, margin: u16) -> Self {
-        self.inner = self.inner.with_margin(margin);
         self
     }
 
@@ -206,9 +192,7 @@ mod tests {
             ),
         ];
 
-        let table = GoalieStatsTableWidget::from_game_stats(goalies)
-            .with_header("Goalies")
-            .with_focused_row(Some(0));
+        let table = GoalieStatsTableWidget::from_game_stats(goalies).with_focused_row(Some(0));
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -238,8 +222,7 @@ mod tests {
 
     #[test]
     fn test_table_with_no_data() {
-        let table = GoalieStatsTableWidget::from_game_stats(vec![])
-            .with_header("No Goalies");
+        let table = GoalieStatsTableWidget::from_game_stats(vec![]);
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -262,9 +245,7 @@ mod tests {
             28,
         )];
 
-        let table = GoalieStatsTableWidget::from_game_stats(goalies)
-            .with_header("Test")
-            .with_margin(0);
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -275,12 +256,12 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "  Test",
-                "  ════",
-                "",
                 "  Player                Dec  SA   Sa...  GA  SV%    TOI    EV...  PP...  SH...",
                 "  ────────────────────────────────────────────────────────────────────────────",
                 "  Carey Price            W    30     28   2  0....  60...     15      5      2",
+                "",
+                "",
+                "",
                 "",
                 "",
                 "",
@@ -304,9 +285,7 @@ mod tests {
 
         let goalies = vec![win_goalie, loss_goalie, ot_goalie, no_decision];
 
-        let table = GoalieStatsTableWidget::from_game_stats(goalies)
-            .with_header("Decisions")
-            .with_margin(0);
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         let area = Rect::new(0, 0, 80, 8);
         let mut buf = Buffer::empty(area);
@@ -326,9 +305,7 @@ mod tests {
 
         let goalies = vec![perfect_goalie, good_goalie];
 
-        let table = GoalieStatsTableWidget::from_game_stats(goalies)
-            .with_header("Save Percentages")
-            .with_margin(0);
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         let area = Rect::new(0, 0, 100, 6);
         let mut buf = Buffer::empty(area);
@@ -345,7 +322,7 @@ mod tests {
         let goalie = create_test_goalie(8471679, "No Decision", None, 30, 28);
 
         let goalies = vec![goalie];
-        let table = GoalieStatsTableWidget::from_game_stats(goalies).with_margin(0);
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         let area = Rect::new(0, 0, 80, 6);
         let mut buf = Buffer::empty(area);
@@ -363,7 +340,7 @@ mod tests {
         goalie.save_pctg = None;
 
         let goalies = vec![goalie];
-        let table = GoalieStatsTableWidget::from_game_stats(goalies).with_margin(0);
+        let table = GoalieStatsTableWidget::from_game_stats(goalies);
 
         let area = Rect::new(0, 0, 80, 6);
         let mut buf = Buffer::empty(area);

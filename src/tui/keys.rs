@@ -13,6 +13,7 @@ use super::components::scores_tab::ScoresTabState;
 use super::components::standings_tab::StandingsTabState;
 use super::constants::{DEMO_TAB_PATH, SCORES_TAB_PATH, SETTINGS_TAB_PATH, STANDINGS_TAB_PATH};
 use super::state::AppState;
+use super::tab_component::TabState;
 use super::types::Tab;
 
 /// Helper to check if scores tab is in browse mode (box selection)

@@ -70,7 +70,7 @@ impl App {
                 let breadcrumb_element = self.render_breadcrumb(state);
 
                 let content_with_breadcrumb = vertical(
-                    [Constraint::Length(1), Constraint::Min(0)],
+                    [Constraint::Length(2), Constraint::Min(0)],
                     vec![breadcrumb_element, doc_element],
                 );
 
@@ -139,7 +139,7 @@ impl App {
                 // Wrap document with breadcrumb
                 let content_with_breadcrumb = vertical(
                     [
-                        Constraint::Length(1), // Breadcrumb (1 line)
+                        Constraint::Length(2), // Breadcrumb (2 lines: text + divider)
                         Constraint::Min(0),    // Document content
                     ],
                     vec![breadcrumb_element, doc_element],

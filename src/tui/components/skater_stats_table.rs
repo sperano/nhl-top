@@ -19,10 +19,8 @@ use nhl_api::SkaterStats;
 /// let forwards: Vec<SkaterStats> = boxscore.player_by_game_stats.away_team.forwards;
 ///
 /// let table = SkaterStatsTableWidget::from_game_stats(forwards)
-///     .with_header("Away - Forwards")
-///     .with_selection(0, 0)
-///     .with_focused(true)
-///     .build();
+///     .with_focused_row(Some(0))
+///     ;
 ///
 /// table.render(area, buf, config);
 /// ```
@@ -105,21 +103,9 @@ impl SkaterStatsTableWidget {
         Self { inner }
     }
 
-    /// Set the table header text
-    pub fn with_header(mut self, header: impl Into<String>) -> Self {
-        self.inner = self.inner.with_header(header);
-        self
-    }
-
     /// Set which row is focused (externally managed)
     pub fn with_focused_row(mut self, row: Option<usize>) -> Self {
         self.inner = self.inner.with_focused_row(row);
-        self
-    }
-
-    /// Set left margin (spaces before table content)
-    pub fn with_margin(mut self, margin: u16) -> Self {
-        self.inner = self.inner.with_margin(margin);
         self
     }
 
@@ -198,9 +184,7 @@ mod tests {
             create_test_skater(8478402, "Connor McDavid", Position::Center, 1, 3),
         ];
 
-        let table = SkaterStatsTableWidget::from_game_stats(skaters)
-            .with_header("Forwards")
-            .with_focused_row(Some(0));
+        let table = SkaterStatsTableWidget::from_game_stats(skaters).with_focused_row(Some(0));
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -230,8 +214,7 @@ mod tests {
 
     #[test]
     fn test_table_with_no_data() {
-        let table = SkaterStatsTableWidget::from_game_stats(vec![])
-            .with_header("No Skaters");
+        let table = SkaterStatsTableWidget::from_game_stats(vec![]);
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -254,9 +237,7 @@ mod tests {
             1,
         )];
 
-        let table = SkaterStatsTableWidget::from_game_stats(skaters)
-            .with_header("Test")
-            .with_margin(0);
+        let table = SkaterStatsTableWidget::from_game_stats(skaters);
 
         let area = Rect::new(0, 0, 80, 10);
         let mut buf = Buffer::empty(area);
@@ -267,12 +248,12 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "  Test",
-                "  ════",
-                "",
                 "  Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI",
                 "  ──────────────────────────────────────────────────────────────────────────────",
                 "  Auston Matthews        C    2   1    3   +2    8     5    2    4   55.0  18...",
+                "",
+                "",
+                "",
                 "",
                 "",
                 "",
@@ -287,9 +268,7 @@ mod tests {
 
         let skater = create_test_skater(8479318, "A. Matthews", Position::Center, 2, 1);
 
-        let table = SkaterStatsTableWidget::from_game_stats(vec![skater])
-            .with_header("Stats")
-            .with_margin(0);
+        let table = SkaterStatsTableWidget::from_game_stats(vec![skater]);
 
         let area = Rect::new(0, 0, 100, 10);
         let mut buf = Buffer::empty(area);
@@ -298,12 +277,12 @@ mod tests {
         table.render(area, &mut buf, &config);
 
         assert_buffer(&buf, &[
-            "  Stats",
-            "  ═════",
-            "",
             "  Player                Pos  G   A   PTS  +/-  SOG  H...  Blk  PIM  FO%    TOI    S...  G...  T...",
             "  ────────────────────────────────────────────────────────────────────────────────────────────────",
             "  A. Matthews            C    2   1    3   +2    8     5    2    4   55.0  18...    22     1     3",
+            "",
+            "",
+            "",
             "",
             "",
             "",

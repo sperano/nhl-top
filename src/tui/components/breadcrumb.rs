@@ -28,8 +28,23 @@ impl BreadcrumbWidget {
     }
 
     /// Build breadcrumb text from tab and document stack
-    fn build_breadcrumb_text(&self) -> Vec<Span<'_>> {
+    fn build_breadcrumb_text(&self, config: &DisplayConfig) -> Vec<Span<'_>> {
         let mut spans = Vec::new();
+
+        // Get styles from theme
+        let (text_style, separator_style) = if let Some(theme) = &config.theme {
+            (
+                Style::default().fg(theme.fg2).add_modifier(Modifier::BOLD),
+                Style::default().fg(theme.fg3),
+            )
+        } else {
+            (
+                Style::default().add_modifier(Modifier::BOLD),
+                Style::default(),
+            )
+        };
+
+        let separator = format!(" {} ", config.box_chars.breadcrumb_separator);
 
         // Start with the current tab name
         let tab_name = match self.current_tab {
@@ -39,14 +54,11 @@ impl BreadcrumbWidget {
             Tab::Demo => "Demo",
         };
 
-        spans.push(Span::styled(
-            tab_name.to_string(),
-            Style::default().add_modifier(Modifier::BOLD),
-        ));
+        spans.push(Span::styled(tab_name.to_string(), text_style));
 
         // Add each document in the stack
         for doc_entry in &self.document_stack {
-            spans.push(Span::raw(" > "));
+            spans.push(Span::styled(separator.clone(), separator_style));
 
             let doc_text = match &doc_entry.document {
                 StackedDocument::Boxscore { game_id } => format!("Boxscore: Game {}", game_id),
@@ -54,24 +66,41 @@ impl BreadcrumbWidget {
                 StackedDocument::PlayerDetail { player_id } => format!("Player: {}", player_id),
             };
 
-            spans.push(Span::raw(doc_text));
+            spans.push(Span::styled(doc_text, text_style));
         }
 
         spans
     }
 }
 
+/// Box drawing character for horizontal divider
+const HORIZONTAL_LINE: char = '─';
+
 impl ElementWidget for BreadcrumbWidget {
-    fn render(&self, area: Rect, buf: &mut Buffer, _config: &DisplayConfig) {
+    fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if area.height == 0 || area.width == 0 {
             return;
         }
 
-        let spans = self.build_breadcrumb_text();
+        let spans = self.build_breadcrumb_text(config);
         let line = Line::from(spans);
 
         // Render the breadcrumb line
         buf.set_line(area.x, area.y, &line, area.width);
+
+        // Render the divider line on the second row
+        if area.height >= 2 {
+            let divider_style = if let Some(theme) = &config.theme {
+                Style::default().fg(theme.fg3)
+            } else {
+                Style::default()
+            };
+            let divider: String = std::iter::repeat(HORIZONTAL_LINE)
+                .take(area.width as usize)
+                .collect();
+            let divider_line = Line::from(Span::styled(divider, divider_style));
+            buf.set_line(area.x, area.y + 1, &divider_line, area.width);
+        }
     }
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {
@@ -82,7 +111,7 @@ impl ElementWidget for BreadcrumbWidget {
         if self.document_stack.is_empty() {
             Some(0) // No breadcrumb if no documents are open
         } else {
-            Some(1) // 1 line for breadcrumb
+            Some(2) // 2 lines: breadcrumb text + divider
         }
     }
 }
@@ -99,11 +128,17 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Scores, Vec::new());
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        // With no documents, should just show the tab name
-        assert_buffer(&buf, &["Scores"]);
+        // With no documents, should just show the tab name and divider
+        assert_buffer(
+            &buf,
+            &[
+                "Scores",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -118,10 +153,16 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Standings, document_stack);
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Standings > Team: TOR"]);
+        assert_buffer(
+            &buf,
+            &[
+                "Standings ▶ Team: TOR",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -136,10 +177,16 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Scores > Boxscore: Game 2024020001"]);
+        assert_buffer(
+            &buf,
+            &[
+                "Scores ▶ Boxscore: Game 2024020001",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -160,12 +207,15 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
         assert_buffer(
             &buf,
-            &["Scores > Boxscore: Game 2024020001 > Player: 8471675"],
+            &[
+                "Scores ▶ Boxscore: Game 2024020001 ▶ Player: 8471675",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
         );
     }
 
@@ -174,10 +224,16 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Standings, Vec::new());
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Standings"]);
+        assert_buffer(
+            &buf,
+            &[
+                "Standings",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -185,10 +241,16 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Settings, Vec::new());
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Settings"]);
+        assert_buffer(
+            &buf,
+            &[
+                "Settings",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -196,10 +258,16 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Demo, Vec::new());
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Demo"]);
+        assert_buffer(
+            &buf,
+            &[
+                "Demo",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 
     #[test]
@@ -247,7 +315,7 @@ mod tests {
         )];
 
         let widget = BreadcrumbWidget::new(Tab::Standings, document_stack);
-        assert_eq!(widget.preferred_height(), Some(1));
+        assert_eq!(widget.preferred_height(), Some(2));
     }
 
     #[test]
@@ -260,9 +328,15 @@ mod tests {
         let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
 
-        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 1));
+        let mut buf = Buffer::empty(Rect::new(0, 0, 80, 2));
         widget.render(buf.area, &mut buf, &config);
 
-        assert_buffer(&buf, &["Scores > Player: 8478402"]);
+        assert_buffer(
+            &buf,
+            &[
+                "Scores ▶ Player: 8478402",
+                "────────────────────────────────────────────────────────────────────────────────",
+            ],
+        );
     }
 }

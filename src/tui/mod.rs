@@ -21,6 +21,7 @@ pub mod renderer;
 pub mod runtime;
 pub mod settings_helpers;
 pub mod state;
+pub mod tab_component;
 pub mod table;
 pub mod types;
 
