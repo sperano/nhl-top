@@ -244,8 +244,7 @@ impl App {
             }
         }
     }
-    //
-    /// Render Scores tab content (with component states - Phase 3.5)
+    /// Render Scores tab content using component state store
     fn render_scores_tab_with_states(
         &self,
         state: &AppState,
@@ -280,8 +279,7 @@ impl App {
         let component_state = ScoresTabState::default();
         ScoresTab.view(&props, &component_state)
     }
-    //
-    /// Render Standings tab content (with component states - Phase 4)
+    /// Render Standings tab content using component state store
     fn render_standings_tab_with_states(
         &self,
         state: &AppState,

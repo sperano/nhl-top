@@ -122,17 +122,10 @@ pub struct UiState {
     pub settings: SettingsUiState,
 }
 
-/// UI state for Scores tab
+/// UI state for Scores tab (minimal - most state in component-local ScoresTabState)
 ///
-/// PHASE 7 COMPLETE: Most state migrated to component-local state (ScoresTabState).
-///
-/// Remaining field needed for effects system:
-/// - `game_date`: Maintained by RefreshSchedule action, read by RefreshData for timer-based refreshes
-///
-/// Component-local state (ScoresTabState) manages all UI state:
-/// - Date navigation within the 5-date window (selected_date_index, game_date)
-/// - Game selection UI (selected_game_index)
-/// - Browse mode (whether user is navigating game boxes vs dates)
+/// `game_date` is kept in global state for the effects system (timer-based refreshes).
+/// Component-local ScoresTabState manages all UI state (date navigation, game selection, browse mode).
 ///
 /// Note: game_date is duplicated between global and component state by design:
 /// - Global: What schedule data is loaded (for effects system)

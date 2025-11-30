@@ -121,15 +121,15 @@ pub struct DemoTabProps {
 
 /// Messages that can be sent to the Demo tab
 #[derive(Clone, Debug)]
-pub enum DemoTabMessage {
-    /// Key event when this tab is focused (Phase 3: component handles own keys)
+pub enum DemoTabMsg {
+    /// Key event when this tab is focused
     Key(KeyEvent),
 
     /// Navigate up request (ESC in browse mode, returns to tab bar otherwise)
     /// Returns Effect::Handled if consumed, Effect::None if should bubble up
     NavigateUp,
 
-    /// Document navigation (Phase 7: Delegated to DocumentNavMsg)
+    /// Document navigation
     DocNav(DocumentNavMsg),
     /// Update viewport height
     UpdateViewportHeight(u16),
@@ -137,7 +137,7 @@ pub enum DemoTabMessage {
     ActivateLink,
 }
 
-impl TabMessage for DemoTabMessage {
+impl TabMessage for DemoTabMsg {
     fn as_common(&self) -> Option<CommonTabMessage<'_>> {
         match self {
             Self::DocNav(msg) => Some(CommonTabMessage::DocNav(msg)),
@@ -153,7 +153,7 @@ impl TabMessage for DemoTabMessage {
 }
 
 // Use macro to eliminate ComponentMessageTrait boilerplate
-component_message_impl!(DemoTabMessage, DemoTab, DocumentNavState);
+component_message_impl!(DemoTabMsg, DemoTab, DocumentNavState);
 
 /// Demo tab component
 #[derive(Default)]
@@ -162,7 +162,7 @@ pub struct DemoTab;
 impl Component for DemoTab {
     type Props = DemoTabProps;
     type State = crate::tui::document_nav::DocumentNavState;
-    type Message = DemoTabMessage;
+    type Message = DemoTabMsg;
 
     fn init(props: &Self::Props) -> Self::State {
         use crate::tui::document::Document;
@@ -186,9 +186,9 @@ impl Component for DemoTab {
 
         // Handle tab-specific messages
         match msg {
-            DemoTabMessage::Key(key) => self.handle_key(key, state),
+            DemoTabMsg::Key(key) => self.handle_key(key, state),
 
-            DemoTabMessage::ActivateLink => {
+            DemoTabMsg::ActivateLink => {
                 // Get the link target from the focused element
                 if let Some(link_target) = state.focused_link_target() {
                     if let LinkTarget::Action(action) = link_target {
@@ -212,7 +212,7 @@ impl Component for DemoTab {
             }
 
             // Common messages already handled above
-            DemoTabMessage::DocNav(_) | DemoTabMessage::UpdateViewportHeight(_) | DemoTabMessage::NavigateUp => {
+            DemoTabMsg::DocNav(_) | DemoTabMsg::UpdateViewportHeight(_) | DemoTabMsg::NavigateUp => {
                 unreachable!("Common messages should be handled by handle_common_message")
             }
         }
@@ -248,7 +248,7 @@ impl DemoTab {
             }
             KeyCode::Enter => {
                 // Activate the focused link
-                self.update(DemoTabMessage::ActivateLink, state)
+                self.update(DemoTabMsg::ActivateLink, state)
             }
             _ => Effect::None,
         }
@@ -549,7 +549,7 @@ mod tests {
             Some(LinkTarget::Action("team:MTL".to_string())),
         ];
 
-        let effect = demo_tab.update(DemoTabMessage::ActivateLink, &mut state);
+        let effect = demo_tab.update(DemoTabMsg::ActivateLink, &mut state);
 
         // Should return PushDocument action for TeamDetail
         match effect {
@@ -572,7 +572,7 @@ mod tests {
         state.focus_index = Some(0);
         state.link_targets = vec![Some(LinkTarget::Action("player:8477492".to_string()))];
 
-        let effect = demo_tab.update(DemoTabMessage::ActivateLink, &mut state);
+        let effect = demo_tab.update(DemoTabMsg::ActivateLink, &mut state);
 
         // Should return PushDocument action for PlayerDetail
         match effect {
@@ -595,7 +595,7 @@ mod tests {
         state.focus_index = None;
         state.link_targets = vec![Some(LinkTarget::Action("team:BOS".to_string()))];
 
-        let effect = demo_tab.update(DemoTabMessage::ActivateLink, &mut state);
+        let effect = demo_tab.update(DemoTabMsg::ActivateLink, &mut state);
 
         // Should return None effect when no focus
         assert!(matches!(effect, Effect::None));

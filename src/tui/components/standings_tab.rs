@@ -56,7 +56,7 @@ impl TabState for StandingsTabState {
 /// Messages handled by StandingsTab component
 #[derive(Clone, Debug)]
 pub enum StandingsTabMsg {
-    /// Key event when this tab is focused (Phase 3: component handles own keys)
+    /// Key event when this tab is focused
     Key(KeyEvent),
 
     /// Navigate up request (ESC in browse mode, returns to tab bar otherwise)
@@ -140,9 +140,7 @@ impl Component for StandingsTab {
                 // Reset focus/scroll when changing views
                 state.exit_browse_mode();
                 // Signal that focusable metadata needs to be rebuilt
-                Effect::Action(crate::tui::action::Action::StandingsAction(
-                    crate::tui::action::StandingsAction::RebuildFocusableMetadata,
-                ))
+                Effect::Action(crate::tui::action::Action::RebuildStandingsFocusable)
             }
             StandingsTabMsg::CycleViewRight => {
                 state.view = match state.view {
@@ -154,9 +152,7 @@ impl Component for StandingsTab {
                 // Reset focus/scroll when changing views
                 state.exit_browse_mode();
                 // Signal that focusable metadata needs to be rebuilt
-                Effect::Action(crate::tui::action::Action::StandingsAction(
-                    crate::tui::action::StandingsAction::RebuildFocusableMetadata,
-                ))
+                Effect::Action(crate::tui::action::Action::RebuildStandingsFocusable)
             }
             StandingsTabMsg::EnterBrowseMode => {
                 state.enter_browse_mode();
@@ -201,7 +197,6 @@ impl Component for StandingsTab {
             return self.render_stacked_document(props);
         }
 
-        // Use TabbedPanel for view selection (Phase 7: using component state)
         self.render_view_tabs(props, state)
     }
 }
@@ -238,7 +233,6 @@ impl StandingsTab {
     }
 
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
-    /// Phase 7: Using component state for UI state, props for data
     fn render_view_tabs(&self, props: &StandingsTabProps, state: &StandingsTabState) -> Element {
         // All inactive tabs get Element::None to avoid cloning issues
         let tabs = [
@@ -742,7 +736,7 @@ mod tests {
     /// to League view (positions [2-33] for single column) would use the wrong positions.
     #[test]
     fn test_cycle_view_triggers_rebuild_focusable_metadata() {
-        use crate::tui::action::{Action, StandingsAction};
+        use crate::tui::action::Action;
         use crate::tui::component::{Component, Effect};
 
         let mut standings_tab = StandingsTab;
@@ -761,18 +755,18 @@ mod tests {
         assert_eq!(state.doc_nav.focus_index, None);
         assert_eq!(state.doc_nav.scroll_offset, 0);
 
-        // Effect should trigger RebuildFocusableMetadata
+        // Effect should trigger RebuildStandingsFocusable
         match effect {
-            Effect::Action(Action::StandingsAction(StandingsAction::RebuildFocusableMetadata)) => {
+            Effect::Action(Action::RebuildStandingsFocusable) => {
                 // Good - this is the fix for the regression
             }
-            _ => panic!("Expected RebuildFocusableMetadata action, got {:?}", effect),
+            _ => panic!("Expected RebuildStandingsFocusable action, got {:?}", effect),
         }
     }
 
     #[test]
     fn test_cycle_view_right_triggers_rebuild_focusable_metadata() {
-        use crate::tui::action::{Action, StandingsAction};
+        use crate::tui::action::Action;
         use crate::tui::component::{Component, Effect};
 
         let mut standings_tab = StandingsTab;
@@ -791,12 +785,12 @@ mod tests {
         assert_eq!(state.doc_nav.focus_index, None);
         assert_eq!(state.doc_nav.scroll_offset, 0);
 
-        // Effect should trigger RebuildFocusableMetadata
+        // Effect should trigger RebuildStandingsFocusable
         match effect {
-            Effect::Action(Action::StandingsAction(StandingsAction::RebuildFocusableMetadata)) => {
+            Effect::Action(Action::RebuildStandingsFocusable) => {
                 // Good - this is the fix for the regression
             }
-            _ => panic!("Expected RebuildFocusableMetadata action, got {:?}", effect),
+            _ => panic!("Expected RebuildStandingsFocusable action, got {:?}", effect),
         }
     }
 

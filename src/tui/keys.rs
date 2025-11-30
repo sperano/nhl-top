@@ -7,7 +7,9 @@ use tracing::{debug, trace};
 
 use crossterm::event::KeyModifiers;
 
-use super::action::{Action, ScoresAction, SettingsAction, StandingsAction};
+use super::action::{Action, SettingsAction};
+use super::components::scores_tab::ScoresTabMsg;
+use super::components::standings_tab::StandingsTabMsg;
 use super::component_store::ComponentStateStore;
 use super::components::scores_tab::ScoresTabState;
 use super::components::standings_tab::StandingsTabState;
@@ -72,13 +74,19 @@ fn handle_esc_key(state: &AppState, component_states: &ComponentStateStore) -> O
     // Priority 3: If in box selection mode on Scores tab, exit to date subtabs
     if is_scores_browse_mode_active(component_states) {
         debug!("KEY: ESC pressed in box selection - exiting to date subtabs");
-        return Some(Action::ScoresAction(ScoresAction::ExitBoxSelection));
+        return Some(Action::ComponentMessage {
+            path: SCORES_TAB_PATH.to_string(),
+            message: Box::new(ScoresTabMsg::ExitBoxSelection),
+        });
     }
 
     // Priority 4: If in browse mode on Standings tab, exit to view subtabs
     if is_standings_browse_mode_active(component_states) {
         debug!("KEY: ESC pressed in browse mode - exiting to view subtabs");
-        return Some(Action::StandingsAction(StandingsAction::ExitBrowseMode));
+        return Some(Action::ComponentMessage {
+            path: STANDINGS_TAB_PATH.to_string(),
+            message: Box::new(StandingsTabMsg::ExitBrowseMode),
+        });
     }
 
     // Priority 5: If content is focused, return to tab bar
@@ -122,7 +130,6 @@ fn handle_scores_tab_keys(
     key_code: KeyCode,
     component_states: &ComponentStateStore,
 ) -> Option<Action> {
-    use crate::tui::components::scores_tab::ScoresTabMsg;
     use crate::tui::document_nav::DocumentNavMsg;
 
     if is_scores_browse_mode_active(component_states) {
@@ -146,13 +153,11 @@ fn handle_scores_tab_keys(
             }),
             KeyCode::Enter => {
                 // Look up game_id from component state and schedule
-                use crate::tui::components::scores_tab::ScoresTabState;
-
                 if let Some(scores_state) = component_states.get::<ScoresTabState>(SCORES_TAB_PATH) {
                     if let Some(selected_index) = scores_state.doc_nav.focus_index {
                         if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
                             if let Some(game) = schedule.games.get(selected_index) {
-                                return Some(Action::ScoresAction(ScoresAction::SelectGame(game.id)));
+                                return Some(Action::SelectGame(game.id));
                             }
                         }
                     }
@@ -164,18 +169,23 @@ fn handle_scores_tab_keys(
     } else {
         // Date navigation mode - arrows navigate dates
         match key_code {
-            KeyCode::Left => Some(Action::ScoresAction(ScoresAction::DateLeft)),
-            KeyCode::Right => Some(Action::ScoresAction(ScoresAction::DateRight)),
-            KeyCode::Down => Some(Action::ScoresAction(ScoresAction::EnterBoxSelection)),
+            KeyCode::Left => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::NavigateLeft),
+            }),
+            KeyCode::Right => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::NavigateRight),
+            }),
+            KeyCode::Down => Some(Action::ComponentMessage {
+                path: SCORES_TAB_PATH.to_string(),
+                message: Box::new(ScoresTabMsg::EnterBoxSelection),
+            }),
             KeyCode::Enter => {
                 // Look up game_id from component state and schedule (first game)
-                use crate::tui::components::scores_tab::ScoresTabState;
-
-                if let Some(_scores_state) = component_states.get::<ScoresTabState>(SCORES_TAB_PATH) {
-                    if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
-                        if let Some(game) = schedule.games.first() {
-                            return Some(Action::ScoresAction(ScoresAction::SelectGame(game.id)));
-                        }
+                if let Some(schedule) = state.data.schedule.as_ref().as_ref() {
+                    if let Some(game) = schedule.games.first() {
+                        return Some(Action::SelectGame(game.id));
                     }
                 }
                 None
@@ -185,9 +195,8 @@ fn handle_scores_tab_keys(
     }
 }
 
-/// Handle League standings navigation with document system (Phase 7: Routes to component)
+/// Handle League standings navigation with document system
 fn handle_standings_league_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
-    use crate::tui::components::standings_tab::StandingsTabMsg;
     use crate::tui::document_nav::DocumentNavMsg;
 
     let nav_msg = match key.code {
@@ -237,9 +246,18 @@ fn handle_standings_league_keys(key: KeyEvent, _state: &AppState) -> Option<Acti
 fn handle_standings_tab_keys(key_code: KeyCode, _state: &AppState) -> Option<Action> {
     // View selection mode - arrows navigate views
     match key_code {
-        KeyCode::Left => Some(Action::StandingsAction(StandingsAction::CycleViewLeft)),
-        KeyCode::Right => Some(Action::StandingsAction(StandingsAction::CycleViewRight)),
-        KeyCode::Down => Some(Action::StandingsAction(StandingsAction::EnterBrowseMode)),
+        KeyCode::Left => Some(Action::ComponentMessage {
+            path: STANDINGS_TAB_PATH.to_string(),
+            message: Box::new(StandingsTabMsg::CycleViewLeft),
+        }),
+        KeyCode::Right => Some(Action::ComponentMessage {
+            path: STANDINGS_TAB_PATH.to_string(),
+            message: Box::new(StandingsTabMsg::CycleViewRight),
+        }),
+        KeyCode::Down => Some(Action::ComponentMessage {
+            path: STANDINGS_TAB_PATH.to_string(),
+            message: Box::new(StandingsTabMsg::EnterBrowseMode),
+        }),
         _ => None,
     }
 }
@@ -326,9 +344,9 @@ fn handle_settings_tab_keys(key: KeyEvent, state: &AppState, component_states: &
     })
 }
 
-/// Handle Demo tab navigation (Phase 7: Routes to component)
+/// Handle Demo tab navigation
 fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
-    use crate::tui::components::demo_tab::DemoTabMessage;
+    use crate::tui::components::demo_tab::DemoTabMsg;
     use crate::tui::document_nav::DocumentNavMsg;
 
     let nav_msg = match key.code {
@@ -351,7 +369,7 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
             debug!("KEY: Enter in Demo tab - activate focused link");
             return Some(Action::ComponentMessage {
                 path: DEMO_TAB_PATH.to_string(),
-                message: Box::new(DemoTabMessage::ActivateLink),
+                message: Box::new(DemoTabMsg::ActivateLink),
             });
         }
         // Left/Right arrows for row navigation (jump between side-by-side elements)
@@ -385,7 +403,7 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
 
     Some(Action::ComponentMessage {
         path: DEMO_TAB_PATH.to_string(),
-        message: Box::new(DemoTabMessage::DocNav(nav_msg)),
+        message: Box::new(DemoTabMsg::DocNav(nav_msg)),
     })
 }
 
@@ -397,7 +415,9 @@ fn handle_demo_tab_keys(key: KeyEvent, _state: &AppState) -> Option<Action> {
 /// - Content focus: Context-sensitive navigation, Up returns to tab bar
 /// - Document stack navigation (ESC to close)
 ///
-/// Phase 7: Now reads from component state instead of global state for component-specific checks
+/// Convert a KeyEvent into an Action based on current application state
+///
+/// Reads from component state for component-specific checks (e.g., browse mode active).
 pub fn key_to_action(
     key: KeyEvent,
     state: &AppState,
@@ -453,7 +473,6 @@ pub fn key_to_action(
         // Check if we're in a nested mode first
         if is_scores_browse_mode_active(component_states) {
             // In box selection - Up uses document navigation
-            use crate::tui::components::scores_tab::ScoresTabMsg;
             use crate::tui::document_nav::DocumentNavMsg;
             return Some(Action::ComponentMessage {
                 path: SCORES_TAB_PATH.to_string(),

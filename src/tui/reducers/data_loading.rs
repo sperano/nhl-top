@@ -6,7 +6,7 @@ use crate::tui::action::Action;
 use crate::tui::component::Effect;
 use crate::tui::constants::{DEMO_TAB_PATH, SCORES_TAB_PATH, STANDINGS_TAB_PATH};
 use crate::tui::document::Document;
-use crate::tui::reducers::standings::rebuild_focusable_metadata;
+use crate::tui::reducers::standings::rebuild_standings_focusable_metadata;
 use crate::tui::state::{AppState, LoadingKey};
 
 /// Handle all data loading actions (API responses)
@@ -14,7 +14,7 @@ use crate::tui::state::{AppState, LoadingKey};
 /// Returns Ok((new_state, effect)) if the action was handled,
 /// or Err(state) to pass ownership back to the caller.
 ///
-/// Phase 7: Now takes component_states to update focusable metadata in component state
+/// Takes component_states to update focusable metadata in component state when data loads.
 pub fn reduce_data_loading(
     state: AppState,
     action: &Action,
@@ -66,7 +66,7 @@ fn handle_standings_loaded(
             new_state.data.errors.clear();
             new_state.data.loading.remove(&LoadingKey::Standings);
 
-            // Rebuild demo document focusable data in component state (Phase 8)
+            // Rebuild demo document focusable data in component state
             use crate::tui::components::demo_tab::DemoDocument;
             use crate::tui::document_nav::DocumentNavState;
             if let Some(demo_state) = component_states.get_mut::<DocumentNavState>(DEMO_TAB_PATH) {
@@ -77,8 +77,8 @@ fn handle_standings_loaded(
                 demo_state.link_targets = demo_doc.focusable_link_targets();
             }
 
-            // Rebuild standings document focusable data in component state (Phase 7)
-            rebuild_focusable_metadata(&new_state, component_states);
+            // Rebuild standings document focusable data in component state
+            rebuild_standings_focusable_metadata(&new_state, component_states);
         }
         Err(e) => {
             debug!("DATA: Failed to load standings: {}", e);
@@ -88,7 +88,7 @@ fn handle_standings_loaded(
             );
             new_state.data.loading.remove(&LoadingKey::Standings);
 
-            // Rebuild demo focusable data for empty standings case (Phase 8)
+            // Rebuild demo focusable data for empty standings case
             use crate::tui::components::demo_tab::DemoDocument;
             use crate::tui::document_nav::DocumentNavState;
             if let Some(demo_state) = component_states.get_mut::<DocumentNavState>(DEMO_TAB_PATH) {
@@ -99,7 +99,7 @@ fn handle_standings_loaded(
                 demo_state.link_targets = demo_doc.focusable_link_targets();
             }
 
-            // Clear standings focusable data in component state on error (Phase 7)
+            // Clear standings focusable data in component state on error
             use crate::tui::components::standings_tab::StandingsTabState;
             if let Some(standings_state) = component_states.get_mut::<StandingsTabState>(STANDINGS_TAB_PATH) {
                 standings_state.doc_nav.focusable_positions = Vec::new();

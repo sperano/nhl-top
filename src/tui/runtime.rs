@@ -482,10 +482,10 @@ mod tests {
         let component_states = runtime.component_states();
         assert!(state.navigation.content_focused);
 
-        // Now arrows should navigate dates on Scores tab
+        // Now arrows should navigate dates on Scores tab (dispatches ComponentMessage)
         let key_right = KeyEvent::new(KeyCode::Right, KeyModifiers::empty());
         let action_right = key_to_action(key_right, state, component_states);
-        assert!(matches!(action_right, Some(Action::ScoresAction(_))));
+        assert!(matches!(action_right, Some(Action::ComponentMessage { .. })));
 
         // Up should return to tab bar
         let key_up = KeyEvent::new(KeyCode::Up, KeyModifiers::empty());

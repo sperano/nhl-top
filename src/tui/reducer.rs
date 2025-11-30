@@ -3,14 +3,13 @@ use tracing::debug;
 use super::action::Action;
 use super::component::Effect;
 use super::component_store::ComponentStateStore;
-#[cfg(test)]
-use super::constants::{SCORES_TAB_PATH, STANDINGS_TAB_PATH};
-use super::reducers::reduce_settings;
-use super::state::AppState;
+use super::state::{AppState, DocumentStackEntry};
+use super::types::StackedDocument;
 
 // Import sub-reducers from the parent framework module
 use crate::tui::reducers::{
-    reduce_data_loading, reduce_document_stack, reduce_navigation, reduce_scores, reduce_standings,
+    reduce_data_loading, reduce_document_stack, reduce_navigation, reduce_settings,
+    rebuild_standings_focusable_metadata,
 };
 
 /// Pure state reducer - like Redux reducer
@@ -57,7 +56,7 @@ pub fn reduce(
         Err(state) => state,
     };
 
-    // Data loading actions (Phase 7: Pass component_states for focusable metadata)
+    // Data loading actions
     let state = match reduce_data_loading(state, &action, component_states) {
         Ok(result) => return result,
         Err(state) => state,
@@ -65,9 +64,22 @@ pub fn reduce(
 
     // Tab-specific action delegation
     match action {
-        Action::ScoresAction(scores_action) => reduce_scores(state, scores_action),
-        Action::StandingsAction(standings_action) => reduce_standings(state, standings_action, component_states),
         Action::SettingsAction(settings_action) => reduce_settings(state, settings_action, component_states),
+
+        // Scores: SelectGame pushes boxscore document onto stack
+        Action::SelectGame(game_id) => {
+            let mut new_state = state;
+            new_state.navigation.document_stack.push(
+                DocumentStackEntry::new(StackedDocument::Boxscore { game_id }),
+            );
+            (new_state, Effect::None)
+        }
+
+        // Standings: Rebuild focusable metadata after view change
+        Action::RebuildStandingsFocusable => {
+            rebuild_standings_focusable_metadata(&state, component_states);
+            (state, Effect::None)
+        }
 
         Action::SetStatusMessage { message, is_error } => {
             let mut new_state = state;
@@ -95,7 +107,7 @@ pub fn reduce(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::action::{ScoresAction, SettingsAction, StandingsAction};
+    use crate::tui::action::SettingsAction;
     use crate::tui::types::{SettingsCategory, Tab};
 
     // Test helper that creates a ComponentStateStore for each test
@@ -130,41 +142,31 @@ mod tests {
     }
 
     #[test]
-    fn test_scores_actions_are_delegated() {
-        // Phase 3.5: ScoresAction now routes to ComponentMessage
+    fn test_select_game_pushes_boxscore_document() {
         let state = AppState::default();
-        let action = Action::ScoresAction(ScoresAction::DateLeft);
-        let (new_state, effect) = test_reduce(state.clone(), action);
+        let action = Action::SelectGame(12345);
+        let (new_state, effect) = test_reduce(state, action);
 
-        // State should not be modified by the reducer
-        assert_eq!(new_state.ui.scores.game_date, state.ui.scores.game_date);
-
-        // Should dispatch ComponentMessage
-        match effect {
-            Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, SCORES_TAB_PATH);
+        // Should push boxscore document onto stack
+        assert_eq!(new_state.navigation.document_stack.len(), 1);
+        match &new_state.navigation.document_stack[0].document {
+            StackedDocument::Boxscore { game_id } => {
+                assert_eq!(*game_id, 12345);
             }
-            _ => panic!("Expected ComponentMessage effect"),
+            _ => panic!("Expected Boxscore document"),
         }
+        assert!(matches!(effect, Effect::None));
     }
 
     #[test]
-    fn test_standings_actions_are_delegated() {
-        // Phase 7: StandingsAction now routes to ComponentMessage
+    fn test_rebuild_standings_focusable_returns_none() {
         let state = AppState::default();
-        let action = Action::StandingsAction(StandingsAction::CycleViewRight);
+        let action = Action::RebuildStandingsFocusable;
         let (new_state, effect) = test_reduce(state.clone(), action);
 
-        // State should not be modified by the reducer (StandingsUiState removed in Phase 7)
+        // State should not be modified (focusable metadata is in component state)
         assert_eq!(new_state.data.standings, state.data.standings);
-
-        // Should dispatch ComponentMessage
-        match effect {
-            Effect::Action(Action::ComponentMessage { path, .. }) => {
-                assert_eq!(path, STANDINGS_TAB_PATH);
-            }
-            _ => panic!("Expected ComponentMessage effect"),
-        }
+        assert!(matches!(effect, Effect::None));
     }
 
     #[test]

@@ -29,7 +29,7 @@ pub mod testing;
 #[cfg(test)]
 mod integration_tests;
 
-pub use action::{Action, ScoresAction, StandingsAction};
+pub use action::Action;
 pub use component::{Component, Effect, Element, ElementWidget};
 pub use effects::DataEffects;
 pub use keys::key_to_action;
@@ -255,9 +255,7 @@ mod tests {
         assert!(!is_quit_action(&Action::RefreshData));
         assert!(!is_quit_action(&Action::NavigateTab(Tab::Scores)));
         assert!(!is_quit_action(&Action::ToggleCommandPalette));
-        assert!(!is_quit_action(&Action::ScoresAction(
-            ScoresAction::DateLeft
-        )));
+        assert!(!is_quit_action(&Action::SelectGame(12345)));
     }
 
     #[test]

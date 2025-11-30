@@ -69,8 +69,8 @@ fn enter_content_focus(state: AppState) -> (AppState, Effect) {
             .system
             .set_status_message("↑↓: move selection  Shift+↑↓: scroll  Esc: go back".to_string());
 
-        // Demo tab focus is now managed by component state (Phase 8)
-        // Component will initialize focus to first element when needed
+        // Demo tab focus is managed by component state
+        // Component initializes focus to first element when needed
     }
 
     (new_state, Effect::None)
@@ -97,9 +97,8 @@ fn exit_content_focus(state: AppState) -> (AppState, Effect) {
 /// 2. If content_focused → set content_focused = false
 /// 3. Otherwise do nothing (already at top level)
 ///
-/// Note: In Phase 3, step 2 will first check with the component if it can
-/// handle the NavigateUp (e.g., exit browse mode, close modal) before
-/// falling through to exit_content_focus.
+/// Components may intercept NavigateUp to handle their own modes (e.g., exit browse mode,
+/// close modal) before falling through to exit_content_focus.
 fn navigate_up(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 

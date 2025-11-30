@@ -51,7 +51,7 @@ impl TabState for ScoresTabState {
 /// Messages handled by ScoresTab component
 #[derive(Clone, Debug)]
 pub enum ScoresTabMsg {
-    /// Key event when this tab is focused (Phase 3: component handles own keys)
+    /// Key event when this tab is focused
     Key(KeyEvent),
 
     /// Navigate up request (ESC in browse mode, returns to tab bar otherwise)
@@ -95,10 +95,6 @@ impl TabMessage for ScoresTabMsg {
 component_message_impl!(ScoresTabMsg, ScoresTab, ScoresTabState);
 
 /// Props for ScoresTab component (data from parent)
-///
-/// NOTE: During migration, this still contains UI state fields that should
-/// eventually come from ScoresTabState. For Phase 3, we're demonstrating
-/// the component can manage its own state, but not fully integrating yet.
 #[derive(Clone)]
 pub struct ScoresTabProps {
     // API data
@@ -197,14 +193,13 @@ impl Component for ScoresTab {
     }
 
     fn view(&self, props: &Self::Props, state: &Self::State) -> Element {
-        // Phase 7: Now using component state for UI state, props for data
-        self.render_date_tabs_from_state(props, state)
+        self.render_date_tabs(props, state)
     }
 }
-//
+
 impl ScoresTab {
-    /// Render date tabs using component state for UI, props for data (Phase 7)
-    fn render_date_tabs_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState) -> Element {
+    /// Render date tabs using component state for UI, props for data
+    fn render_date_tabs(&self, props: &ScoresTabProps, state: &ScoresTabState) -> Element {
         const DATE_WINDOW_SIZE: usize = 5;
         //
         // Calculate the 5-date window using component state

@@ -68,7 +68,7 @@ impl TabState for SettingsTabState {
 /// Messages that can be sent to the Settings tab
 #[derive(Clone, Debug)]
 pub enum SettingsTabMsg {
-    /// Key event when this tab is focused (Phase 3: component handles own keys)
+    /// Key event when this tab is focused
     Key(KeyEvent),
 
     /// Navigate up request (ESC closes modal or exits browse mode)

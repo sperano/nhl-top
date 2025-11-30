@@ -70,10 +70,14 @@ pub enum Action {
     FocusNext,
     FocusPrevious,
 
-    // Component-specific actions (nested)
-    ScoresAction(ScoresAction),
-    StandingsAction(StandingsAction),
+    // Component-specific actions
     SettingsAction(SettingsAction),
+
+    // Scores tab actions that modify global state
+    SelectGame(i64),
+
+    // Standings tab actions that modify component state directly
+    RebuildStandingsFocusable,
 
     /// Dispatch a message to a specific component
     ///
@@ -94,27 +98,6 @@ pub enum Action {
     UpdateTerminalWidth(u16),
 }
 
-/// Tab-specific actions for Scores
-#[derive(Debug, Clone)]
-pub enum ScoresAction {
-    DateLeft,
-    DateRight,
-    EnterBoxSelection,
-    ExitBoxSelection,
-    SelectGame(i64), // game_id
-}
-
-/// Tab-specific actions for Standings
-#[derive(Debug, Clone)]
-pub enum StandingsAction {
-    CycleViewLeft,
-    CycleViewRight,
-    EnterBrowseMode,
-    ExitBrowseMode,
-    /// Rebuild focusable metadata after view change
-    RebuildFocusableMetadata,
-}
-
 /// Tab-specific actions for Settings
 #[derive(Debug, Clone)]
 pub enum SettingsAction {
@@ -125,8 +108,6 @@ pub enum SettingsAction {
     UpdateConfig(Box<crate::config::Config>),
 }
 
-// DocumentAction removed in Phase 10 - now handled by component messages
-// (StandingsTabMsg::DocNav, DemoTabMessage::DocNav)
 
 impl Clone for Action {
     fn clone(&self) -> Self {
@@ -153,9 +134,9 @@ impl Clone for Action {
             Self::PlayerStatsLoaded(id, result) => Self::PlayerStatsLoaded(*id, result.clone()),
             Self::FocusNext => Self::FocusNext,
             Self::FocusPrevious => Self::FocusPrevious,
-            Self::ScoresAction(action) => Self::ScoresAction(action.clone()),
-            Self::StandingsAction(action) => Self::StandingsAction(action.clone()),
             Self::SettingsAction(action) => Self::SettingsAction(action.clone()),
+            Self::SelectGame(id) => Self::SelectGame(*id),
+            Self::RebuildStandingsFocusable => Self::RebuildStandingsFocusable,
             Self::ComponentMessage { path, message } => Self::ComponentMessage {
                 path: path.clone(),
                 message: message.clone_box(),
