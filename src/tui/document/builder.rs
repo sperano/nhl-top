@@ -138,6 +138,14 @@ impl DocumentBuilder {
         self
     }
 
+    /// Add a horizontal row of elements with custom gap
+    ///
+    /// Elements are laid out horizontally with the specified gap between them.
+    pub fn row_with_gap(mut self, children: Vec<DocumentElement>, gap: u16) -> Self {
+        self.elements.push(DocumentElement::row_with_gap(children, gap));
+        self
+    }
+
     /// Create a nested group of elements using a nested builder
     ///
     /// # Example

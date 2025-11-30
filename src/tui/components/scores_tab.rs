@@ -9,12 +9,12 @@ use crate::commands::scores_format::PeriodScores;
 use crate::config::DisplayConfig;
 use crate::tui::action::Action;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
-use crate::tui::document::{Document, DocumentView};
+use crate::tui::document::DocumentView;
 use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::tab_component::{CommonTabMessage, TabMessage, TabState, handle_common_message};
 use crate::component_message_impl;
 
-use super::scores_grid_document::ScoresGridDocument;
+use super::score_boxes_document::ScoreBoxesDocument;
 use super::{TabItem, TabbedPanel, TabbedPanelProps};
 //
 /// Component state for ScoresTab - managed by the component itself
@@ -257,23 +257,13 @@ impl ScoresTab {
                 .to_string(),
         }
     }
-    /// Render game list using the document system with ScoresGridDocument
+    /// Render game list using the document system with ScoreBoxesDocument
     fn render_game_list_from_state(&self, props: &ScoresTabProps, state: &ScoresTabState, _date: &GameDate) -> Element {
-        // Create the ScoresGridDocument
-        // Calculate boxes_per_row (we'll use a reasonable default, terminal width not available here)
-        let boxes_per_row = 3; // Will be recalculated based on actual viewport
-
-        let doc = ScoresGridDocument::new(
-            props.schedule.clone(),
-            props.game_info.clone(),
-            props.period_scores.clone(),
-            boxes_per_row,
-            state.game_date.clone(),
-        );
-
-        // Wrap in ScoresDocumentWidget which handles DocumentView rendering
-        Element::Widget(Box::new(ScoresDocumentWidget {
-            doc: Arc::new(doc),
+        // Wrap in ScoreBoxesDocumentWidget which calculates boxes_per_row at render time
+        Element::Widget(Box::new(ScoreBoxesDocumentWidget {
+            schedule: props.schedule.clone(),
+            game_info: props.game_info.clone(),
+            game_date: state.game_date.clone(),
             focus_index: state.doc_nav.focus_index,
             scroll_offset: state.doc_nav.scroll_offset,
         }))
@@ -332,19 +322,33 @@ impl ScoresTab {
     }
 }
 
-/// Widget that renders a ScoresGridDocument with DocumentView
+/// Widget that renders ScoreBoxesDocument with DocumentView
 ///
-/// This widget wraps DocumentView and applies focus/scroll state from component state.
-struct ScoresDocumentWidget {
-    doc: Arc<dyn Document>,
+/// This widget creates the document at render time to calculate boxes_per_row
+/// based on actual viewport width.
+struct ScoreBoxesDocumentWidget {
+    schedule: Arc<Option<DailySchedule>>,
+    game_info: Arc<HashMap<i64, GameMatchup>>,
+    game_date: GameDate,
     focus_index: Option<usize>,
     scroll_offset: u16,
 }
 
-impl ElementWidget for ScoresDocumentWidget {
+impl ElementWidget for ScoreBoxesDocumentWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, display_config: &DisplayConfig) {
+        // Calculate boxes_per_row based on actual viewport width
+        let boxes_per_row = ScoreBoxesDocument::boxes_per_row_for_width(area.width);
+
+        // Create document with correct boxes_per_row
+        let doc = ScoreBoxesDocument::new(
+            self.schedule.clone(),
+            self.game_info.clone(),
+            boxes_per_row,
+            self.game_date.clone(),
+        );
+
         // Create DocumentView with viewport height
-        let mut view = DocumentView::new(self.doc.clone(), area.height);
+        let mut view = DocumentView::new(Arc::new(doc), area.height);
 
         // Apply focus state
         if let Some(idx) = self.focus_index {
@@ -359,8 +363,10 @@ impl ElementWidget for ScoresDocumentWidget {
     }
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {
-        Box::new(ScoresDocumentWidget {
-            doc: self.doc.clone(),
+        Box::new(ScoreBoxesDocumentWidget {
+            schedule: self.schedule.clone(),
+            game_info: self.game_info.clone(),
+            game_date: self.game_date.clone(),
             focus_index: self.focus_index,
             scroll_offset: self.scroll_offset,
         })

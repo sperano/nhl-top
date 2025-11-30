@@ -128,20 +128,18 @@ fn handle_schedule_loaded(
             // TODO: Remove Schedule loading key - needs date string
 
             // Rebuild scores tab focusable metadata from the document
-            use crate::tui::components::scores_grid_document::ScoresGridDocument;
+            use crate::tui::components::score_boxes_document::ScoreBoxesDocument;
             use crate::tui::components::scores_tab::ScoresTabState;
             use crate::tui::document::Document;
 
             if let Some(scores_state) = component_states.get_mut::<ScoresTabState>(SCORES_TAB_PATH) {
                 // Calculate boxes_per_row from terminal width
-                let box_with_margin = crate::layout_constants::GAME_BOX_WITH_MARGIN;
-                let boxes_per_row = (new_state.system.terminal_width / box_with_margin).max(1);
+                let boxes_per_row = ScoreBoxesDocument::boxes_per_row_for_width(new_state.system.terminal_width);
 
                 // Create the document to extract focusable metadata
-                let doc = ScoresGridDocument::new(
+                let doc = ScoreBoxesDocument::new(
                     Arc::new(Some(schedule.clone())),
                     new_state.data.game_info.clone(),
-                    new_state.data.period_scores.clone(),
                     boxes_per_row,
                     scores_state.game_date.clone(),
                 );

@@ -24,11 +24,6 @@ pub mod list_modal;
 pub use list_modal::{render_list_modal, ListModalWidget};
 
 // Widget implementations
-pub mod score_table;
-pub use score_table::ScoreTable;
-
-pub mod game_box;
-pub use game_box::{GameBox, GameState};
 
 pub mod score_box;
 pub use score_box::{ScoreBox, ScoreBoxStatus};

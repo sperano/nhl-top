@@ -10,7 +10,7 @@ use ratatui::style::Style;
 use crate::config::DisplayConfig;
 use crate::tui::component::ElementWidget;
 use crate::tui::components::TableWidget;
-use crate::tui::widgets::{GameBox, StandaloneWidget};
+use crate::tui::widgets::{ScoreBox, StandaloneWidget};
 
 use super::focus::{FocusableElement, FocusableId, RowPosition};
 use super::link::LinkTarget;
@@ -103,18 +103,18 @@ pub enum DocumentElement {
         gap: u16,
     },
 
-    /// A game box widget for displaying NHL game scores
+    /// A compact score box widget for displaying NHL game scores
     ///
-    /// Fixed height of 7 rows (1 header + 6 score table).
-    /// Used in the scores grid to show game matchups.
-    GameBoxElement {
-        /// Unique identifier for focus/activation (e.g., "game_12345")
+    /// Fixed height of 6 rows (1 status + 5 box with double borders).
+    /// Used in the score boxes grid for a compact view.
+    ScoreBoxElement {
+        /// Unique identifier for focus/activation (e.g., "scorebox_12345")
         id: String,
         /// Game ID for activation
         game_id: i64,
-        /// The game box widget containing all score data
-        game_box: GameBox,
-        /// Whether this game box is currently focused
+        /// The score box widget containing score data
+        score_box: ScoreBox,
+        /// Whether this score box is currently focused
         focused: bool,
     },
 
@@ -183,8 +183,8 @@ impl std::fmt::Debug for DocumentElement {
                 .field("children", &children.len())
                 .field("gap", gap)
                 .finish(),
-            Self::GameBoxElement { id, game_id, focused, .. } => f
-                .debug_struct("GameBoxElement")
+            Self::ScoreBoxElement { id, game_id, focused, .. } => f
+                .debug_struct("ScoreBoxElement")
                 .field("id", id)
                 .field("game_id", game_id)
                 .field("focused", focused)
@@ -228,9 +228,9 @@ impl DocumentElement {
                 // Height is the maximum height of all children (side by side)
                 children.iter().map(|c| c.height()).max().unwrap_or(0)
             }
-            Self::GameBoxElement { game_box, .. } => {
-                // GameBox has fixed height of 7
-                game_box.preferred_height().unwrap_or(7)
+            Self::ScoreBoxElement { score_box, .. } => {
+                // ScoreBox has fixed height of 6
+                score_box.preferred_height().unwrap_or(6)
             }
             Self::Indented { element, .. } => {
                 // Same height as inner element
@@ -301,10 +301,10 @@ impl DocumentElement {
                     }
                 }
             }
-            Self::GameBoxElement { game_id, game_box, .. } => {
-                // GameBox is a single focusable element with typed GameLink ID
-                let height = game_box.preferred_height().unwrap_or(7);
-                let width = game_box.preferred_width().unwrap_or(37);
+            Self::ScoreBoxElement { game_id, score_box, .. } => {
+                // ScoreBox is a single focusable element with typed GameLink ID
+                let height = score_box.preferred_height().unwrap_or(6);
+                let width = score_box.preferred_width().unwrap_or(25);
                 out.push(FocusableElement {
                     id: FocusableId::game_link(*game_id),
                     y: y_offset,
@@ -349,7 +349,7 @@ impl DocumentElement {
                     child.collect_focusable_ids(out, y_offset);
                 }
             }
-            Self::GameBoxElement { game_id, .. } => {
+            Self::ScoreBoxElement { game_id, .. } => {
                 out.push(FocusableId::game_link(*game_id));
             }
             Self::Indented { element, .. } => {
@@ -394,9 +394,9 @@ impl DocumentElement {
             Self::Row { children, gap } => {
                 render_row(children, *gap, area, buf, config);
             }
-            Self::GameBoxElement { game_box, focused, .. } => {
+            Self::ScoreBoxElement { score_box, focused, .. } => {
                 // Clone and set selection based on focus state
-                let mut box_to_render = game_box.clone();
+                let mut box_to_render = score_box.clone();
                 box_to_render.selected = *focused;
                 box_to_render.render(area, buf, config);
             }
@@ -575,17 +575,17 @@ impl DocumentElement {
         Self::Row { children, gap }
     }
 
-    /// Create a game box element
+    /// Create a score box element
     ///
     /// # Arguments
     /// - `game_id`: The NHL API game ID (used for activation and as part of the element ID)
-    /// - `game_box`: The GameBox widget containing score data
-    /// - `focused`: Whether this game box is currently focused
-    pub fn game_box_element(game_id: i64, game_box: GameBox, focused: bool) -> Self {
-        Self::GameBoxElement {
-            id: format!("game_{}", game_id),
+    /// - `score_box`: The ScoreBox widget containing score data
+    /// - `focused`: Whether this score box is currently focused
+    pub fn score_box_element(game_id: i64, score_box: ScoreBox, focused: bool) -> Self {
+        Self::ScoreBoxElement {
+            id: format!("scorebox_{}", game_id),
             game_id,
-            game_box,
+            score_box,
             focused,
         }
     }
@@ -602,16 +602,40 @@ fn render_row(
         return;
     }
 
-    let num_children = children.len() as u16;
-    let total_gap = gap * (num_children.saturating_sub(1));
-    let available_width = area.width.saturating_sub(total_gap);
-    let child_width = available_width / num_children;
+    // Check if children have preferred widths (e.g., ScoreBoxElement, GameBoxElement)
+    // If so, use preferred width; otherwise distribute space equally
+    let has_preferred_widths = children.iter().all(|c| get_preferred_width(c).is_some());
 
     let mut x_offset = area.x;
-    for child in children {
-        let child_area = Rect::new(x_offset, area.y, child_width, area.height);
-        child.render(child_area, buf, config);
-        x_offset += child_width + gap;
+
+    if has_preferred_widths {
+        // Use preferred widths for fixed-size widgets
+        for child in children {
+            let child_width = get_preferred_width(child).unwrap_or(0);
+            let child_area = Rect::new(x_offset, area.y, child_width, area.height);
+            child.render(child_area, buf, config);
+            x_offset += child_width + gap;
+        }
+    } else {
+        // Distribute space equally for flexible elements
+        let num_children = children.len() as u16;
+        let total_gap = gap * (num_children.saturating_sub(1));
+        let available_width = area.width.saturating_sub(total_gap);
+        let child_width = available_width / num_children;
+
+        for child in children {
+            let child_area = Rect::new(x_offset, area.y, child_width, area.height);
+            child.render(child_area, buf, config);
+            x_offset += child_width + gap;
+        }
+    }
+}
+
+/// Get preferred width for elements that have fixed dimensions
+fn get_preferred_width(element: &DocumentElement) -> Option<u16> {
+    match element {
+        DocumentElement::ScoreBoxElement { score_box, .. } => score_box.preferred_width(),
+        _ => None,
     }
 }
 
@@ -1213,150 +1237,5 @@ mod tests {
                 "",
             ],
         );
-    }
-
-    #[test]
-    fn test_game_box_element_height() {
-        use crate::tui::widgets::GameBox;
-        use crate::tui::widgets::GameState as WidgetGameState;
-
-        let game_box = GameBox::new(
-            "TOR".to_string(),
-            "MTL".to_string(),
-            Some(3),
-            Some(2),
-            Some(vec![1, 1, 1]),
-            Some(vec![1, 1, 0]),
-            false,
-            false,
-            None,
-            WidgetGameState::Final,
-            false,
-        );
-
-        let elem = DocumentElement::game_box_element(12345, game_box, false);
-        assert_eq!(elem.height(), 7);
-    }
-
-    #[test]
-    fn test_game_box_element_collect_focusable() {
-        use crate::tui::widgets::GameBox;
-        use crate::tui::widgets::GameState as WidgetGameState;
-
-        let game_box = GameBox::new(
-            "TOR".to_string(),
-            "MTL".to_string(),
-            Some(3),
-            Some(2),
-            None,
-            None,
-            false,
-            false,
-            None,
-            WidgetGameState::Final,
-            false,
-        );
-
-        let elem = DocumentElement::game_box_element(12345, game_box, false);
-
-        let mut focusable = Vec::new();
-        elem.collect_focusable(&mut focusable, 10);
-
-        assert_eq!(focusable.len(), 1);
-        assert_eq!(focusable[0].id, FocusableId::game_link(12345));
-        assert_eq!(focusable[0].y, 10);
-        assert_eq!(focusable[0].height, 7);
-    }
-
-    #[test]
-    fn test_row_of_game_boxes_focusable_positions() {
-        use crate::tui::widgets::GameBox;
-        use crate::tui::widgets::GameState as WidgetGameState;
-
-        // Create two game boxes in a row
-        let game1 = GameBox::new(
-            "TOR".to_string(), "MTL".to_string(),
-            Some(3), Some(2), None, None,
-            false, false, None,
-            WidgetGameState::Final, false,
-        );
-        let game2 = GameBox::new(
-            "BOS".to_string(), "NYR".to_string(),
-            Some(4), Some(1), None, None,
-            false, false, None,
-            WidgetGameState::Final, false,
-        );
-
-        let row = DocumentElement::row(vec![
-            DocumentElement::game_box_element(111, game1, false),
-            DocumentElement::game_box_element(222, game2, false),
-        ]);
-
-        let mut focusable = Vec::new();
-        row.collect_focusable(&mut focusable, 0);
-
-        // Both game boxes should be collected with correct row positions
-        assert_eq!(focusable.len(), 2);
-
-        assert_eq!(focusable[0].id, FocusableId::game_link(111));
-        assert_eq!(focusable[0].y, 0);
-        assert!(focusable[0].row_position.is_some());
-        let pos0 = focusable[0].row_position.unwrap();
-        assert_eq!(pos0.row_y, 0);
-        assert_eq!(pos0.child_idx, 0);
-        assert_eq!(pos0.idx_within_child, 0);
-
-        assert_eq!(focusable[1].id, FocusableId::game_link(222));
-        assert_eq!(focusable[1].y, 0);
-        assert!(focusable[1].row_position.is_some());
-        let pos1 = focusable[1].row_position.unwrap();
-        assert_eq!(pos1.row_y, 0);
-        assert_eq!(pos1.child_idx, 1);
-        assert_eq!(pos1.idx_within_child, 0);
-    }
-
-    #[test]
-    fn test_two_rows_of_game_boxes_y_positions() {
-        use crate::tui::widgets::GameBox;
-        use crate::tui::widgets::GameState as WidgetGameState;
-
-        let make_game_box = || GameBox::new(
-            "TOR".to_string(), "MTL".to_string(),
-            Some(3), Some(2), None, None,
-            false, false, None,
-            WidgetGameState::Final, false,
-        );
-
-        // Create two rows of game boxes
-        let row1 = DocumentElement::row(vec![
-            DocumentElement::game_box_element(1, make_game_box(), false),
-            DocumentElement::game_box_element(2, make_game_box(), false),
-        ]);
-        let row2 = DocumentElement::row(vec![
-            DocumentElement::game_box_element(3, make_game_box(), false),
-            DocumentElement::game_box_element(4, make_game_box(), false),
-        ]);
-
-        // Collect from document containing both rows
-        let elements = vec![row1.clone(), row2.clone()];
-
-        // Simulate how FocusManager collects focusables
-        let mut focusable = Vec::new();
-        let mut y_offset = 0u16;
-        for elem in &elements {
-            elem.collect_focusable(&mut focusable, y_offset);
-            y_offset += elem.height();
-        }
-
-        // Should have 4 focusable elements
-        assert_eq!(focusable.len(), 4);
-
-        // First row (y=0)
-        assert_eq!(focusable[0].y, 0);
-        assert_eq!(focusable[1].y, 0);
-
-        // Second row (y=7, because each row has height 7)
-        assert_eq!(focusable[2].y, 7);
-        assert_eq!(focusable[3].y, 7);
     }
 }

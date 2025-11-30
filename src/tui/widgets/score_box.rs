@@ -6,7 +6,7 @@
 //!
 //! Width: 25 characters, Height: 6 rows
 
-use crate::config::DisplayConfig;
+use crate::config::{DisplayConfig, SELECTION_STYLE_MODIFIER};
 use crate::layout_constants::{SCORE_BOX_HEIGHT, SCORE_BOX_WIDTH};
 use ratatui::{buffer::Buffer, layout::Rect};
 
@@ -28,7 +28,7 @@ pub enum ScoreBoxStatus {
 }
 
 impl ScoreBoxStatus {
-    /// Format the status as a display string
+    /// Format the status as a display string (no leading space - render adds it)
     pub fn display(&self) -> String {
         match self {
             ScoreBoxStatus::Scheduled { start_time } => start_time.clone(),
@@ -38,7 +38,7 @@ impl ScoreBoxStatus {
                 intermission,
             } => {
                 if *intermission {
-                    format!("{} intermission", period)
+                    format!("{} int.", period)
                 } else if let Some(t) = time {
                     format!("{} {}", period, t)
                 } else {
@@ -62,7 +62,7 @@ impl ScoreBoxStatus {
 ///
 /// Renders a game score in a 25x6 character box:
 /// ```text
-/// Final
+///  Final
 /// ╔══════════════════╤════╗
 /// ║ Golden Knights   │ 10 ║
 /// ╟──────────────────┼────╢
@@ -140,9 +140,19 @@ impl StandaloneWidget for ScoreBox {
         let x = area.x;
         let y = area.y;
 
-        // Row 0: Status line
-        let status_text = self.status.display();
-        buf.set_string(x, y, &status_text, ratatui::style::Style::default());
+        // Styles: fg3 for box chars, fg2 for team names and scores
+        // When selected, both box and text use fg2 with reverse video
+        let status_style = config.text_style(); // Status line never changes
+        let (box_style, text_style) = if self.selected {
+            let selected = config.text_style().add_modifier(SELECTION_STYLE_MODIFIER);
+            (selected, selected)
+        } else {
+            (config.muted_style(), config.text_style()) // fg3 for box, fg2 for text
+        };
+
+        // Row 0: Status line with leading space (never reversed)
+        let status_text = format!(" {}", self.status.display());
+        buf.set_string(x, y, &status_text, status_style);
 
         // Row 1: Top border ╔══════════════════╤════╗
         // Width breakdown: ╔ (1) + ═×18 + ╤ (1) + ═×4 + ╗ (1) = 25
@@ -154,19 +164,16 @@ impl StandaloneWidget for ScoreBox {
             bc.double_horizontal.repeat(4),
             bc.double_top_right
         );
-        buf.set_string(x, y + 1, &top_border, ratatui::style::Style::default());
+        buf.set_string(x, y + 1, &top_border, box_style);
 
         // Row 2: Away team ║ Team Name        │ SS ║
-        // Width: ║ (1) + space (1) + name (17) + │ (1) + score (4) + ║ (1) = 25
-        let away_line = format!(
-            "{} {}{}{}{}",
-            bc.double_vertical,
-            Self::format_team_name(&self.away_team),
-            bc.vertical,
-            Self::format_score(self.away_score),
-            bc.double_vertical,
-        );
-        buf.set_string(x, y + 2, &away_line, ratatui::style::Style::default());
+        // Render box chars and content separately for different styles
+        buf.set_string(x, y + 2, &bc.double_vertical, box_style);
+        buf.set_string(x + 1, y + 2, " ", box_style);
+        buf.set_string(x + 2, y + 2, &Self::format_team_name(&self.away_team), text_style);
+        buf.set_string(x + 19, y + 2, &bc.vertical, box_style);
+        buf.set_string(x + 20, y + 2, &Self::format_score(self.away_score), text_style);
+        buf.set_string(x + 24, y + 2, &bc.double_vertical, box_style);
 
         // Row 3: Separator ╟──────────────────┼────╢
         let separator = format!(
@@ -177,18 +184,15 @@ impl StandaloneWidget for ScoreBox {
             bc.horizontal.repeat(4),
             bc.mixed_right_junction
         );
-        buf.set_string(x, y + 3, &separator, ratatui::style::Style::default());
+        buf.set_string(x, y + 3, &separator, box_style);
 
         // Row 4: Home team ║ Team Name        │ SS ║
-        let home_line = format!(
-            "{} {}{}{}{}",
-            bc.double_vertical,
-            Self::format_team_name(&self.home_team),
-            bc.vertical,
-            Self::format_score(self.home_score),
-            bc.double_vertical,
-        );
-        buf.set_string(x, y + 4, &home_line, ratatui::style::Style::default());
+        buf.set_string(x, y + 4, &bc.double_vertical, box_style);
+        buf.set_string(x + 1, y + 4, " ", box_style);
+        buf.set_string(x + 2, y + 4, &Self::format_team_name(&self.home_team), text_style);
+        buf.set_string(x + 19, y + 4, &bc.vertical, box_style);
+        buf.set_string(x + 20, y + 4, &Self::format_score(self.home_score), text_style);
+        buf.set_string(x + 24, y + 4, &bc.double_vertical, box_style);
 
         // Row 5: Bottom border ╚══════════════════╧════╝
         let bottom_border = format!(
@@ -199,7 +203,7 @@ impl StandaloneWidget for ScoreBox {
             bc.double_horizontal.repeat(4),
             bc.double_bottom_right
         );
-        buf.set_string(x, y + 5, &bottom_border, ratatui::style::Style::default());
+        buf.set_string(x, y + 5, &bottom_border, box_style);
     }
 
     fn preferred_width(&self) -> Option<u16> {
@@ -236,7 +240,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Final                    ",
+                " Final                   ",
                 "╔══════════════════╤════╗",
                 "║ Golden Knights   │ 10 ║",
                 "╟──────────────────┼────╢",
@@ -266,7 +270,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "1st 09:27                ",
+                " 1st 09:27               ",
                 "╔══════════════════╤════╗",
                 "║ Maple Leafs      │  2 ║",
                 "╟──────────────────┼────╢",
@@ -294,7 +298,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "9PM                      ",
+                " 9PM                     ",
                 "╔══════════════════╤════╗",
                 "║ Canucks          │  - ║",
                 "╟──────────────────┼────╢",
@@ -323,7 +327,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Final (OT)               ",
+                " Final (OT)              ",
                 "╔══════════════════╤════╗",
                 "║ Canadiens        │  3 ║",
                 "╟──────────────────┼────╢",
@@ -353,7 +357,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "1st intermission         ",
+                " 1st int.                ",
                 "╔══════════════════╤════╗",
                 "║ Senators         │  0 ║",
                 "╟──────────────────┼────╢",
@@ -382,7 +386,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Final (SO)               ",
+                " Final (SO)              ",
                 "╔══════════════════╤════╗",
                 "║ Rangers          │  4 ║",
                 "╟──────────────────┼────╢",
@@ -411,7 +415,7 @@ mod tests {
         assert_buffer(
             &buf,
             &[
-                "Final                    ",
+                " Final                   ",
                 "╔══════════════════╤════╗",
                 "║ Very Long Team Na│  1 ║",
                 "╟──────────────────┼────╢",
@@ -469,7 +473,7 @@ mod tests {
                 intermission: true
             }
             .display(),
-            "2nd intermission"
+            "2nd int."
         );
 
         assert_eq!(
