@@ -1,5 +1,5 @@
 use crate::config::{DisplayConfig, SELECTION_STYLE_MODIFIER};
-use crate::layout_constants::{PERIOD_COL_WIDTH, SCORE_BOX_WIDTH, TEAM_ABBREV_COL_WIDTH};
+use crate::layout_constants::{GAME_BOX_WIDTH, PERIOD_COL_WIDTH, TEAM_ABBREV_COL_WIDTH};
 use crate::tui::widgets::StandaloneWidget;
 /// ScoreTable widget - displays period-by-period score breakdown
 ///
@@ -79,7 +79,7 @@ impl ScoreTable {
         // Current width = 1 (left border) + 5 (team) + (total_cols-1) * (1 sep + 4 data) + 1 (right border)
         let current_width =
             1 + TEAM_ABBREV_COL_WIDTH + (total_cols - 1) * (1 + PERIOD_COL_WIDTH) + 1;
-        (SCORE_BOX_WIDTH as usize).saturating_sub(current_width)
+        (GAME_BOX_WIDTH as usize).saturating_sub(current_width)
     }
 
     /// Check if a period should show score or dash (for live games)
@@ -111,7 +111,7 @@ impl ScoreTable {
 
 impl StandaloneWidget for ScoreTable {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        if area.height < 6 || area.width < SCORE_BOX_WIDTH {
+        if area.height < 6 || area.width < GAME_BOX_WIDTH {
             return; // Not enough space
         }
 
@@ -181,7 +181,7 @@ impl StandaloneWidget for ScoreTable {
     }
 
     fn preferred_width(&self) -> Option<u16> {
-        Some(SCORE_BOX_WIDTH)
+        Some(GAME_BOX_WIDTH)
     }
 }
 

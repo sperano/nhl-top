@@ -1,5 +1,5 @@
 use crate::formatting::BoxChars;
-use crate::layout_constants::{PERIOD_COL_WIDTH, SCORE_BOX_WIDTH, TEAM_ABBREV_COL_WIDTH};
+use crate::layout_constants::{GAME_BOX_WIDTH, PERIOD_COL_WIDTH, TEAM_ABBREV_COL_WIDTH};
 use nhl_api::{GameSummary, PeriodType};
 
 // Score Table Constants
@@ -85,7 +85,7 @@ pub fn build_score_table(
     let ot_cols = if has_ot { 1 } else { 0 };
     let so_cols = if has_so { 1 } else { 0 };
     let total_cols = base_cols + ot_cols + so_cols;
-    let max_width = SCORE_BOX_WIDTH as usize; // Width with all 5 periods
+    let max_width = GAME_BOX_WIDTH as usize; // Width with all 5 periods
 
     // Helper to check if a period should show score or dash
     let should_show_period =

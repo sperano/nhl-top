@@ -1,5 +1,5 @@
 use crate::config::{DisplayConfig, SELECTION_STYLE_MODIFIER};
-use crate::layout_constants::SCORE_BOX_WIDTH;
+use crate::layout_constants::GAME_BOX_WIDTH;
 use crate::tui::widgets::{ScoreTable, StandaloneWidget};
 /// GameBox widget - displays a single game's score in a compact box
 ///
@@ -121,7 +121,7 @@ impl GameBox {
 
 impl StandaloneWidget for GameBox {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
-        if area.height < GAME_BOX_HEIGHT as u16 || area.width < SCORE_BOX_WIDTH {
+        if area.height < GAME_BOX_HEIGHT as u16 || area.width < GAME_BOX_WIDTH {
             return; // Not enough space
         }
 
@@ -156,7 +156,7 @@ impl StandaloneWidget for GameBox {
                 self.selected,
             );
 
-            let table_area = Rect::new(area.x, y, SCORE_BOX_WIDTH, 6);
+            let table_area = Rect::new(area.x, y, GAME_BOX_WIDTH, 6);
             score_table.render(table_area, buf, config);
         }
     }
@@ -166,7 +166,7 @@ impl StandaloneWidget for GameBox {
     }
 
     fn preferred_width(&self) -> Option<u16> {
-        Some(SCORE_BOX_WIDTH)
+        Some(GAME_BOX_WIDTH)
     }
 }
 

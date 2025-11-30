@@ -3,8 +3,8 @@ use crate::config::DisplayConfig;
 /// Box-drawing characters for table borders
 #[derive(Debug, Clone, PartialEq)]
 pub struct BoxChars {
+    // Single-line characters
     pub horizontal: String,
-    pub double_horizontal: String,
     pub vertical: String,
     pub top_left: String,
     pub top_right: String,
@@ -15,6 +15,22 @@ pub struct BoxChars {
     pub left_junction: String,
     pub right_junction: String,
     pub cross: String,
+
+    // Double-line characters
+    pub double_horizontal: String,
+    pub double_vertical: String,
+    pub double_top_left: String,
+    pub double_top_right: String,
+    pub double_bottom_left: String,
+    pub double_bottom_right: String,
+    pub double_top_junction: String,
+    pub double_bottom_junction: String,
+
+    // Mixed double-vertical/single-horizontal junctions
+    pub mixed_left_junction: String,
+    pub mixed_right_junction: String,
+
+    // Other characters
     pub connector2: String,
     pub connector3: String,
     pub selector: String,
@@ -24,8 +40,8 @@ pub struct BoxChars {
 impl BoxChars {
     pub fn unicode() -> Self {
         Self {
+            // Single-line
             horizontal: "─".to_string(),
-            double_horizontal: "═".to_string(),
             vertical: "│".to_string(),
             top_left: "╭".to_string(),
             top_right: "╮".to_string(),
@@ -36,6 +52,22 @@ impl BoxChars {
             left_junction: "├".to_string(),
             right_junction: "┤".to_string(),
             cross: "┼".to_string(),
+
+            // Double-line
+            double_horizontal: "═".to_string(),
+            double_vertical: "║".to_string(),
+            double_top_left: "╔".to_string(),
+            double_top_right: "╗".to_string(),
+            double_bottom_left: "╚".to_string(),
+            double_bottom_right: "╝".to_string(),
+            double_top_junction: "╤".to_string(),
+            double_bottom_junction: "╧".to_string(),
+
+            // Mixed (double vertical, single horizontal)
+            mixed_left_junction: "╟".to_string(),
+            mixed_right_junction: "╢".to_string(),
+
+            // Other
             connector2: "┴".to_string(),
             connector3: "┬".to_string(),
             selector: "▶".to_string(),
@@ -45,8 +77,8 @@ impl BoxChars {
 
     pub fn ascii() -> Self {
         Self {
+            // Single-line
             horizontal: "-".to_string(),
-            double_horizontal: "=".to_string(),
             vertical: "|".to_string(),
             top_left: "+".to_string(),
             top_right: "+".to_string(),
@@ -57,6 +89,22 @@ impl BoxChars {
             left_junction: "+".to_string(),
             right_junction: "+".to_string(),
             cross: "+".to_string(),
+
+            // Double-line
+            double_horizontal: "=".to_string(),
+            double_vertical: "|".to_string(),
+            double_top_left: "+".to_string(),
+            double_top_right: "+".to_string(),
+            double_bottom_left: "+".to_string(),
+            double_bottom_right: "+".to_string(),
+            double_top_junction: "+".to_string(),
+            double_bottom_junction: "+".to_string(),
+
+            // Mixed
+            mixed_left_junction: "+".to_string(),
+            mixed_right_junction: "+".to_string(),
+
+            // Other
             connector2: "-".to_string(),
             connector3: "-".to_string(),
             selector: ">".to_string(),

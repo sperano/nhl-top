@@ -1,4 +1,6 @@
 - is the action to set the viewport height necessary?
 - get rid of link like team:TOR or player:2131, use enum types
 - leverage the usage of Document::group
+- would boxchar be better as single chars instead of string
+- scorebox: postponed game?
 
