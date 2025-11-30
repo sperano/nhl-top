@@ -72,13 +72,12 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_trail_single_document() {
-        let stack = vec![DocumentStackEntry {
-            document: StackedDocument::TeamDetail {
+        let stack = vec![DocumentStackEntry::with_selection(
+            StackedDocument::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            selected_index: None,
-            scroll_offset: 0,
-        }];
+            None,
+        )];
         let trail = breadcrumb_trail(&stack);
         assert_eq!(trail, vec!["TOR"]);
     }
@@ -86,18 +85,16 @@ mod tests {
     #[test]
     fn test_breadcrumb_trail_multiple_documents() {
         let stack = vec![
-            DocumentStackEntry {
-                document: StackedDocument::TeamDetail {
+            DocumentStackEntry::with_selection(
+                StackedDocument::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
-            DocumentStackEntry {
-                document: StackedDocument::PlayerDetail { player_id: 8478402 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
+                None,
+            ),
+            DocumentStackEntry::with_selection(
+                StackedDocument::PlayerDetail { player_id: 8478402 },
+                None,
+            ),
         ];
         let trail = breadcrumb_trail(&stack);
         assert_eq!(trail, vec!["TOR", "Player 8478402"]);
@@ -106,18 +103,16 @@ mod tests {
     #[test]
     fn test_breadcrumb_string_with_separator() {
         let stack = vec![
-            DocumentStackEntry {
-                document: StackedDocument::TeamDetail {
+            DocumentStackEntry::with_selection(
+                StackedDocument::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
-            DocumentStackEntry {
-                document: StackedDocument::PlayerDetail { player_id: 8478402 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
+                None,
+            ),
+            DocumentStackEntry::with_selection(
+                StackedDocument::PlayerDetail { player_id: 8478402 },
+                None,
+            ),
         ];
         assert_eq!(breadcrumb_string(&stack, " >> "), "TOR >> Player 8478402");
         assert_eq!(breadcrumb_string(&stack, " / "), "TOR / Player 8478402");
@@ -128,13 +123,12 @@ mod tests {
         let empty: Vec<DocumentStackEntry> = vec![];
         assert!(is_at_root(&empty));
 
-        let with_document = vec![DocumentStackEntry {
-            document: StackedDocument::TeamDetail {
+        let with_document = vec![DocumentStackEntry::with_selection(
+            StackedDocument::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            selected_index: None,
-            scroll_offset: 0,
-        }];
+            None,
+        )];
         assert!(!is_at_root(&with_document));
     }
 
@@ -144,18 +138,16 @@ mod tests {
         assert!(current_document(&empty).is_none());
 
         let stack = vec![
-            DocumentStackEntry {
-                document: StackedDocument::TeamDetail {
+            DocumentStackEntry::with_selection(
+                StackedDocument::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
-            DocumentStackEntry {
-                document: StackedDocument::PlayerDetail { player_id: 8478402 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
+                None,
+            ),
+            DocumentStackEntry::with_selection(
+                StackedDocument::PlayerDetail { player_id: 8478402 },
+                None,
+            ),
         ];
 
         let current = current_document(&stack).unwrap();
@@ -171,18 +163,16 @@ mod tests {
         assert_eq!(stack_depth(&empty), 0);
 
         let stack = vec![
-            DocumentStackEntry {
-                document: StackedDocument::TeamDetail {
+            DocumentStackEntry::with_selection(
+                StackedDocument::TeamDetail {
                     abbrev: "TOR".to_string(),
                 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
-            DocumentStackEntry {
-                document: StackedDocument::PlayerDetail { player_id: 8478402 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
+                None,
+            ),
+            DocumentStackEntry::with_selection(
+                StackedDocument::PlayerDetail { player_id: 8478402 },
+                None,
+            ),
         ];
         assert_eq!(stack_depth(&stack), 2);
     }

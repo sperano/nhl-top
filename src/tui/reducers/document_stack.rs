@@ -21,11 +21,10 @@ pub fn reduce_document_stack(state: &AppState, action: &Action) -> Option<(AppSt
 fn push_document(state: AppState, doc: StackedDocument) -> (AppState, Effect) {
     debug!("DOCUMENT_STACK: Pushing document onto stack: {:?}", doc);
     let mut new_state = state;
-    new_state.navigation.document_stack.push(DocumentStackEntry {
-        document: doc,
-        selected_index: Some(0), // Start with first item selected
-        scroll_offset: 0,
-    });
+    new_state
+        .navigation
+        .document_stack
+        .push(DocumentStackEntry::new(doc));
     (new_state, Effect::None)
 }
 
@@ -70,13 +69,19 @@ fn pop_document(state: AppState) -> (AppState, Effect) {
     (new_state, Effect::None)
 }
 
+/// Autoscroll padding - number of lines to keep visible above/below focused element
+const AUTOSCROLL_PADDING: u16 = 2;
+
 fn document_select_next(state: AppState) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Move selection in the current document
     if let Some(doc_entry) = new_state.navigation.document_stack.last_mut() {
+        let max_index = doc_entry.focusable_positions.len().saturating_sub(1);
         if let Some(idx) = doc_entry.selected_index {
-            doc_entry.selected_index = Some(idx.saturating_add(1));
+            // Clamp to max index
+            let new_idx = (idx + 1).min(max_index);
+            doc_entry.selected_index = Some(new_idx);
             debug!(
                 "DOCUMENT_STACK: Selected next item, index: {:?}",
                 doc_entry.selected_index
@@ -84,6 +89,7 @@ fn document_select_next(state: AppState) -> (AppState, Effect) {
         } else {
             doc_entry.selected_index = Some(0);
         }
+        ensure_focused_visible(doc_entry);
     }
 
     (new_state, Effect::None)
@@ -101,9 +107,53 @@ fn document_select_previous(state: AppState) -> (AppState, Effect) {
                 doc_entry.selected_index
             );
         }
+        ensure_focused_visible(doc_entry);
     }
 
     (new_state, Effect::None)
+}
+
+/// Ensure the focused element is visible in the viewport
+fn ensure_focused_visible(doc_entry: &mut crate::tui::state::DocumentStackEntry) {
+    let focus_idx = match doc_entry.selected_index {
+        Some(idx) => idx,
+        None => return,
+    };
+
+    let focused_y = match doc_entry.focusable_positions.get(focus_idx) {
+        Some(&y) => y,
+        None => return,
+    };
+
+    let focused_height = doc_entry
+        .focusable_heights
+        .get(focus_idx)
+        .copied()
+        .unwrap_or(1);
+
+    let viewport_height = doc_entry.viewport_height.max(10);
+    let scroll_offset = doc_entry.scroll_offset;
+
+    // Calculate viewport bounds
+    let viewport_top = scroll_offset;
+    let viewport_bottom = scroll_offset.saturating_add(viewport_height);
+
+    // Calculate element bounds
+    let element_top = focused_y;
+    let element_bottom = focused_y.saturating_add(focused_height);
+
+    // Only scroll if element is actually outside the viewport
+    if element_top < viewport_top {
+        // Element top is above viewport - scroll up to show it with padding
+        let new_offset = element_top.saturating_sub(AUTOSCROLL_PADDING);
+        doc_entry.scroll_offset = new_offset;
+    } else if element_bottom > viewport_bottom {
+        // Element bottom is below viewport - scroll down to show entire element
+        let new_offset = element_bottom
+            .saturating_add(AUTOSCROLL_PADDING)
+            .saturating_sub(viewport_height);
+        doc_entry.scroll_offset = new_offset;
+    }
 }
 
 /// Handle selecting a player from a team roster document
@@ -137,11 +187,9 @@ fn handle_team_roster_selection(
 
                 // Push PlayerDetail document
                 let mut new_state = state;
-                new_state.navigation.document_stack.push(DocumentStackEntry {
-                    document: StackedDocument::PlayerDetail { player_id },
-                    selected_index: None,
-                    scroll_offset: 0,
-                });
+                new_state.navigation.document_stack.push(
+                    DocumentStackEntry::with_selection(StackedDocument::PlayerDetail { player_id }, None),
+                );
 
                 return Some((new_state, Effect::None));
             }
@@ -157,11 +205,9 @@ fn handle_team_roster_selection(
 
                 // Push PlayerDetail document
                 let mut new_state = state;
-                new_state.navigation.document_stack.push(DocumentStackEntry {
-                    document: StackedDocument::PlayerDetail { player_id },
-                    selected_index: None,
-                    scroll_offset: 0,
-                });
+                new_state.navigation.document_stack.push(
+                    DocumentStackEntry::with_selection(StackedDocument::PlayerDetail { player_id }, None),
+                );
 
                 return Some((new_state, Effect::None));
             }
@@ -223,11 +269,9 @@ fn handle_boxscore_selection(
 
             // Push PlayerDetail document
             let mut new_state = state;
-            new_state.navigation.document_stack.push(DocumentStackEntry {
-                document: StackedDocument::PlayerDetail { player_id },
-                selected_index: None,
-                scroll_offset: 0,
-            });
+            new_state.navigation.document_stack.push(
+                DocumentStackEntry::with_selection(StackedDocument::PlayerDetail { player_id }, None),
+            );
 
             return Some((new_state, Effect::None));
         }
@@ -265,13 +309,11 @@ fn handle_player_season_selection(
 
                         // Push TeamDetail document
                         let mut new_state = state;
-                        new_state.navigation.document_stack.push(DocumentStackEntry {
-                            document: StackedDocument::TeamDetail {
+                        new_state.navigation.document_stack.push(
+                            DocumentStackEntry::new(StackedDocument::TeamDetail {
                                 abbrev: abbrev.to_string(),
-                            },
-                            selected_index: Some(0),
-                            scroll_offset: 0,
-                        });
+                            }),
+                        );
 
                         return Some((new_state, Effect::None));
                     }
@@ -340,6 +382,9 @@ mod tests {
             document: StackedDocument::Boxscore { game_id },
             selected_index: None,
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
         state.data.loading.insert(LoadingKey::Boxscore(game_id));
 
@@ -361,6 +406,10 @@ mod tests {
             },
             selected_index: Some(0),
             scroll_offset: 0,
+            // Provide focusable positions so navigation can work
+            focusable_positions: vec![0, 5, 10, 15, 20],
+            focusable_heights: vec![1, 1, 1, 1, 1],
+            viewport_height: 30,
         });
 
         let (state, _) = document_select_next(state);
@@ -482,6 +531,9 @@ mod tests {
             },
             selected_index: Some(0), // Select first skater
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         // Select the first skater
@@ -601,6 +653,9 @@ mod tests {
             },
             selected_index: Some(1), // Select first goalie (index 1, after 1 skater)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         // Select the first goalie
@@ -719,6 +774,9 @@ mod tests {
             },
             selected_index: Some(2), // Select second goalie (index 2 = 1 skater + 1 goalie)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         // Select the second goalie
@@ -844,6 +902,9 @@ mod tests {
             },
             selected_index: Some(0), // Select first VISUAL position (highest points)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         // Select the first visual position
@@ -961,6 +1022,9 @@ mod tests {
             },
             selected_index: Some(1), // Select second VISUAL position
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         let (new_state, _) = document_select_item(state);
@@ -1083,6 +1147,9 @@ mod tests {
             },
             selected_index: Some(0), // Select first goalie visually (0 skaters + 0 = index 0)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         let (new_state, _) = document_select_item(state);
@@ -1249,6 +1316,9 @@ mod tests {
             },
             selected_index: Some(0), // Select first away forward
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         let (new_state, _) = document_select_item(state);
@@ -1290,6 +1360,9 @@ mod tests {
             },
             selected_index: Some(1), // Index 1 = first home forward (after 1 away forward)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         let (new_state, _) = document_select_item(state);
@@ -1335,6 +1408,9 @@ mod tests {
             },
             selected_index: Some(1), // Index 1 = first away defenseman (after 1 forward)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         let (new_state, _) = document_select_item(state);
@@ -1436,6 +1512,9 @@ mod tests {
             },
             selected_index: Some(0), // Select first season (2023-2024, Bruins)
             scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
         });
 
         let (new_state, _) = document_select_item(state);

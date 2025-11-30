@@ -209,6 +209,29 @@ fn handle_boxscore_loaded(
     match result {
         Ok(boxscore) => {
             debug!("DATA: Loaded boxscore for game {}", game_id);
+
+            // Update focusable metadata for the document stack entry
+            use crate::tui::components::boxscore_document::{BoxscoreDocumentContent, TeamView};
+            use crate::tui::document::Document;
+            use crate::tui::types::StackedDocument;
+
+            // Find the boxscore document entry in the stack and update its focusable metadata
+            for doc_entry in new_state.navigation.document_stack.iter_mut() {
+                if let StackedDocument::Boxscore { game_id: doc_game_id } = &doc_entry.document {
+                    if *doc_game_id == game_id {
+                        let doc = BoxscoreDocumentContent::new(game_id, boxscore.clone(), TeamView::Away);
+                        doc_entry.focusable_positions = doc.focusable_positions();
+                        doc_entry.focusable_heights = doc.focusable_heights();
+                        debug!(
+                            "DATA: Updated boxscore {} focusable metadata: {} positions",
+                            game_id,
+                            doc_entry.focusable_positions.len()
+                        );
+                        break;
+                    }
+                }
+            }
+
             Arc::make_mut(&mut new_state.data.boxscores).insert(game_id, boxscore);
             new_state
                 .data
@@ -241,6 +264,46 @@ fn handle_team_roster_loaded(
     match result {
         Ok(roster) => {
             debug!("DATA: Loaded roster for team {}", team_abbrev);
+
+            // Update focusable metadata for the document stack entry
+            use crate::tui::components::team_detail_document::TeamDetailDocumentContent;
+            use crate::tui::document::Document;
+            use crate::tui::types::StackedDocument;
+
+            // Find the team detail document entry in the stack and update its focusable metadata
+            for doc_entry in new_state.navigation.document_stack.iter_mut() {
+                if let StackedDocument::TeamDetail { abbrev } = &doc_entry.document {
+                    if abbrev == &team_abbrev {
+                        // Get the standing for this team
+                        let standing = new_state
+                            .data
+                            .standings
+                            .as_ref()
+                            .as_ref()
+                            .and_then(|standings| {
+                                standings
+                                    .iter()
+                                    .find(|s| s.team_abbrev.default == team_abbrev)
+                                    .cloned()
+                            });
+
+                        let doc = TeamDetailDocumentContent::new(
+                            team_abbrev.clone(),
+                            standing,
+                            Some(roster.clone()),
+                        );
+                        doc_entry.focusable_positions = doc.focusable_positions();
+                        doc_entry.focusable_heights = doc.focusable_heights();
+                        debug!(
+                            "DATA: Updated team {} focusable metadata: {} positions",
+                            team_abbrev,
+                            doc_entry.focusable_positions.len()
+                        );
+                        break;
+                    }
+                }
+            }
+
             Arc::make_mut(&mut new_state.data.team_roster_stats)
                 .insert(team_abbrev.clone(), roster);
             new_state

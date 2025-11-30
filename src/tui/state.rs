@@ -84,6 +84,38 @@ pub struct DocumentStackEntry {
     pub selected_index: Option<usize>,
     /// Scroll offset (lines from top) for document viewport
     pub scroll_offset: u16,
+    /// Y-positions of focusable elements (for autoscroll)
+    pub focusable_positions: Vec<u16>,
+    /// Heights of focusable elements (for autoscroll)
+    pub focusable_heights: Vec<u16>,
+    /// Viewport height (for autoscroll calculations)
+    pub viewport_height: u16,
+}
+
+impl DocumentStackEntry {
+    /// Create a new document stack entry with default values
+    pub fn new(document: StackedDocument) -> Self {
+        Self {
+            document,
+            selected_index: Some(0),
+            scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
+        }
+    }
+
+    /// Create a new document stack entry with a specific selected index
+    pub fn with_selection(document: StackedDocument, selected_index: Option<usize>) -> Self {
+        Self {
+            document,
+            selected_index,
+            scroll_offset: 0,
+            focusable_positions: Vec::new(),
+            focusable_heights: Vec::new(),
+            viewport_height: 30,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

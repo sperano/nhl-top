@@ -50,11 +50,9 @@ fn handle_select_game(state: AppState, game_id: i64) -> (AppState, Effect) {
     let mut new_state = state;
 
     // Push boxscore document onto stack
-    new_state.navigation.document_stack.push(DocumentStackEntry {
-        document: StackedDocument::Boxscore { game_id },
-        selected_index: Some(0), // Start with first player selected
-        scroll_offset: 0,
-    });
+    new_state.navigation.document_stack.push(
+        DocumentStackEntry::new(StackedDocument::Boxscore { game_id }),
+    );
 
     (new_state, Effect::None)
 }

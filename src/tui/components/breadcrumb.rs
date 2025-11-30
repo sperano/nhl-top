@@ -108,13 +108,12 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_with_team_detail() {
-        let document_stack = vec![DocumentStackEntry {
-            document: StackedDocument::TeamDetail {
+        let document_stack = vec![DocumentStackEntry::with_selection(
+            StackedDocument::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            selected_index: None,
-            scroll_offset: 0,
-        }];
+            None,
+        )];
 
         let widget = BreadcrumbWidget::new(Tab::Standings, document_stack);
         let config = DisplayConfig::default();
@@ -127,13 +126,12 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_with_boxscore() {
-        let document_stack = vec![DocumentStackEntry {
-            document: StackedDocument::Boxscore {
+        let document_stack = vec![DocumentStackEntry::with_selection(
+            StackedDocument::Boxscore {
                 game_id: 2024020001,
             },
-            selected_index: None,
-            scroll_offset: 0,
-        }];
+            None,
+        )];
 
         let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
@@ -147,18 +145,16 @@ mod tests {
     #[test]
     fn test_breadcrumb_with_nested_documents() {
         let document_stack = vec![
-            DocumentStackEntry {
-                document: StackedDocument::Boxscore {
+            DocumentStackEntry::with_selection(
+                StackedDocument::Boxscore {
                     game_id: 2024020001,
                 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
-            DocumentStackEntry {
-                document: StackedDocument::PlayerDetail { player_id: 8471675 },
-                selected_index: None,
-                scroll_offset: 0,
-            },
+                None,
+            ),
+            DocumentStackEntry::with_selection(
+                StackedDocument::PlayerDetail { player_id: 8471675 },
+                None,
+            ),
         ];
 
         let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
@@ -243,13 +239,12 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_preferred_height_with_documents() {
-        let document_stack = vec![DocumentStackEntry {
-            document: StackedDocument::TeamDetail {
+        let document_stack = vec![DocumentStackEntry::with_selection(
+            StackedDocument::TeamDetail {
                 abbrev: "TOR".to_string(),
             },
-            selected_index: None,
-            scroll_offset: 0,
-        }];
+            None,
+        )];
 
         let widget = BreadcrumbWidget::new(Tab::Standings, document_stack);
         assert_eq!(widget.preferred_height(), Some(1));
@@ -257,11 +252,10 @@ mod tests {
 
     #[test]
     fn test_breadcrumb_with_player_detail() {
-        let document_stack = vec![DocumentStackEntry {
-            document: StackedDocument::PlayerDetail { player_id: 8478402 },
-            selected_index: None,
-            scroll_offset: 0,
-        }];
+        let document_stack = vec![DocumentStackEntry::with_selection(
+            StackedDocument::PlayerDetail { player_id: 8478402 },
+            None,
+        )];
 
         let widget = BreadcrumbWidget::new(Tab::Scores, document_stack);
         let config = DisplayConfig::default();
