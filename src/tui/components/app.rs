@@ -27,15 +27,10 @@ impl Component for App {
     type Props = AppState;
     type State = ();
     type Message = ();
-    //
+
     fn view(&self, props: &Self::Props, _state: &Self::State) -> Element {
-        // Note: This is kept for backward compatibility with the Component trait,
-        // but Runtime now calls build_with_component_states() directly
         vertical(
-            [
-                Constraint::Min(0),    // TabbedPanel (tabs + content)
-                Constraint::Length(2), // StatusBar (2 lines: separator + content)
-            ],
+            [Constraint::Min(0), Constraint::Length(2)],
             vec![
                 self.render_main_tabs_without_states(props),
                 StatusBar.view(&props.system, &()),
@@ -43,22 +38,15 @@ impl Component for App {
         )
     }
 }
-//
+
 impl App {
-    /// Build the app element tree with access to component states
-    ///
-    /// This is called by Runtime instead of the normal view() method,
-    /// allowing App to access component_states for child components.
     pub fn build_with_component_states(
         &self,
         state: &AppState,
         component_states: &mut ComponentStateStore,
     ) -> Element {
         vertical(
-            [
-                Constraint::Min(0),    // TabbedPanel (tabs + content)
-                Constraint::Length(2), // StatusBar (2 lines: separator + content)
-            ],
+            [Constraint::Min(0), Constraint::Length(2)],
             vec![
                 self.render_main_tabs_with_states(state, component_states),
                 StatusBar.view(&state.system, &()),
@@ -66,7 +54,6 @@ impl App {
         )
     }
 
-    /// Render main navigation tabs using TabbedPanel (without component states - for tests)
     fn render_main_tabs_without_states(&self, state: &AppState) -> Element {
         use crate::tui::Tab;
 
@@ -83,10 +70,7 @@ impl App {
                 let breadcrumb_element = self.render_breadcrumb(state);
 
                 let content_with_breadcrumb = vertical(
-                    [
-                        Constraint::Length(1),
-                        Constraint::Min(0),
-                    ],
+                    [Constraint::Length(1), Constraint::Min(0)],
                     vec![breadcrumb_element, doc_element],
                 );
 
@@ -182,16 +166,13 @@ impl App {
                 (scores, standings, settings, demo)
             };
 
-        // Build tabs with their content
         let tabs = vec![
             TabItem::new("scores", "Scores", scores_content),
             TabItem::new("standings", "Standings", standings_content),
-            TabItem::new("stats", "Stats", Element::None), // TODO
-            TabItem::new("players", "Players", Element::None), // TODO
             TabItem::new("settings", "Settings", settings_content),
             TabItem::new("demo", "Demo", demo_content),
         ];
-        //
+
         TabbedPanel.view(
             &TabbedPanelProps {
                 active_key: active_key.into(),
@@ -202,8 +183,7 @@ impl App {
             &(),
         )
     }
-    //
-    /// Render a stacked document overlay
+
     fn render_stacked_document(
         &self,
         state: &AppState,
@@ -215,9 +195,9 @@ impl App {
                     game_id: *game_id,
                     boxscore: state.data.boxscores.get(game_id).cloned(),
                     loading: state.data.loading.contains(&LoadingKey::Boxscore(*game_id)),
-                    team_view: TeamView::Away, // TODO: Store in doc_entry to allow switching
-                    selected_index: doc_entry.selected_index,
-                    scroll_offset: doc_entry.scroll_offset,
+                    team_view: TeamView::Away,
+                    selected_index: doc_entry.nav.focus_index,
+                    scroll_offset: doc_entry.nav.scroll_offset,
                     focused: true, // Document has focus when it's on the stack
                 };
                 BoxscoreDocument.view(&props, &())
@@ -244,8 +224,8 @@ impl App {
                         .data
                         .loading
                         .contains(&LoadingKey::TeamRosterStats(abbrev.clone())),
-                    selected_index: doc_entry.selected_index,
-                    scroll_offset: doc_entry.scroll_offset,
+                    selected_index: doc_entry.nav.focus_index,
+                    scroll_offset: doc_entry.nav.scroll_offset,
                 };
                 TeamDetailDocument.view(&props, &())
             }
@@ -257,8 +237,8 @@ impl App {
                         .data
                         .loading
                         .contains(&LoadingKey::PlayerStats(*player_id)),
-                    selected_index: doc_entry.selected_index,
-                    scroll_offset: doc_entry.scroll_offset,
+                    selected_index: doc_entry.nav.focus_index,
+                    scroll_offset: doc_entry.nav.scroll_offset,
                 };
                 PlayerDetailDocument.view(&props, &())
             }

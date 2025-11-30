@@ -323,7 +323,7 @@ impl TableWidget {
                 );
 
                 let header_style = if let Some(theme) = &config.theme {
-                    Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme.fg2).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().add_modifier(Modifier::BOLD)
                 };
@@ -342,7 +342,7 @@ impl TableWidget {
                 );
 
                 let underline_style = if let Some(theme) = &config.theme {
-                    Style::default().fg(theme.fg1)
+                    Style::default().fg(theme.fg2)
                 } else {
                     Style::default()
                 };
@@ -362,7 +362,7 @@ impl TableWidget {
             let mut x = area.x + margin as u16 + SELECTOR_WIDTH as u16;
 
             let col_header_style = if let Some(theme) = &config.theme {
-                Style::default().fg(theme.fg1).add_modifier(Modifier::BOLD)
+                Style::default().fg(theme.fg2).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().add_modifier(Modifier::BOLD)
             };

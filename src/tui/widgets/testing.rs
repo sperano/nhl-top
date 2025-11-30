@@ -14,9 +14,6 @@ pub fn test_config() -> DisplayConfig {
         use_unicode: true,
         theme_name: None,
         theme: None,
-        selection_fg: Color::Rgb(255, 200, 0), // Gold
-        unfocused_selection_fg: None,
-        division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
         error_fg: Color::Red,
         box_chars: BoxChars::unicode(),
     }
@@ -30,9 +27,6 @@ pub fn test_config_ascii() -> DisplayConfig {
         use_unicode: false,
         theme_name: None,
         theme: None,
-        selection_fg: Color::Rgb(255, 200, 0),
-        unfocused_selection_fg: None,
-        division_header_fg: Color::Rgb(159, 226, 191),
         error_fg: Color::Red,
         box_chars: BoxChars::ascii(),
     }

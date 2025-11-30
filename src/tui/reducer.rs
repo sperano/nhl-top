@@ -1,13 +1,12 @@
 use tracing::debug;
 
-use super::action::{Action, SettingsAction};
+use super::action::Action;
 use super::component::Effect;
 use super::component_store::ComponentStateStore;
-use super::constants::SETTINGS_TAB_PATH;
 #[cfg(test)]
 use super::constants::{SCORES_TAB_PATH, STANDINGS_TAB_PATH};
+use super::reducers::reduce_settings;
 use super::state::AppState;
-use super::types::SettingsCategory;
 use crate::config::Config;
 
 // Import sub-reducers from the parent framework module
@@ -148,140 +147,12 @@ pub fn reduce(
     }
 }
 
-/// Sub-reducer for settings tab
-/// TODO: Move this to its own module once refactoring is complete
-fn reduce_settings(
-    state: AppState,
-    action: SettingsAction,
-    component_states: &mut ComponentStateStore,
-) -> (AppState, Effect) {
-    match action {
-        SettingsAction::NavigateCategoryLeft => {
-            use crate::tui::components::{SettingsDocument, SettingsTabState};
-            use crate::tui::document::Document;
-            let mut new_state = state;
-            let old_category = new_state.ui.settings.selected_category;
-            new_state.ui.settings.selected_category = match old_category {
-                SettingsCategory::Logging => SettingsCategory::Data,
-                SettingsCategory::Display => SettingsCategory::Logging,
-                SettingsCategory::Data => SettingsCategory::Display,
-            };
-
-            // Update focusable metadata in component state
-            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>(SETTINGS_TAB_PATH) {
-                let doc = SettingsDocument::new(new_state.ui.settings.selected_category, new_state.system.config.clone());
-                settings_state.doc_nav = Default::default(); // Reset navigation
-                settings_state.doc_nav.focusable_positions = doc.focusable_positions();
-                settings_state.doc_nav.focusable_ids = doc.focusable_ids();
-                settings_state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
-            }
-
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::NavigateCategoryRight => {
-            use crate::tui::components::{SettingsDocument, SettingsTabState};
-            use crate::tui::document::Document;
-            let mut new_state = state;
-            let old_category = new_state.ui.settings.selected_category;
-            new_state.ui.settings.selected_category = match old_category {
-                SettingsCategory::Logging => SettingsCategory::Display,
-                SettingsCategory::Display => SettingsCategory::Data,
-                SettingsCategory::Data => SettingsCategory::Logging,
-            };
-
-            // Update focusable metadata in component state
-            if let Some(settings_state) = component_states.get_mut::<SettingsTabState>(SETTINGS_TAB_PATH) {
-                let doc = SettingsDocument::new(new_state.ui.settings.selected_category, new_state.system.config.clone());
-                settings_state.doc_nav = Default::default(); // Reset navigation
-                settings_state.doc_nav.focusable_positions = doc.focusable_positions();
-                settings_state.doc_nav.focusable_ids = doc.focusable_ids();
-                settings_state.doc_nav.focusable_row_positions = doc.focusable_row_positions();
-            }
-
-            (new_state, Effect::None)
-        }
-
-        SettingsAction::ToggleBoolean(key) => {
-            debug!("SETTINGS: Toggling boolean setting: {}", key);
-            let mut new_state = state;
-            match key.as_str() {
-                "use_unicode" => {
-                    new_state.system.config.display.use_unicode =
-                        !new_state.system.config.display.use_unicode;
-                    // Update box_chars based on use_unicode
-                    new_state.system.config.display.box_chars =
-                        crate::formatting::BoxChars::from_use_unicode(
-                            new_state.system.config.display.use_unicode,
-                        );
-                }
-                "western_teams_first" => {
-                    new_state.system.config.display_standings_western_first =
-                        !new_state.system.config.display_standings_western_first;
-                }
-                _ => {
-                    debug!("SETTINGS: Unknown boolean setting: {}", key);
-                }
-            }
-            let config = new_state.system.config.clone();
-            let effect = save_config_effect(config);
-            (new_state, effect)
-        }
-
-        SettingsAction::UpdateSetting { key, value } => {
-            debug!("SETTINGS: Updating setting: {} = {}", key, value);
-            let mut new_state = state;
-            match key.as_str() {
-                "log_level" => {
-                    new_state.system.config.log_level = value;
-                }
-                "theme" => {
-                    if value == "none" {
-                        new_state.system.config.display.theme_name = None;
-                        new_state.system.config.display.theme = None;
-                    } else {
-                        use crate::config::{
-                            THEME_BLUE, THEME_CYAN, THEME_GREEN, THEME_ORANGE, THEME_PURPLE,
-                            THEME_RED, THEME_WHITE, THEME_YELLOW,
-                        };
-                        let theme = match value.as_str() {
-                            "orange" => Some(THEME_ORANGE.clone()),
-                            "green" => Some(THEME_GREEN.clone()),
-                            "blue" => Some(THEME_BLUE.clone()),
-                            "purple" => Some(THEME_PURPLE.clone()),
-                            "white" => Some(THEME_WHITE.clone()),
-                            "red" => Some(THEME_RED.clone()),
-                            "yellow" => Some(THEME_YELLOW.clone()),
-                            "cyan" => Some(THEME_CYAN.clone()),
-                            _ => None,
-                        };
-                        new_state.system.config.display.theme_name = Some(value);
-                        new_state.system.config.display.theme = theme;
-                    }
-                }
-                _ => {
-                    debug!("SETTINGS: Unknown setting key: {}", key);
-                }
-            }
-            let config = new_state.system.config.clone();
-            let effect = save_config_effect(config);
-            (new_state, effect)
-        }
-
-        SettingsAction::UpdateConfig(config) => {
-            debug!("SETTINGS: Updating config");
-            let mut new_state = state;
-            new_state.system.config = *config;
-            (new_state, Effect::None)
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tui::action::{ScoresAction, StandingsAction};
-    use crate::tui::types::Tab;
+    use crate::tui::action::{ScoresAction, SettingsAction, StandingsAction};
+    use crate::tui::types::{SettingsCategory, Tab};
 
     // Test helper that creates a ComponentStateStore for each test
     fn test_reduce(state: AppState, action: Action) -> (AppState, Effect) {
@@ -528,9 +399,6 @@ mod tests {
         );
     }
 
-    // TODO: Obsolete tests removed - settings now use document system
-    // These tests were for the old modal/editing/selection system which has been replaced
-
     #[test]
     fn test_set_status_message_with_error() {
         let state = AppState::default();
@@ -637,6 +505,4 @@ mod tests {
             state.system.config.display_standings_western_first
         );
     }
-
-    // TODO: Obsolete editing/modal tests removed - settings now use document system
 }

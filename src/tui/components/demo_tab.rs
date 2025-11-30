@@ -9,12 +9,14 @@
 
 use std::sync::Arc;
 
+use crossterm::event::{KeyCode, KeyEvent};
 use nhl_api::Standing;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
 use crate::config::DisplayConfig;
 use crate::tui::action::{Action, ComponentMessageTrait};
+use crate::tui::document_nav::DocumentNavMsg;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::create_standings_table_with_selection;
 use crate::tui::components::TableWidget;
@@ -118,8 +120,15 @@ pub struct DemoTabProps {
 /// Messages that can be sent to the Demo tab
 #[derive(Clone, Debug)]
 pub enum DemoTabMessage {
+    /// Key event when this tab is focused (Phase 3: component handles own keys)
+    Key(KeyEvent),
+
+    /// Navigate up request (ESC in browse mode, returns to tab bar otherwise)
+    /// Returns Effect::Handled if consumed, Effect::None if should bubble up
+    NavigateUp,
+
     /// Document navigation (Phase 7: Delegated to DocumentNavMsg)
-    DocNav(crate::tui::document_nav::DocumentNavMsg),
+    DocNav(DocumentNavMsg),
     /// Update viewport height
     UpdateViewportHeight(u16),
     /// Activate the currently focused link (team or player)
@@ -166,6 +175,19 @@ impl Component for DemoTab {
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
         match msg {
+            DemoTabMessage::Key(key) => self.handle_key(key, state),
+
+            DemoTabMessage::NavigateUp => {
+                // Exit browse mode if active, otherwise let it bubble up
+                if state.focus_index.is_some() {
+                    state.focus_index = None;
+                    state.scroll_offset = 0;
+                    Effect::Handled
+                } else {
+                    Effect::None // Let it bubble up to exit content focus
+                }
+            }
+
             DemoTabMessage::DocNav(nav_msg) => {
                 crate::tui::document_nav::handle_message(state, &nav_msg)
             }
@@ -205,6 +227,33 @@ impl Component for DemoTab {
             scroll_offset: state.scroll_offset,
             standings: props.standings.clone(),
         }))
+    }
+}
+
+impl DemoTab {
+    /// Handle key events when this tab is focused
+    fn handle_key(&mut self, key: KeyEvent, state: &mut crate::tui::document_nav::DocumentNavState) -> Effect {
+        // DemoTab is always in "browse mode" when content is focused
+        // Arrow keys navigate focusable elements, Enter activates links
+        match key.code {
+            KeyCode::Up => {
+                crate::tui::document_nav::handle_message(state, &DocumentNavMsg::FocusPrev)
+            }
+            KeyCode::Down => {
+                crate::tui::document_nav::handle_message(state, &DocumentNavMsg::FocusNext)
+            }
+            KeyCode::Tab => {
+                crate::tui::document_nav::handle_message(state, &DocumentNavMsg::FocusNext)
+            }
+            KeyCode::BackTab => {
+                crate::tui::document_nav::handle_message(state, &DocumentNavMsg::FocusPrev)
+            }
+            KeyCode::Enter => {
+                // Activate the focused link
+                self.update(DemoTabMessage::ActivateLink, state)
+            }
+            _ => Effect::None,
+        }
     }
 }
 

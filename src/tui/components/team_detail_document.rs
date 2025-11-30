@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::{Block, Borders, Paragraph},
+    widgets::Paragraph,
 };
 
 use nhl_api::{ClubGoalieStats, ClubSkaterStats, ClubStats, Standing};
@@ -247,37 +247,19 @@ impl ElementWidget for TeamDetailDocumentWidget {
     fn render(&self, area: Rect, buf: &mut Buffer, config: &DisplayConfig) {
         if self.loading {
             let text = format!("Loading {} team details...", self.team_abbrev);
-            let widget = Paragraph::new(text)
-                .block(Block::default().borders(Borders::ALL).title("Team Detail"));
+            let widget = Paragraph::new(text);
             ratatui::widgets::Widget::render(widget, area, buf);
             return;
         }
 
         if self.club_stats.is_none() {
             let text = format!("No stats available for {}", self.team_abbrev);
-            let widget = Paragraph::new(text)
-                .block(Block::default().borders(Borders::ALL).title("Team Detail"));
+            let widget = Paragraph::new(text);
             ratatui::widgets::Widget::render(widget, area, buf);
             return;
         }
 
-        // Render border/title first
-        let title = format!(
-            "{} - ↑↓: Navigate | Enter: View Player | ESC: Back",
-            self.team_abbrev
-        );
-        let block = Block::default().borders(Borders::ALL).title(title);
-        ratatui::widgets::Widget::render(block, area, buf);
-
-        // Create inner area (inside the border)
-        let inner_area = Rect::new(
-            area.x + 1,
-            area.y + 1,
-            area.width.saturating_sub(2),
-            area.height.saturating_sub(2),
-        );
-
-        if inner_area.width == 0 || inner_area.height == 0 {
+        if area.width == 0 || area.height == 0 {
             return;
         }
 
@@ -288,7 +270,7 @@ impl ElementWidget for TeamDetailDocumentWidget {
             self.club_stats.clone(),
         );
 
-        let mut view = DocumentView::new(Arc::new(doc), inner_area.height);
+        let mut view = DocumentView::new(Arc::new(doc), area.height);
 
         // Apply focus state
         if let Some(idx) = self.selected_index {
@@ -299,7 +281,7 @@ impl ElementWidget for TeamDetailDocumentWidget {
         view.set_scroll_offset(self.scroll_offset);
 
         // Render the document
-        view.render(inner_area, buf, config);
+        view.render(area, buf, config);
     }
 
     fn clone_box(&self) -> Box<dyn ElementWidget> {

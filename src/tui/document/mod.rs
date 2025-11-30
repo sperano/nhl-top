@@ -16,11 +16,17 @@ pub mod link;
 pub mod viewport;
 pub mod widget;
 
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use std::sync::Arc;
 
 use crate::config::DisplayConfig;
+use crate::tui::component::Effect;
+use crate::tui::document_nav::{handle_message, DocumentNavState};
+use crate::tui::nav_handler::key_to_nav_msg;
+use crate::tui::state::DataState;
+use crate::tui::types::StackedDocument;
 
 pub use builder::DocumentBuilder;
 pub use elements::DocumentElement;
@@ -163,6 +169,260 @@ pub trait Document: Send + Sync {
         }
 
         (buffer, height)
+    }
+}
+
+/// Handler trait for stacked documents to handle their own key events
+///
+/// Stacked documents (Boxscore, TeamDetail, PlayerDetail) implement this trait
+/// to encapsulate their navigation and activation logic. This keeps key handling
+/// close to the document that understands its structure.
+///
+/// Implementors provide `activate()` and `populate_focusable_metadata()`.
+/// The default `handle_key()` populates metadata on-demand before navigation,
+/// eliminating the need to sync cached metadata when data loads.
+pub trait StackedDocumentHandler: Send + Sync {
+    /// Activate the focused element (Enter key)
+    ///
+    /// Called when the user presses Enter on a focused element.
+    /// Returns Effect::Action to push a new document, or Effect::None if nothing to activate.
+    fn activate(&self, nav: &DocumentNavState, data: &DataState) -> Effect;
+
+    /// Populate focusable metadata from the document into nav state
+    ///
+    /// Called before navigation to ensure metadata is current.
+    /// Builds the document from data and extracts focusable positions/heights.
+    fn populate_focusable_metadata(&self, nav: &mut DocumentNavState, data: &DataState);
+
+    /// Handle a key event for this document
+    ///
+    /// Default implementation populates focusable metadata on-demand, then handles
+    /// navigation via `key_to_nav_msg` and delegates Enter to `activate()`.
+    fn handle_key(&self, key: KeyEvent, nav: &mut DocumentNavState, data: &DataState) -> Effect {
+        // Populate focusable metadata on-demand before navigation
+        self.populate_focusable_metadata(nav, data);
+
+        // Try navigation first (Tab, arrows, Page keys, etc.)
+        if let Some(nav_msg) = key_to_nav_msg(key) {
+            return handle_message(nav, &nav_msg);
+        }
+        // Handle Enter for activation
+        if key.code == KeyCode::Enter {
+            return self.activate(nav, data);
+        }
+        Effect::None
+    }
+}
+
+/// Get the appropriate handler for a stacked document type
+///
+/// Returns a handler that implements key handling for the specific document type.
+/// Each document type (Boxscore, TeamDetail, PlayerDetail) has its own handler
+/// that understands how to navigate and activate elements within it.
+pub fn get_stacked_document_handler(doc: &StackedDocument) -> Box<dyn StackedDocumentHandler> {
+    match doc {
+        StackedDocument::Boxscore { game_id } => {
+            Box::new(BoxscoreDocumentHandler { game_id: *game_id })
+        }
+        StackedDocument::TeamDetail { abbrev } => {
+            Box::new(TeamDetailDocumentHandler {
+                abbrev: abbrev.clone(),
+            })
+        }
+        StackedDocument::PlayerDetail { player_id } => {
+            Box::new(PlayerDetailDocumentHandler {
+                player_id: *player_id,
+            })
+        }
+    }
+}
+
+/// Handler for Boxscore documents
+struct BoxscoreDocumentHandler {
+    game_id: i64,
+}
+
+impl StackedDocumentHandler for BoxscoreDocumentHandler {
+    fn activate(&self, nav: &DocumentNavState, data: &DataState) -> Effect {
+        use crate::tui::action::Action;
+
+        if let Some(idx) = nav.focus_index {
+            if let Some(player_id) = self.get_player_id_at_index(idx, data) {
+                return Effect::Action(Action::PushDocument(
+                    StackedDocument::PlayerDetail { player_id },
+                ));
+            }
+        }
+        Effect::None
+    }
+
+    fn populate_focusable_metadata(&self, nav: &mut DocumentNavState, data: &DataState) {
+        use crate::tui::components::boxscore_document::{BoxscoreDocumentContent, TeamView};
+
+        if let Some(boxscore) = data.boxscores.get(&self.game_id) {
+            let doc = BoxscoreDocumentContent::new(self.game_id, boxscore.clone(), TeamView::Away);
+            nav.focusable_positions = doc.focusable_positions();
+            nav.focusable_heights = doc.focusable_heights();
+            nav.focusable_ids = doc.focusable_ids();
+            nav.link_targets = doc.focusable_link_targets();
+        }
+    }
+}
+
+impl BoxscoreDocumentHandler {
+    /// Get the player ID at the given focus index
+    fn get_player_id_at_index(&self, index: usize, data: &DataState) -> Option<i64> {
+        let boxscore = data.boxscores.get(&self.game_id)?;
+        let away_stats = &boxscore.player_by_game_stats.away_team;
+        let home_stats = &boxscore.player_by_game_stats.home_team;
+
+        // Calculate section boundaries
+        let away_forwards_count = away_stats.forwards.len();
+        let away_defense_count = away_stats.defense.len();
+        let away_goalies_count = away_stats.goalies.len();
+        let away_total = away_forwards_count + away_defense_count + away_goalies_count;
+
+        let home_forwards_count = home_stats.forwards.len();
+        let home_defense_count = home_stats.defense.len();
+
+        if index < away_forwards_count {
+            away_stats.forwards.get(index).map(|p| p.player_id)
+        } else if index < away_forwards_count + away_defense_count {
+            let defense_idx = index - away_forwards_count;
+            away_stats.defense.get(defense_idx).map(|p| p.player_id)
+        } else if index < away_total {
+            let goalie_idx = index - away_forwards_count - away_defense_count;
+            away_stats.goalies.get(goalie_idx).map(|p| p.player_id)
+        } else if index < away_total + home_forwards_count {
+            let forward_idx = index - away_total;
+            home_stats.forwards.get(forward_idx).map(|p| p.player_id)
+        } else if index < away_total + home_forwards_count + home_defense_count {
+            let defense_idx = index - away_total - home_forwards_count;
+            home_stats.defense.get(defense_idx).map(|p| p.player_id)
+        } else {
+            let goalie_idx = index - away_total - home_forwards_count - home_defense_count;
+            home_stats.goalies.get(goalie_idx).map(|p| p.player_id)
+        }
+    }
+}
+
+/// Handler for TeamDetail documents
+struct TeamDetailDocumentHandler {
+    abbrev: String,
+}
+
+impl StackedDocumentHandler for TeamDetailDocumentHandler {
+    fn activate(&self, nav: &DocumentNavState, data: &DataState) -> Effect {
+        use crate::tui::action::Action;
+        use crate::tui::helpers::{ClubGoalieStatsSorting, ClubSkaterStatsSorting};
+
+        let Some(idx) = nav.focus_index else {
+            return Effect::None;
+        };
+        let Some(roster) = data.team_roster_stats.get(&self.abbrev) else {
+            return Effect::None;
+        };
+
+        // Sort the same way as display
+        let mut sorted_skaters = roster.skaters.clone();
+        sorted_skaters.sort_by_points_desc();
+
+        let mut sorted_goalies = roster.goalies.clone();
+        sorted_goalies.sort_by_games_played_desc();
+
+        let num_skaters = sorted_skaters.len();
+
+        let player_id = if idx < num_skaters {
+            sorted_skaters.get(idx).map(|p| p.player_id)
+        } else {
+            let goalie_idx = idx - num_skaters;
+            sorted_goalies.get(goalie_idx).map(|g| g.player_id)
+        };
+
+        match player_id {
+            Some(id) => Effect::Action(Action::PushDocument(StackedDocument::PlayerDetail {
+                player_id: id,
+            })),
+            None => Effect::None,
+        }
+    }
+
+    fn populate_focusable_metadata(&self, nav: &mut DocumentNavState, data: &DataState) {
+        use crate::tui::components::team_detail_document::TeamDetailDocumentContent;
+
+        let roster = data.team_roster_stats.get(&self.abbrev);
+        let standing = data
+            .standings
+            .as_ref()
+            .as_ref()
+            .and_then(|standings| {
+                standings
+                    .iter()
+                    .find(|s| s.team_abbrev.default == self.abbrev)
+                    .cloned()
+            });
+
+        let doc = TeamDetailDocumentContent::new(self.abbrev.clone(), standing, roster.cloned());
+        nav.focusable_positions = doc.focusable_positions();
+        nav.focusable_heights = doc.focusable_heights();
+        nav.focusable_ids = doc.focusable_ids();
+        nav.link_targets = doc.focusable_link_targets();
+    }
+}
+
+/// Handler for PlayerDetail documents
+struct PlayerDetailDocumentHandler {
+    player_id: i64,
+}
+
+impl StackedDocumentHandler for PlayerDetailDocumentHandler {
+    fn activate(&self, nav: &DocumentNavState, data: &DataState) -> Effect {
+        use crate::tui::action::Action;
+        use crate::tui::helpers::SeasonSorting;
+
+        let Some(idx) = nav.focus_index else {
+            return Effect::None;
+        };
+        let Some(player) = data.player_data.get(&self.player_id) else {
+            return Effect::None;
+        };
+        let Some(seasons) = &player.season_totals else {
+            return Effect::None;
+        };
+
+        // Filter and sort same as display
+        let mut nhl_seasons: Vec<_> = seasons
+            .iter()
+            .filter(|s| {
+                s.game_type == nhl_api::GameType::RegularSeason && s.league_abbrev == "NHL"
+            })
+            .collect();
+        nhl_seasons.sort_by_season_desc();
+
+        let Some(season) = nhl_seasons.get(idx) else {
+            return Effect::None;
+        };
+        let Some(ref common_name) = season.team_common_name else {
+            return Effect::None;
+        };
+        let Some(abbrev) = crate::team_abbrev::common_name_to_abbrev(&common_name.default) else {
+            return Effect::None;
+        };
+
+        Effect::Action(Action::PushDocument(StackedDocument::TeamDetail {
+            abbrev: abbrev.to_string(),
+        }))
+    }
+
+    fn populate_focusable_metadata(&self, nav: &mut DocumentNavState, data: &DataState) {
+        use crate::tui::components::player_detail_document::PlayerDetailDocumentContent;
+
+        let player_data = data.player_data.get(&self.player_id).cloned();
+        let doc = PlayerDetailDocumentContent::new(player_data, self.player_id);
+        nav.focusable_positions = doc.focusable_positions();
+        nav.focusable_heights = doc.focusable_heights();
+        nav.focusable_ids = doc.focusable_ids();
+        nav.link_targets = doc.focusable_link_targets();
     }
 }
 
@@ -371,8 +631,6 @@ impl DocumentView {
             .map(|id| FocusContext::from_id(id))
             .unwrap_or_default();
 
-        // Always re-render when focus might have changed
-        // TODO: Optimize by tracking if focus changed since last render
         let (full_buf, height) = self.document.render_full(area.width, config, &focus);
         self.full_buffer = Some(full_buf);
         self.cached_height = height;

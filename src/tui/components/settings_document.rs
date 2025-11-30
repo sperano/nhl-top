@@ -65,10 +65,6 @@ impl SettingsDocument {
                 focus,
             )
             .spacer(1)
-            .text(&format!("Selection Color: {}", format_color(&self.config.display.selection_fg)))
-            .spacer(1)
-            .text(&format!("Division Header Color: {}", format_color(&self.config.display.division_header_fg)))
-            .spacer(1)
             .text(&format!("Error Color: {}", format_color(&self.config.display.error_fg)))
     }
 

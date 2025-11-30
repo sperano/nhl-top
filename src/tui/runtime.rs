@@ -69,6 +69,9 @@ impl Runtime {
     }
 
     /// Dispatch an action to be processed by the reducer
+    ///
+    /// Uses mem::take to avoid cloning AppState. Reducers now return fetch effects
+    /// directly instead of runtime comparing old/new state.
     pub fn dispatch(&mut self, action: Action) {
         trace!("ACTION: Dispatching {:?}", action);
 
@@ -76,9 +79,9 @@ impl Runtime {
         let effect = if matches!(action, Action::RefreshData) {
             debug!("ACTION: RefreshData - generating fetch effects");
 
-            // First, run the reducer to update last_refresh timestamp
-            let (new_state, _reducer_effect) =
-                reduce(self.state.clone(), action.clone(), &mut self.component_states);
+            // Take ownership temporarily, run reducer, put back
+            let state = std::mem::take(&mut self.state);
+            let (new_state, _reducer_effect) = reduce(state, action.clone(), &mut self.component_states);
             self.state = new_state;
 
             // Then generate data fetch effects
@@ -86,182 +89,66 @@ impl Runtime {
         } else if let Action::RefreshSchedule(date) = &action {
             debug!("ACTION: RefreshSchedule({:?}) - generating fetch effects", date);
 
-            // Clear old schedule data and update global game_date before fetching new data
-            let mut new_state = self.state.clone();
-            new_state.ui.scores.game_date = date.clone();
-            new_state.data.schedule = Arc::new(None);
-            Arc::make_mut(&mut new_state.data.game_info).clear();
-            Arc::make_mut(&mut new_state.data.period_scores).clear();
-            self.state = new_state;
+            // Mutate in place - no clone needed
+            self.state.ui.scores.game_date = date.clone();
+            self.state.data.schedule = Arc::new(None);
+            Arc::make_mut(&mut self.state.data.game_info).clear();
+            Arc::make_mut(&mut self.state.data.period_scores).clear();
 
-            // Then generate schedule fetch effect for the specific date
+            // Generate schedule fetch effect for the specific date
             self.data_effects.handle_refresh_schedule(date.clone())
         } else {
-            // Run the reducer to get new state and any effects
-            let (new_state, reducer_effect) =
-                reduce(self.state.clone(), action, &mut self.component_states);
-
-            // Check if a boxscore document was just pushed and trigger fetch
-            let boxscore_effect = self.check_for_boxscore_fetch(&self.state, &new_state);
-
-            // Check if a team detail document was just pushed and trigger fetch
-            let team_detail_effect = self.check_for_team_detail_fetch(&self.state, &new_state);
-
-            // Check if a player detail document was just pushed and trigger fetch
-            let player_detail_effect = self.check_for_player_detail_fetch(&self.state, &new_state);
-
-            // Check if schedule was just loaded and trigger game detail fetches
-            let game_details_effect = self.check_for_game_details_fetch(&self.state, &new_state);
-
+            // Take ownership temporarily using mem::take pattern (no clone!)
+            let state = std::mem::take(&mut self.state);
+            let (new_state, reducer_effect) = reduce(state, action, &mut self.component_states);
             self.state = new_state;
 
-            // Combine effects if needed
-            let mut effects = Vec::new();
-            if !matches!(reducer_effect, Effect::None) {
-                effects.push(reducer_effect);
-            }
-            if !matches!(boxscore_effect, Effect::None) {
-                effects.push(boxscore_effect);
-            }
-            if !matches!(team_detail_effect, Effect::None) {
-                effects.push(team_detail_effect);
-            }
-            if !matches!(player_detail_effect, Effect::None) {
-                effects.push(player_detail_effect);
-            }
-            if !matches!(game_details_effect, Effect::None) {
-                effects.push(game_details_effect);
-            }
-
-            if effects.is_empty() {
-                Effect::None
-            } else if effects.len() == 1 {
-                effects
-                    .pop()
-                    .expect("effects vec should contain exactly 1 element")
-            } else {
-                Effect::Batch(effects)
-            }
+            // Reducer now returns fetch effects directly, no need to compare old/new state
+            reducer_effect
         };
 
-        // Queue effect for execution if not None
-        if !matches!(effect, Effect::None) {
-            trace!("ACTION: Queueing effect for execution");
-            let _ = self.effect_tx.send(effect);
-        }
+        // Execute the effect (handles both legacy Effect::Async and new fetch variants)
+        self.execute_effect(effect);
     }
 
-    /// Check if a boxscore document was just pushed and needs data fetching
-    fn check_for_boxscore_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if document_stack grew and new document is a Boxscore
-        if new_state.navigation.document_stack.len() > old_state.navigation.document_stack.len() {
-            if let Some(doc_entry) = new_state.navigation.document_stack.last() {
-                if let super::types::StackedDocument::Boxscore { game_id } = doc_entry.document {
-                    // Check if we don't already have the data and aren't already loading
-                    if !new_state.data.boxscores.contains_key(&game_id)
-                        && !new_state
-                            .data
-                            .loading
-                            .contains(&super::state::LoadingKey::Boxscore(game_id))
-                    {
-                        debug!("EFFECT: Triggering boxscore fetch for game_id={}", game_id);
-                        return self.data_effects.fetch_boxscore(game_id);
-                    } else {
-                        trace!(
-                            "EFFECT: Boxscore already loaded/loading for game_id={}",
-                            game_id
-                        );
-                    }
+    /// Execute an effect, handling both legacy async effects and new fetch variants
+    fn execute_effect(&self, effect: Effect) {
+        match effect {
+            Effect::None | Effect::Handled => {
+                // Nothing to do
+            }
+            Effect::FetchBoxscore(game_id) => {
+                debug!("EFFECT: Executing boxscore fetch for game_id={}", game_id);
+                let fetch_effect = self.data_effects.fetch_boxscore(game_id);
+                let _ = self.effect_tx.send(fetch_effect);
+            }
+            Effect::FetchTeamRosterStats(abbrev) => {
+                debug!("EFFECT: Executing team roster stats fetch for team={}", abbrev);
+                let fetch_effect = self.data_effects.fetch_team_roster_stats(abbrev);
+                let _ = self.effect_tx.send(fetch_effect);
+            }
+            Effect::FetchPlayerStats(player_id) => {
+                debug!("EFFECT: Executing player stats fetch for player_id={}", player_id);
+                let fetch_effect = self.data_effects.fetch_player_stats(player_id);
+                let _ = self.effect_tx.send(fetch_effect);
+            }
+            Effect::FetchGameDetails(game_id) => {
+                debug!("EFFECT: Executing game details fetch for game_id={}", game_id);
+                let fetch_effect = self.data_effects.fetch_game_details(game_id);
+                let _ = self.effect_tx.send(fetch_effect);
+            }
+            Effect::Batch(effects) => {
+                // Execute each effect in the batch
+                for e in effects {
+                    self.execute_effect(e);
                 }
             }
-        }
-        Effect::None
-    }
-
-    /// Check if a team detail document was just pushed and needs data fetching
-    fn check_for_team_detail_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if document_stack grew and new document is a TeamDetail
-        if new_state.navigation.document_stack.len() > old_state.navigation.document_stack.len() {
-            if let Some(doc_entry) = new_state.navigation.document_stack.last() {
-                if let super::types::StackedDocument::TeamDetail { abbrev } = &doc_entry.document {
-                    // Check if we don't already have the data and aren't already loading
-                    if !new_state.data.team_roster_stats.contains_key(abbrev)
-                        && !new_state
-                            .data
-                            .loading
-                            .contains(&super::state::LoadingKey::TeamRosterStats(abbrev.clone()))
-                    {
-                        debug!(
-                            "EFFECT: Triggering team roster stats fetch for team={}",
-                            abbrev
-                        );
-                        return self.data_effects.fetch_team_roster_stats(abbrev.clone());
-                    } else {
-                        trace!(
-                            "EFFECT: Team roster stats already loaded/loading for team={}",
-                            abbrev
-                        );
-                    }
-                }
+            // Legacy effects - queue for async executor
+            Effect::Action(_) | Effect::Async(_) => {
+                trace!("ACTION: Queueing effect for async execution");
+                let _ = self.effect_tx.send(effect);
             }
         }
-        Effect::None
-    }
-
-    /// Check if a player detail document was just pushed and needs data fetching
-    fn check_for_player_detail_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if document_stack grew and new document is a PlayerDetail
-        if new_state.navigation.document_stack.len() > old_state.navigation.document_stack.len() {
-            if let Some(doc_entry) = new_state.navigation.document_stack.last() {
-                if let super::types::StackedDocument::PlayerDetail { player_id } = doc_entry.document {
-                    // Check if we don't already have the data and aren't already loading
-                    if !new_state.data.player_data.contains_key(&player_id)
-                        && !new_state
-                            .data
-                            .loading
-                            .contains(&super::state::LoadingKey::PlayerStats(player_id))
-                    {
-                        debug!(
-                            "EFFECT: Triggering player stats fetch for player_id={}",
-                            player_id
-                        );
-                        return self.data_effects.fetch_player_stats(player_id);
-                    } else {
-                        trace!(
-                            "EFFECT: Player stats already loaded/loading for player_id={}",
-                            player_id
-                        );
-                    }
-                }
-            }
-        }
-        Effect::None
-    }
-
-    /// Check if schedule was just loaded and trigger game detail fetches for started games
-    fn check_for_game_details_fetch(&self, old_state: &AppState, new_state: &AppState) -> Effect {
-        // Check if schedule just loaded (went from None to Some)
-        if old_state.data.schedule.is_none() && new_state.data.schedule.is_some() {
-            if let Some(schedule) = new_state.data.schedule.as_ref().as_ref() {
-                let mut effects = Vec::new();
-                for game in &schedule.games {
-                    // Only fetch details for games that have started
-                    if game.game_state != nhl_api::GameState::Future
-                        && game.game_state != nhl_api::GameState::PreGame
-                    {
-                        debug!(
-                            "EFFECT: Triggering game details fetch for game_id={}",
-                            game.id
-                        );
-                        effects.push(self.data_effects.fetch_game_details(game.id));
-                    }
-                }
-                if !effects.is_empty() {
-                    return Effect::Batch(effects);
-                }
-            }
-        }
-        Effect::None
     }
 
     /// Process all pending actions in the queue
@@ -352,62 +239,52 @@ impl Runtime {
     ///
     /// This runs in a separate tokio task and processes effects as they come in.
     /// Effects can dispatch new actions which feed back into the runtime.
+    ///
+    /// Note: FetchBoxscore, FetchTeamRosterStats, FetchPlayerStats, FetchGameDetails
+    /// are handled synchronously by execute_effect() and should never reach here.
+    /// They are converted to Effect::Async before being sent to this channel.
     async fn run_effect_executor(
         effect_rx: &mut mpsc::UnboundedReceiver<Effect>,
         action_tx: mpsc::UnboundedSender<Action>,
     ) {
         while let Some(effect) = effect_rx.recv().await {
-            match effect {
-                Effect::None => {
-                    // Nothing to do
+            Self::process_effect_async(effect, &action_tx);
+        }
+    }
+
+    /// Process a single effect in the async executor
+    fn process_effect_async(effect: Effect, action_tx: &mpsc::UnboundedSender<Action>) {
+        match effect {
+            Effect::None | Effect::Handled => {
+                // Nothing to do
+            }
+            Effect::Action(action) => {
+                // Dispatch action immediately
+                let _ = action_tx.send(action);
+            }
+            Effect::Batch(effects) => {
+                // Process each effect in the batch
+                for e in effects {
+                    Self::process_effect_async(e, action_tx);
                 }
-                Effect::Action(action) => {
-                    // Dispatch action immediately
+            }
+            Effect::Async(future) => {
+                // Spawn async task to execute the future
+                let action_tx = action_tx.clone();
+                tokio::spawn(async move {
+                    let action = future.await;
                     let _ = action_tx.send(action);
-                }
-                Effect::Batch(effects) => {
-                    // Process each effect in the batch
-                    for e in effects {
-                        // Re-queue each effect to be processed
-                        // Note: We can't directly recurse here because we're borrowing effect_rx
-                        // Instead, we'll handle batches by dispatching actions
-                        match e {
-                            Effect::Action(action) => {
-                                let _ = action_tx.send(action);
-                            }
-                            Effect::Async(future) => {
-                                let action_tx = action_tx.clone();
-                                tokio::spawn(async move {
-                                    let action = future.await;
-                                    let _ = action_tx.send(action);
-                                });
-                            }
-                            Effect::Batch(nested) => {
-                                // Handle nested batches recursively
-                                for nested_effect in nested {
-                                    if let Effect::Action(action) = nested_effect {
-                                        let _ = action_tx.send(action);
-                                    } else if let Effect::Async(future) = nested_effect {
-                                        let action_tx = action_tx.clone();
-                                        tokio::spawn(async move {
-                                            let action = future.await;
-                                            let _ = action_tx.send(action);
-                                        });
-                                    }
-                                }
-                            }
-                            Effect::None => {}
-                        }
-                    }
-                }
-                Effect::Async(future) => {
-                    // Spawn async task to execute the future
-                    let action_tx = action_tx.clone();
-                    tokio::spawn(async move {
-                        let action = future.await;
-                        let _ = action_tx.send(action);
-                    });
-                }
+                });
+            }
+            // Fetch effects should never reach here - they're handled by execute_effect()
+            // before being queued. Log a warning if they somehow slip through.
+            Effect::FetchBoxscore(_)
+            | Effect::FetchTeamRosterStats(_)
+            | Effect::FetchPlayerStats(_)
+            | Effect::FetchGameDetails(_) => {
+                tracing::warn!(
+                    "Fetch effect reached async executor - this should be handled by execute_effect()"
+                );
             }
         }
     }

@@ -6,6 +6,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use tracing::debug;
@@ -15,7 +16,7 @@ use crate::tui::action::ComponentMessageTrait;
 use crate::tui::component::{Component, Effect, Element, ElementWidget};
 use crate::tui::components::{SettingsDocument, TabItem, TabbedPanel, TabbedPanelProps};
 use crate::tui::document::{DocumentView, FocusableId};
-use crate::tui::document_nav::DocumentNavState;
+use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::settings_helpers::ModalOption;
 use crate::tui::SettingsCategory;
 
@@ -58,8 +59,14 @@ pub struct SettingsTabState {
 /// Messages that can be sent to the Settings tab
 #[derive(Clone, Debug)]
 pub enum SettingsTabMsg {
+    /// Key event when this tab is focused (Phase 3: component handles own keys)
+    Key(KeyEvent),
+
+    /// Navigate up request (ESC closes modal or exits browse mode)
+    NavigateUp,
+
     /// Document navigation
-    DocNav(crate::tui::document_nav::DocumentNavMsg),
+    DocNav(DocumentNavMsg),
     /// Update viewport height
     UpdateViewportHeight(u16),
     /// Change category (triggered by tab navigation)
@@ -112,6 +119,24 @@ impl Component for SettingsTab {
         use crate::tui::document::FocusableId;
 
         match msg {
+            SettingsTabMsg::Key(key) => self.handle_key(key, state),
+
+            SettingsTabMsg::NavigateUp => {
+                // Priority 1: Close modal if open
+                if state.modal.is_some() {
+                    state.modal = None;
+                    return Effect::Handled;
+                }
+                // Priority 2: Exit browse mode if active
+                if state.doc_nav.focus_index.is_some() {
+                    state.doc_nav.focus_index = None;
+                    state.doc_nav.scroll_offset = 0;
+                    return Effect::Handled;
+                }
+                // Otherwise let it bubble up
+                Effect::None
+            }
+
             SettingsTabMsg::DocNav(nav_msg) => {
                 crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg)
             }
@@ -138,23 +163,19 @@ impl Component for SettingsTab {
                     if let Some(FocusableId::Link(link_id)) = state.doc_nav.focusable_ids.get(focus_idx) {
                         // Parse the link ID which is the setting key (e.g., "log_level", "theme")
 
-                        // Determine if this is a toggle, modal, or other action based on the setting
-                        match link_id.as_str() {
+                        let effect = match link_id.as_str() {
                             "use_unicode" | "western_teams_first" => {
-                                // Boolean settings - toggle them
-                                return Effect::Action(Action::SettingsAction(SettingsAction::ToggleBoolean(link_id.clone())));
+                                Effect::Action(Action::SettingsAction(SettingsAction::ToggleBoolean(link_id.clone())))
                             }
                             "log_level" | "theme" => {
-                                // List selection settings - open modal
                                 let options = get_setting_modal_options(link_id);
                                 let selected_index = find_initial_modal_index(&config, link_id);
 
-                                // Calculate modal position (center of focused item)
                                 let position_y = state.doc_nav.focusable_positions
                                     .get(focus_idx)
                                     .copied()
                                     .unwrap_or(0);
-                                let position_x = 10; // Fixed x position for now
+                                let position_x = 10;
 
                                 state.modal = Some(ModalState {
                                     options,
@@ -164,14 +185,11 @@ impl Component for SettingsTab {
                                     position_y,
                                 });
 
-                                return Effect::None;
+                                Effect::None
                             }
-                            _ => {
-                                // Other settings - TODO: implement text editing
-                                debug!("TODO: Implement editing for setting: {}", link_id);
-                                return Effect::None;
-                            }
-                        }
+                            _ => Effect::None,
+                        };
+                        return effect;
                     }
                 }
                 Effect::None
@@ -269,6 +287,65 @@ impl Component for SettingsTab {
 }
 
 impl SettingsTab {
+    /// Handle key events when this tab is focused
+    fn handle_key(&mut self, key: KeyEvent, state: &mut SettingsTabState) -> Effect {
+        use crate::tui::action::{Action, SettingsAction};
+        use crate::tui::nav_handler::key_to_nav_msg;
+
+        // If modal is open, handle modal navigation
+        if state.modal.is_some() {
+            return match key.code {
+                KeyCode::Up => self.update(SettingsTabMsg::Modal(ModalMsg::Up), state),
+                KeyCode::Down => self.update(SettingsTabMsg::Modal(ModalMsg::Down), state),
+                KeyCode::Enter => self.update(SettingsTabMsg::Modal(ModalMsg::Confirm), state),
+                KeyCode::Esc => self.update(SettingsTabMsg::Modal(ModalMsg::Cancel), state),
+                _ => Effect::None,
+            };
+        }
+
+        // Check if in browse mode (has focus)
+        let in_browse_mode = state.doc_nav.focus_index.is_some();
+
+        if in_browse_mode {
+            // Browse mode - navigate settings
+
+            // Try standard navigation first (handles Tab, arrows, PageUp/Down, etc.)
+            if let Some(nav_msg) = key_to_nav_msg(key) {
+                return crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg);
+            }
+
+            // Handle Enter to activate the setting
+            match key.code {
+                KeyCode::Enter => {
+                    // We need access to config, which is in props
+                    // This will be handled by dispatching an action
+                    Effect::Action(Action::SettingsAction(SettingsAction::ToggleBoolean(
+                        "placeholder".to_string(),
+                    )))
+                }
+                _ => Effect::None,
+            }
+        } else {
+            // Category selection mode
+            match key.code {
+                KeyCode::Left => Effect::Action(Action::SettingsAction(
+                    SettingsAction::NavigateCategoryLeft,
+                )),
+                KeyCode::Right => Effect::Action(Action::SettingsAction(
+                    SettingsAction::NavigateCategoryRight,
+                )),
+                KeyCode::Down | KeyCode::Enter => {
+                    // Enter browse mode
+                    if !state.doc_nav.focusable_positions.is_empty() {
+                        state.doc_nav.focus_index = Some(0);
+                    }
+                    Effect::None
+                }
+                _ => Effect::None,
+            }
+        }
+    }
+
     /// Convert category to tab key
     fn category_to_key(&self, category: SettingsCategory) -> String {
         match category {

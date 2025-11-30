@@ -13,6 +13,7 @@ pub mod effects;
 pub mod focus_helpers;
 pub mod helpers;
 pub mod keys;
+pub mod nav_handler;
 pub mod navigation;
 pub mod reducer;
 pub mod reducers;

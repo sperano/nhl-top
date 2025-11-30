@@ -1,3 +1,4 @@
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -19,7 +20,7 @@ use super::{TabItem, TabbedPanel, TabbedPanelProps};
 
 use crate::tui::action::{Action, ComponentMessageTrait};
 use crate::tui::component::Effect;
-use crate::tui::document_nav::DocumentNavState;
+use crate::tui::document_nav::{DocumentNavMsg, DocumentNavState};
 use crate::tui::types::StackedDocument;
 use std::any::Any;
 
@@ -51,13 +52,19 @@ impl StandingsTabState {
 /// Messages handled by StandingsTab component
 #[derive(Clone, Debug)]
 pub enum StandingsTabMsg {
+    /// Key event when this tab is focused (Phase 3: component handles own keys)
+    Key(KeyEvent),
+
+    /// Navigate up request (ESC in browse mode, returns to tab bar otherwise)
+    NavigateUp,
+
     CycleViewLeft,
     CycleViewRight,
     EnterBrowseMode,
     ExitBrowseMode,
 
     // Document navigation (delegated to DocumentNavMsg)
-    DocNav(crate::tui::document_nav::DocumentNavMsg),
+    DocNav(DocumentNavMsg),
 
     // Update viewport height
     UpdateViewportHeight(u16),
@@ -107,6 +114,19 @@ impl Component for StandingsTab {
 
     fn update(&mut self, msg: Self::Message, state: &mut Self::State) -> Effect {
         match msg {
+            StandingsTabMsg::Key(key) => self.handle_key(key, state),
+
+            StandingsTabMsg::NavigateUp => {
+                // Exit browse mode if active, otherwise let it bubble up
+                if state.is_browse_mode() {
+                    state.doc_nav.focus_index = None;
+                    state.doc_nav.scroll_offset = 0;
+                    Effect::Handled
+                } else {
+                    Effect::None // Let it bubble up to exit content focus
+                }
+            }
+
             StandingsTabMsg::CycleViewLeft => {
                 state.view = match state.view {
                     GroupBy::Wildcard => GroupBy::League,
@@ -194,6 +214,35 @@ impl Component for StandingsTab {
 }
 
 impl StandingsTab {
+    /// Handle key events when this tab is focused
+    fn handle_key(&mut self, key: KeyEvent, state: &mut StandingsTabState) -> Effect {
+        use crate::tui::nav_handler::key_to_nav_msg;
+
+        if state.is_browse_mode() {
+            // Browse mode - arrow keys navigate teams
+
+            // Try standard navigation first (handles Tab, arrows, PageUp/Down, etc.)
+            if let Some(nav_msg) = key_to_nav_msg(key) {
+                return crate::tui::document_nav::handle_message(&mut state.doc_nav, &nav_msg);
+            }
+
+            // Handle Enter to activate focused element
+            match key.code {
+                KeyCode::Enter => self.update(StandingsTabMsg::ActivateTeam, state),
+                _ => Effect::None,
+            }
+        } else {
+            // View selection mode - arrow keys navigate views
+            match key.code {
+                KeyCode::Left => self.update(StandingsTabMsg::CycleViewLeft, state),
+                KeyCode::Right => self.update(StandingsTabMsg::CycleViewRight, state),
+                KeyCode::Down | KeyCode::Enter => {
+                    self.update(StandingsTabMsg::EnterBrowseMode, state)
+                }
+                _ => Effect::None,
+            }
+        }
+    }
 
     /// Render view tabs using TabbedPanel (Wildcard/Division/Conference/League)
     /// Phase 7: Using component state for UI state, props for data

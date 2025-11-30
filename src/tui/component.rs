@@ -97,18 +97,35 @@ pub enum Constraint {
 /// Side effects to run after rendering
 pub enum Effect {
     None,
+    /// Indicates the component handled the input and no further processing needed
+    /// Used by NavigateUp to signal that browse mode was exited, preventing bubble up
+    Handled,
     Action(Action),
     Batch(Vec<Effect>),
     Async(Pin<Box<dyn Future<Output = Action> + Send>>),
+    // Data fetch effects - returned by reducers to trigger async fetches
+    /// Fetch boxscore data for a game
+    FetchBoxscore(i64),
+    /// Fetch team roster/stats for a team
+    FetchTeamRosterStats(String),
+    /// Fetch player stats
+    FetchPlayerStats(i64),
+    /// Fetch game details (period scores, etc.)
+    FetchGameDetails(i64),
 }
 
 impl std::fmt::Debug for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Effect::None => write!(f, "Effect::None"),
+            Effect::Handled => write!(f, "Effect::Handled"),
             Effect::Action(action) => f.debug_tuple("Effect::Action").field(action).finish(),
             Effect::Batch(effects) => f.debug_tuple("Effect::Batch").field(effects).finish(),
             Effect::Async(_) => write!(f, "Effect::Async(<future>)"),
+            Effect::FetchBoxscore(id) => f.debug_tuple("Effect::FetchBoxscore").field(id).finish(),
+            Effect::FetchTeamRosterStats(abbrev) => f.debug_tuple("Effect::FetchTeamRosterStats").field(abbrev).finish(),
+            Effect::FetchPlayerStats(id) => f.debug_tuple("Effect::FetchPlayerStats").field(id).finish(),
+            Effect::FetchGameDetails(id) => f.debug_tuple("Effect::FetchGameDetails").field(id).finish(),
         }
     }
 }

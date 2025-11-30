@@ -70,14 +70,6 @@ impl SettingsListWidget {
                     self.config.display.use_unicode.to_string(),
                 ),
                 (
-                    "Selection Color".to_string(),
-                    format_color(&self.config.display.selection_fg),
-                ),
-                (
-                    "Division Header Color".to_string(),
-                    format_color(&self.config.display.division_header_fg),
-                ),
-                (
                     "Error Color".to_string(),
                     format_color(&self.config.display.error_fg),
                 ),
@@ -249,9 +241,10 @@ mod tests {
         );
 
         let settings = widget.get_settings();
-        assert_eq!(settings.len(), 5);
+        assert_eq!(settings.len(), 3);
         assert_eq!(settings[0].0, "Theme");
         assert_eq!(settings[1].0, "Use Unicode");
+        assert_eq!(settings[2].0, "Error Color");
     }
 
     #[test]

@@ -155,6 +155,7 @@ fn init_logging(log_level: &str, log_file: &str) {
     }
 }
 
+// TODO update this command, output is not up to date
 /// Handle the config command - display current configuration
 fn handle_config_command() {
     let cfg = config::read();
@@ -185,16 +186,6 @@ fn handle_config_command() {
     println!("time_format: {}", cfg.time_format);
     println!();
     println!("[theme]");
-    println!("selection_fg: {:?}", cfg.display.selection_fg);
-    println!(
-        "unfocused_selection_fg: {:?}{}",
-        cfg.display.unfocused_selection_fg(),
-        if cfg.display.unfocused_selection_fg.is_none() {
-            " (auto: 50% darker)"
-        } else {
-            ""
-        }
-    );
 }
 
 /// Resolve log configuration from CLI args and config file

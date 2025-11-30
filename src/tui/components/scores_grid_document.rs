@@ -170,9 +170,6 @@ impl Document for ScoresGridDocument {
     }
 }
 
-// TODO: GameBoxWidget will be implemented later when we add Custom rendering support
-// For now, we're using Link elements as placeholders
-
 #[cfg(test)]
 mod tests {
     use super::*;

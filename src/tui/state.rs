@@ -7,36 +7,8 @@ use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerL
 use crate::commands::scores_format::PeriodScores;
 use crate::config::Config;
 
-use super::document::{FocusableId, RowPosition};
+use super::document_nav::DocumentNavState;
 use super::types::{SettingsCategory, StackedDocument, Tab};
-
-/// Shared state for document-based navigation
-///
-/// This struct contains the common fields needed for document navigation,
-/// scrolling, and focus management. It's embedded in any UI state that
-/// uses the document system (Demo tab, Standings League/Conference views).
-#[derive(Debug, Clone, Default)]
-pub struct DocumentState {
-    /// Current focus index within the document (None = no focus)
-    pub focus_index: Option<usize>,
-    /// Current scroll offset (lines from top)
-    pub scroll_offset: u16,
-    /// Viewport height (updated during render)
-    pub viewport_height: u16,
-    /// Y-positions of focusable elements (populated during render/data load)
-    pub focusable_positions: Vec<u16>,
-    /// IDs of focusable elements (for meaningful display when activating)
-    pub focusable_ids: Vec<FocusableId>,
-    /// Row positions for left/right navigation within Row elements
-    pub focusable_row_positions: Vec<Option<RowPosition>>,
-}
-
-impl DocumentState {
-    /// Get the number of focusable elements
-    pub fn focusable_count(&self) -> usize {
-        self.focusable_positions.len()
-    }
-}
 
 /// Root application state - single source of truth
 ///
@@ -76,20 +48,18 @@ impl Default for NavigationState {
     }
 }
 
+/// Default viewport height for stacked documents before terminal size is known
+const DEFAULT_VIEWPORT_HEIGHT: u16 = 30;
+
+/// Entry in the document stack
+///
+/// Each stacked document (boxscore, team detail, player detail) has its own
+/// navigation state embedded via `DocumentNavState`.
 #[derive(Debug, Clone)]
 pub struct DocumentStackEntry {
     pub document: StackedDocument,
-    /// Selected item index within the document (None = no selection)
-    /// Used for navigating lists (players, games, etc.) within documents
-    pub selected_index: Option<usize>,
-    /// Scroll offset (lines from top) for document viewport
-    pub scroll_offset: u16,
-    /// Y-positions of focusable elements (for autoscroll)
-    pub focusable_positions: Vec<u16>,
-    /// Heights of focusable elements (for autoscroll)
-    pub focusable_heights: Vec<u16>,
-    /// Viewport height (for autoscroll calculations)
-    pub viewport_height: u16,
+    /// Navigation state for this stacked document (focus, scroll, focusable metadata)
+    pub nav: DocumentNavState,
 }
 
 impl DocumentStackEntry {
@@ -97,11 +67,11 @@ impl DocumentStackEntry {
     pub fn new(document: StackedDocument) -> Self {
         Self {
             document,
-            selected_index: Some(0),
-            scroll_offset: 0,
-            focusable_positions: Vec::new(),
-            focusable_heights: Vec::new(),
-            viewport_height: 30,
+            nav: DocumentNavState {
+                focus_index: Some(0),
+                viewport_height: DEFAULT_VIEWPORT_HEIGHT,
+                ..Default::default()
+            },
         }
     }
 
@@ -109,11 +79,11 @@ impl DocumentStackEntry {
     pub fn with_selection(document: StackedDocument, selected_index: Option<usize>) -> Self {
         Self {
             document,
-            selected_index,
-            scroll_offset: 0,
-            focusable_positions: Vec::new(),
-            focusable_heights: Vec::new(),
-            viewport_height: 30,
+            nav: DocumentNavState {
+                focus_index: selected_index,
+                viewport_height: DEFAULT_VIEWPORT_HEIGHT,
+                ..Default::default()
+            },
         }
     }
 }

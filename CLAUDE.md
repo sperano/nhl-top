@@ -91,3 +91,5 @@ Detailed documentation in `docs/`:
 Plan and state files go in `.claude/work/` directory.
 - when i ask to write a report, write it in .claude/work/reports
 - when i ask to write a report, plan or any reference md file, add date and time in filename
+- update test_config_to_toml when adding new config attributes
+- never do any git add or commit

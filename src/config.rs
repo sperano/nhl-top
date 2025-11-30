@@ -6,9 +6,6 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 use xdg::BaseDirectories;
 
-// TODO: darker_colorX should be renamed dimmer_colorX
-
-/// Factor used to darken theme colors (0.5 = 50% darker)
 const DARKENING_FACTOR: f32 = 0.5;
 
 /// Default refresh interval in seconds for background data fetching
@@ -43,9 +40,9 @@ pub struct Theme {
     #[serde(serialize_with = "serialize_color")]
     pub fg3: Color,
     #[serde(skip)]
-    pub fg2_dark: OnceLock<Color>,
+    pub fg2_dim: OnceLock<Color>,
     #[serde(skip)]
-    pub fg3_dark: OnceLock<Color>,
+    pub fg3_dim: OnceLock<Color>,
 }
 
 pub static THEME_ID_ORANGE: &str = "orange";
@@ -62,8 +59,8 @@ pub static THEME_ORANGE: Theme = Theme {
     fg1: Color::Rgb(255, 214, 128),
     fg2: Color::Rgb(255, 175, 64),
     fg3: Color::Rgb(226, 108, 34),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_GREEN: Theme = Theme {
@@ -71,8 +68,8 @@ pub static THEME_GREEN: Theme = Theme {
     fg1: Color::Rgb(175, 255, 135),
     fg2: Color::Rgb(95, 255, 175),
     fg3: Color::Rgb(0, 255, 0),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_BLUE: Theme = Theme {
@@ -80,8 +77,8 @@ pub static THEME_BLUE: Theme = Theme {
     fg1: Color::Rgb(175, 255, 255),
     fg2: Color::Rgb(95, 135, 255),
     fg3: Color::Rgb(0, 95, 255),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_PURPLE: Theme = Theme {
@@ -89,8 +86,8 @@ pub static THEME_PURPLE: Theme = Theme {
     fg1: Color::Rgb(255, 175, 255),
     fg2: Color::Rgb(175, 135, 255),
     fg3: Color::Rgb(135, 95, 175),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_WHITE: Theme = Theme {
@@ -98,8 +95,8 @@ pub static THEME_WHITE: Theme = Theme {
     fg1: Color::Rgb(255, 255, 255),
     fg2: Color::Rgb(192, 192, 192),
     fg3: Color::Rgb(128, 128, 128),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_RED: Theme = Theme {
@@ -107,8 +104,8 @@ pub static THEME_RED: Theme = Theme {
     fg1: Color::Rgb(255, 175, 175),
     fg2: Color::Rgb(255, 95, 95),
     fg3: Color::Rgb(255, 0, 0),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_YELLOW: Theme = Theme {
@@ -116,8 +113,8 @@ pub static THEME_YELLOW: Theme = Theme {
     fg1: Color::Rgb(255, 255, 175),
     fg2: Color::Rgb(255, 255, 95),
     fg3: Color::Rgb(255, 215, 0),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEME_CYAN: Theme = Theme {
@@ -125,8 +122,8 @@ pub static THEME_CYAN: Theme = Theme {
     fg1: Color::Rgb(175, 255, 255),
     fg2: Color::Rgb(95, 255, 255),
     fg3: Color::Rgb(0, 255, 255),
-    fg2_dark: OnceLock::new(),
-    fg3_dark: OnceLock::new(),
+    fg2_dim: OnceLock::new(),
+    fg3_dim: OnceLock::new(),
 };
 
 pub static THEMES: phf::Map<&'static str, &Theme> = phf_map! {
@@ -150,14 +147,14 @@ impl Theme {
     /// Get a 50% darker version of fg2, computed lazily and cached
     pub fn fg2_dark(&self) -> Color {
         *self
-            .fg2_dark
+            .fg2_dim
             .get_or_init(|| darken_color(self.fg2, DARKENING_FACTOR))
     }
 
     /// Get a 50% darker version of fg3, computed lazily and cached
     pub fn fg3_dark(&self) -> Color {
         *self
-            .fg3_dark
+            .fg3_dim
             .get_or_init(|| darken_color(self.fg3, DARKENING_FACTOR))
     }
 }
@@ -171,16 +168,6 @@ pub struct DisplayConfig {
     pub theme_name: Option<String>,
     #[serde(skip)]
     pub theme: Option<Theme>,
-    #[serde(deserialize_with = "deserialize_color")]
-    #[serde(serialize_with = "serialize_color")]
-    pub selection_fg: Color,
-    #[serde(deserialize_with = "deserialize_color_optional")]
-    #[serde(serialize_with = "serialize_color_optional")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unfocused_selection_fg: Option<Color>,
-    #[serde(deserialize_with = "deserialize_color")]
-    #[serde(serialize_with = "serialize_color")]
-    pub division_header_fg: Color,
     #[serde(deserialize_with = "deserialize_color")]
     #[serde(serialize_with = "serialize_color")]
     pub error_fg: Color,
@@ -207,9 +194,6 @@ impl Default for DisplayConfig {
             use_unicode: true,
             theme_name: None,
             theme: None,
-            selection_fg: Color::Rgb(255, 165, 0), // Orange
-            unfocused_selection_fg: None,
-            division_header_fg: Color::Rgb(159, 226, 191), // Seafoam
             error_fg: Color::Rgb(255, 0, 0),               // Red
             box_chars: crate::formatting::BoxChars::unicode(),
         }
@@ -217,12 +201,6 @@ impl Default for DisplayConfig {
 }
 
 impl DisplayConfig {
-    /// Get the unfocused selection color, calculating 50% darker if not explicitly set
-    pub fn unfocused_selection_fg(&self) -> Color {
-        self.unfocused_selection_fg
-            .unwrap_or_else(|| darken_color(self.selection_fg, 0.5))
-    }
-
     /// Apply theme from theme_name by looking it up in THEMES map
     pub fn apply_theme(&mut self) {
         self.theme = self
@@ -285,21 +263,21 @@ where
     parse_color(&s).ok_or_else(|| serde::de::Error::custom(format!("Invalid color: {}", s)))
 }
 
-/// Deserialize an optional color from a string
-fn deserialize_color_optional<'de, D>(deserializer: D) -> Result<Option<Color>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    match s {
-        Some(color_str) => {
-            let color = parse_color(&color_str)
-                .ok_or_else(|| serde::de::Error::custom(format!("Invalid color: {}", color_str)))?;
-            Ok(Some(color))
-        }
-        None => Ok(None),
-    }
-}
+// Deserialize an optional color from a string
+// fn deserialize_color_optional<'de, D>(deserializer: D) -> Result<Option<Color>, D::Error>
+// where
+//     D: serde::Deserializer<'de>,
+// {
+//     let s: Option<String> = Option::deserialize(deserializer)?;
+//     match s {
+//         Some(color_str) => {
+//             let color = parse_color(&color_str)
+//                 .ok_or_else(|| serde::de::Error::custom(format!("Invalid color: {}", color_str)))?;
+//             Ok(Some(color))
+//         }
+//         None => Ok(None),
+//     }
+// }
 
 /// Serialize a color to a string
 fn serialize_color<S>(color: &Color, serializer: S) -> Result<S::Ok, S::Error>
@@ -309,16 +287,16 @@ where
     serializer.serialize_str(&format_color(color))
 }
 
-/// Serialize an optional color to a string
-fn serialize_color_optional<S>(color: &Option<Color>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match color {
-        Some(c) => serializer.serialize_str(&format_color(c)),
-        None => serializer.serialize_none(),
-    }
-}
+// Serialize an optional color to a string
+// fn serialize_color_optional<S>(color: &Option<Color>, serializer: S) -> Result<S::Ok, S::Error>
+// where
+//     S: serde::Serializer,
+// {
+//     match color {
+//         Some(c) => serializer.serialize_str(&format_color(c)),
+//         None => serializer.serialize_none(),
+//     }
+// }
 
 /// Format a color as a string (RGB format for serialization)
 fn format_color(color: &Color) -> String {
@@ -529,71 +507,6 @@ mod tests {
     }
 
     #[test]
-    fn test_display_config_default() {
-        let display = DisplayConfig::default();
-        assert_eq!(display.selection_fg, Color::Rgb(255, 165, 0));
-        assert_eq!(display.use_unicode, true);
-    }
-
-    #[test]
-    fn test_config_default_includes_display() {
-        let config = Config::default();
-        assert_eq!(config.display.selection_fg, Color::Rgb(255, 165, 0));
-        assert_eq!(config.display.use_unicode, true);
-    }
-
-    #[test]
-    fn test_config_from_toml_named_color() {
-        let toml_str = r#"
-log_level = "info"
-log_file = "/dev/null"
-refresh_interval = 60
-display_standings_western_first = false
-time_format = "%H:%M:%S"
-
-[display]
-selection_fg = "cyan"
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.display.selection_fg, Color::Cyan);
-    }
-
-    #[test]
-    fn test_config_from_toml_hex_color() {
-        let toml_str = r###"
-log_level = "info"
-log_file = "/dev/null"
-refresh_interval = 60
-display_standings_western_first = false
-time_format = "%H:%M:%S"
-
-[display]
-selection_fg = "#00FFFF"
-        "###;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.display.selection_fg, Color::Rgb(0, 255, 255));
-    }
-
-    #[test]
-    fn test_config_from_toml_rgb_tuple() {
-        let toml_str = r#"
-log_level = "info"
-log_file = "/dev/null"
-refresh_interval = 60
-display_standings_western_first = false
-time_format = "%H:%M:%S"
-
-[display]
-selection_fg = "128,0,128"
-        "#;
-
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert_eq!(config.display.selection_fg, Color::Rgb(128, 0, 128));
-    }
-
-    #[test]
     fn test_serialize_color_rgb() {
         let color = Color::Rgb(255, 165, 0);
         assert_eq!(format_color(&color), "255,165,0");
@@ -609,21 +522,29 @@ selection_fg = "128,0,128"
     #[test]
     fn test_config_to_toml() {
         let mut config = Config::default();
-        config.display.selection_fg = Color::Rgb(128, 0, 128);
         config.refresh_interval = 30;
+        config.log_level = "debug".to_string();
+        config.display_standings_western_first = true;
+        config.display.use_unicode = false;
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
 
-        // Verify it contains expected values
-        assert!(toml_str.contains("refresh_interval = 30"));
-        assert!(toml_str.contains("selection_fg = \"128,0,128\""));
+        let expected = r#"log_level = "debug"
+log_file = "/dev/null"
+refresh_interval = 30
+display_standings_western_first = true
+time_format = "%H:%M:%S"
+
+[display]
+use_unicode = false
+error_fg = "255,0,0"
+"#;
+        assert_eq!(toml_str.trim(), expected.trim());
     }
 
     #[test]
     fn test_roundtrip_serialization() {
         let mut config = Config::default();
-        config.display.selection_fg = Color::Rgb(255, 100, 50);
-        config.display.unfocused_selection_fg = Some(Color::Cyan);
         config.display.use_unicode = false;
         config.refresh_interval = 45;
         config.display_standings_western_first = true;
@@ -634,11 +555,6 @@ selection_fg = "128,0,128"
         // Deserialize back
         let deserialized: Config = toml::from_str(&toml_str).unwrap();
 
-        assert_eq!(deserialized.display.selection_fg, Color::Rgb(255, 100, 50));
-        assert_eq!(
-            deserialized.display.unfocused_selection_fg,
-            Some(Color::Cyan)
-        );
         assert_eq!(deserialized.display.use_unicode, false);
         assert_eq!(deserialized.refresh_interval, 45);
         assert_eq!(deserialized.display_standings_western_first, true);

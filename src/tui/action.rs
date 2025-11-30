@@ -1,3 +1,4 @@
+use crossterm::event::KeyEvent;
 use nhl_api::{Boxscore, ClubStats, DailySchedule, GameDate, GameMatchup, PlayerLanding, Standing};
 use std::any::Any;
 
@@ -36,6 +37,21 @@ pub enum Action {
     PopDocument,
     ToggleCommandPalette,
 
+    /// Unified "navigate up" action (ESC key)
+    ///
+    /// Hierarchical fallthrough:
+    /// 1. If document stack not empty → pop document
+    /// 2. Send NavigateUpMsg to current tab component
+    /// 3. Component returns whether it handled it (closed modal, exited browse mode)
+    /// 4. If not handled and content_focused → set content_focused = false
+    NavigateUp,
+
+    /// Route key events to stacked documents
+    ///
+    /// When a document is on the stack, key events are dispatched to the
+    /// document's handle_key method for encapsulated navigation handling.
+    StackedDocumentKey(KeyEvent),
+
     // Data actions
     // SelectTeam(String),
     // SelectPlayer(i64),
@@ -53,11 +69,6 @@ pub enum Action {
     // UI actions
     FocusNext,
     FocusPrevious,
-
-    // Document stack navigation actions
-    DocumentSelectNext,     // Move selection down in current stacked document
-    DocumentSelectPrevious, // Move selection up in current stacked document
-    DocumentSelectItem,     // Activate/enter selected item in stacked document
 
     // Component-specific actions (nested)
     ScoresAction(ScoresAction),
@@ -128,6 +139,8 @@ impl Clone for Action {
             Self::PushDocument(doc) => Self::PushDocument(doc.clone()),
             Self::PopDocument => Self::PopDocument,
             Self::ToggleCommandPalette => Self::ToggleCommandPalette,
+            Self::NavigateUp => Self::NavigateUp,
+            Self::StackedDocumentKey(key) => Self::StackedDocumentKey(*key),
             Self::RefreshData => Self::RefreshData,
             Self::RefreshSchedule(date) => Self::RefreshSchedule(date.clone()),
             Self::StandingsLoaded(result) => Self::StandingsLoaded(result.clone()),
@@ -140,9 +153,6 @@ impl Clone for Action {
             Self::PlayerStatsLoaded(id, result) => Self::PlayerStatsLoaded(*id, result.clone()),
             Self::FocusNext => Self::FocusNext,
             Self::FocusPrevious => Self::FocusPrevious,
-            Self::DocumentSelectNext => Self::DocumentSelectNext,
-            Self::DocumentSelectPrevious => Self::DocumentSelectPrevious,
-            Self::DocumentSelectItem => Self::DocumentSelectItem,
             Self::ScoresAction(action) => Self::ScoresAction(action.clone()),
             Self::StandingsAction(action) => Self::StandingsAction(action.clone()),
             Self::SettingsAction(action) => Self::SettingsAction(action.clone()),
@@ -184,6 +194,7 @@ mod tests {
         assert!(Action::PopDocument.should_render());
         assert!(Action::FocusNext.should_render());
         assert!(Action::FocusPrevious.should_render());
+        assert!(Action::NavigateUp.should_render());
     }
 
     #[test]
