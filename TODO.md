@@ -3,4 +3,4 @@
 - leverage the usage of Document::group
 - would boxchar be better as single chars instead of string
 - scorebox: postponed game?
-
+- rename boxscore stuff to gamedetail?
