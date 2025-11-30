@@ -7,12 +7,15 @@ use crate::tui::state::{AppState, DocumentStackEntry, LoadingKey};
 use crate::tui::types::StackedDocument;
 
 /// Handle all document stack management actions
-pub fn reduce_document_stack(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
+///
+/// Returns Ok((new_state, effect)) if the action was handled,
+/// or Err(state) to pass ownership back to the caller.
+pub fn reduce_document_stack(state: AppState, action: &Action) -> Result<(AppState, Effect), AppState> {
     match action {
-        Action::PushDocument(doc) => Some(push_document(state.clone(), doc.clone())),
-        Action::PopDocument => Some(pop_document(state.clone())),
-        Action::StackedDocumentKey(key) => Some(stacked_document_key(state.clone(), *key)),
-        _ => None,
+        Action::PushDocument(doc) => Ok(push_document(state, doc.clone())),
+        Action::PopDocument => Ok(pop_document(state)),
+        Action::StackedDocumentKey(key) => Ok(stacked_document_key(state, *key)),
+        _ => Err(state),
     }
 }
 

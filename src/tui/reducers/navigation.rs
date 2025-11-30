@@ -6,16 +6,19 @@ use crate::tui::state::AppState;
 use crate::tui::types::Tab;
 
 /// Handle all navigation-related actions
-pub fn reduce_navigation(state: &AppState, action: &Action) -> Option<(AppState, Effect)> {
+///
+/// Returns Ok((new_state, effect)) if the action was handled,
+/// or Err(state) to pass ownership back to the caller.
+pub fn reduce_navigation(state: AppState, action: &Action) -> Result<(AppState, Effect), AppState> {
     match action {
-        Action::NavigateTab(tab) => Some(navigate_to_tab(state.clone(), *tab)),
-        Action::NavigateTabLeft => Some(navigate_tab_left(state.clone())),
-        Action::NavigateTabRight => Some(navigate_tab_right(state.clone())),
-        Action::EnterContentFocus => Some(enter_content_focus(state.clone())),
-        Action::ExitContentFocus => Some(exit_content_focus(state.clone())),
-        Action::NavigateUp => Some(navigate_up(state.clone())),
-        Action::ToggleCommandPalette => Some((state.clone(), Effect::None)),
-        _ => None,
+        Action::NavigateTab(tab) => Ok(navigate_to_tab(state, *tab)),
+        Action::NavigateTabLeft => Ok(navigate_tab_left(state)),
+        Action::NavigateTabRight => Ok(navigate_tab_right(state)),
+        Action::EnterContentFocus => Ok(enter_content_focus(state)),
+        Action::ExitContentFocus => Ok(exit_content_focus(state)),
+        Action::NavigateUp => Ok(navigate_up(state)),
+        Action::ToggleCommandPalette => Ok((state, Effect::None)),
+        _ => Err(state),
     }
 }
 

@@ -21,14 +21,15 @@ use crate::tui::reducers::{
 ///
 /// Note: component_states is passed as &mut to allow ComponentMessage actions to update
 /// component-local state, but the reducer itself doesn't create side effects through this.
+///
+/// Ownership is passed through the sub-reducer chain to avoid cloning:
+/// - Each sub-reducer returns Ok((state, effect)) if it handled the action
+/// - Or Err(state) to pass ownership back for the next reducer to try
 pub fn reduce(
     state: AppState,
     action: Action,
     component_states: &mut ComponentStateStore,
 ) -> (AppState, Effect) {
-    // Try each sub-reducer in order
-    // Each returns Option<(AppState, Effect)> - None means it didn't handle the action
-
     // Component message dispatch (React-like component system)
     if let Action::ComponentMessage { path, message } = &action {
         if let Some(component_state) = component_states.get_mut_any(path) {
@@ -41,22 +42,26 @@ pub fn reduce(
         }
     }
 
+    // Chain sub-reducers, passing ownership through
+    // Each returns Ok((state, effect)) if handled, Err(state) to continue
+
     // Navigation actions
-    if let Some(result) = reduce_navigation(&state, &action) {
-        return result;
-    }
+    let state = match reduce_navigation(state, &action) {
+        Ok(result) => return result,
+        Err(state) => state,
+    };
 
     // Document stack management actions
-    if let Some(result) = reduce_document_stack(&state, &action) {
-        return result;
-    }
+    let state = match reduce_document_stack(state, &action) {
+        Ok(result) => return result,
+        Err(state) => state,
+    };
 
     // Data loading actions (Phase 7: Pass component_states for focusable metadata)
-    if let Some(result) = reduce_data_loading(&state, &action, component_states) {
-        return result;
-    }
-
-    // Document actions removed in Phase 10 - now handled by component messages
+    let state = match reduce_data_loading(state, &action, component_states) {
+        Ok(result) => return result,
+        Err(state) => state,
+    };
 
     // Tab-specific action delegation
     match action {

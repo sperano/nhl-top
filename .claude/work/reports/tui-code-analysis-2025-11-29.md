@@ -1,15 +1,19 @@
 # TUI Code Analysis Report
 
-**Date:** 2025-11-29 (Updated)
+**Date:** 2025-11-29 (Updated 2025-11-30)
 **Scope:** Comprehensive analysis of `src/tui/` codebase
 
 ---
 
 ## Executive Summary
 
-The TUI codebase implements a React/Redux-inspired architecture for a terminal UI. **Recent refactoring has addressed several major issues**: the runtime no longer clones state multiple times per dispatch (now uses `mem::take`), and autoscrolling has been unified with a single `autoscroll_to_focus()` function in `document_nav.rs`. The document stack navigation no longer uses global actions for focus movement - it now uses a handler pattern via `get_stacked_document_handler()`.
+The TUI codebase implements a React/Redux-inspired architecture for a terminal UI. **Major architectural issues have been resolved**:
+- Runtime no longer clones state multiple times per dispatch (uses `mem::take`)
+- Autoscrolling unified with `autoscroll_to_focus()` in `document_nav.rs`
+- Document stack navigation uses handler pattern via `get_stacked_document_handler()`
+- Reducer chain now passes ownership to avoid clones (returns `Result<(AppState, Effect), AppState>`)
 
-Remaining opportunities include: creating a derive macro for ComponentMessageTrait boilerplate, consolidating the reducer cloning pattern, and cleaning up the remaining TODOs.
+Remaining work is primarily cleanup (TODOs) and minor optimizations.
 
 ---
 
@@ -135,17 +139,20 @@ The runtime now uses typed effect variants (`Effect::FetchBoxscore`, `Effect::Fe
 
 All widgets re-render every frame even when unchanged. This is a potential optimization target.
 
-### Reducer Cloning Pattern (Still Present)
+### ~~Reducer Cloning Pattern~~ (RESOLVED)
 
-**File:** `reducers/navigation.rs:11-18`
+Reducers now pass ownership through the chain using `Result<(AppState, Effect), AppState>`:
+- `Ok((state, effect))` - action was handled
+- `Err(state)` - action wasn't handled, ownership returned for next reducer
 
-Every reducer path clones the state even if it won't modify it:
 ```rust
-Action::NavigateTab(tab) => Some(navigate_to_tab(state.clone(), *tab)),
-Action::NavigateTabLeft => Some(navigate_tab_left(state.clone())),
+let state = match reduce_navigation(state, &action) {
+    Ok(result) => return result,
+    Err(state) => state,  // ownership returned, try next reducer
+};
 ```
 
-The reducers receive `&AppState` and must clone to return `(AppState, Effect)`. Consider refactoring to take ownership or use cow patterns.
+No more cloning at the reducer dispatch level.
 
 ---
 
@@ -193,11 +200,9 @@ The `ComponentMessageTrait::apply()` pattern is now handled by the `component_me
 
 Multiple places allocate `Vec` for typically 0-2 effects. Consider `SmallVec<[Effect; 4]>`.
 
-### 5.4 Excessive `.clone()` in Reducers (Still Present)
+### ~~5.4 Excessive `.clone()` in Reducers~~ (RESOLVED)
 
-Reducers clone state at the start even if the action won't match. Pattern should be:
-1. Match action first
-2. Clone only when needed
+Reducer chain now passes ownership through, eliminating unnecessary clones. See section 3.
 
 ---
 
@@ -232,28 +237,23 @@ The `DocumentStackEntry` struct now contains a `DocumentNavState` (`nav` field),
 
 `keys.rs` no longer has disabled tests. The key handling tests are integrated into `runtime.rs` tests.
 
-### 7.2 Commented-Out Code Blocks (Still Present)
+### ~~7.2 Commented-Out Code Blocks~~ (RESOLVED)
 
-**File:** `reducer.rs:91-127`
-
-Large commented blocks for `SelectPlayer` and `SelectTeam` actions. These should be removed.
+`SelectPlayer` and `SelectTeam` commented blocks have been removed from `reducer.rs`.
 
 ### 7.3 Remaining TODO Items
 
 | File | TODO |
 |------|------|
-| `reducers/data_loading.rs:124,179` | "TODO: Remove Schedule loading key - needs date string" |
+| `reducers/data_loading.rs:128,183` | "TODO: Remove Schedule loading key - needs date string" |
 | `document/focus.rs:32` | "TODO: Remove once all usages are migrated to typed variants" |
-
-### ~~7.4 Unused Cfg Conditions~~ (Not Found)
-
-No cfg condition warnings were observed in the current codebase.
+| `document/elements.rs:701` | "TODO: use Boxchar instead of hardcoded unicode character" |
 
 ---
 
 ## 8. Summary of Recommendations
 
-### Completed (Since Initial Analysis)
+### Completed
 
 1. ~~**Unify autoscroll logic**~~ - ✅ Now unified in `document_nav.rs`
 2. ~~**Reduce state cloning in Runtime.dispatch()**~~ - ✅ Now uses `mem::take` pattern
@@ -261,17 +261,17 @@ No cfg condition warnings were observed in the current codebase.
 4. ~~**Consolidate DocumentNavState and DocumentStackEntry**~~ - ✅ Both now use `DocumentNavState`
 5. ~~**Create ComponentMessageTrait derive macro**~~ - ✅ `component_message_impl!` macro in `tab_component.rs`
 6. ~~**Extract tab component generic**~~ - ✅ `TabState` and `TabMessage` traits in `tab_component.rs`
+7. ~~**Clean up commented code**~~ - ✅ `SelectPlayer`/`SelectTeam` blocks removed
+8. ~~**Reduce reducer cloning**~~ - ✅ Reducers now pass ownership via `Result<(AppState, Effect), AppState>`
 
 ### Still Relevant
 
-7. **Clean up commented code** - Remove `SelectPlayer`/`SelectTeam` blocks in `reducer.rs`
-8. **Address remaining TODOs** - 3 TODO comments remaining
+9. **Address remaining TODOs** - 4 TODO comments remaining (see section 7.3)
 
 ### Low Priority
 
-9. **Use SmallVec for effect accumulation** - Minor perf improvement
-10. **Add widget comparison for rendering** - Minor perf improvement
-11. **Reduce reducer cloning** - Reducers still clone state even for unmatched actions
+10. **Use SmallVec for effect accumulation** - Minor perf improvement
+11. **Add widget comparison for rendering** - Minor perf improvement
 
 ---
 
@@ -279,6 +279,6 @@ No cfg condition warnings were observed in the current codebase.
 
 | Directory | Files | Lines (approx) |
 |-----------|-------|----------------|
-| `src/tui/` (all) | 60 | ~31,500 |
+| `src/tui/` (all) | 60 | ~32,000 |
 
-The codebase has grown significantly (~16k → ~31k lines) but is now more consistent. The major architectural issues (autoscroll split, state cloning, dual navigation systems) have been resolved. Remaining work is primarily cleanup and DRY improvements.
+The codebase is now architecturally consistent. All major issues (autoscroll split, state cloning, dual navigation systems, reducer cloning) have been resolved. Remaining work is minor cleanup (TODOs) and optional optimizations.

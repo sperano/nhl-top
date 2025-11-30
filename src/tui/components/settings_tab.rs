@@ -469,8 +469,9 @@ impl ElementWidget for SettingsTabWidget {
     }
 }
 
-/// Helper to get focusable IDs for a settings category (for testing/debugging)
-pub fn get_focusable_ids_for_category(category: SettingsCategory) -> Vec<FocusableId> {
+/// Helper to get focusable IDs for a settings category (for testing)
+#[cfg(test)]
+fn get_focusable_ids_for_category(category: SettingsCategory) -> Vec<FocusableId> {
     match category {
         SettingsCategory::Logging => vec![
             FocusableId::Link("log_level".to_string()),

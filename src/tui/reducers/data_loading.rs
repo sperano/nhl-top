@@ -10,41 +10,45 @@ use crate::tui::reducers::standings::rebuild_focusable_metadata;
 use crate::tui::state::{AppState, LoadingKey};
 
 /// Handle all data loading actions (API responses)
+///
+/// Returns Ok((new_state, effect)) if the action was handled,
+/// or Err(state) to pass ownership back to the caller.
+///
 /// Phase 7: Now takes component_states to update focusable metadata in component state
 pub fn reduce_data_loading(
-    state: &AppState,
+    state: AppState,
     action: &Action,
     component_states: &mut crate::tui::component_store::ComponentStateStore,
-) -> Option<(AppState, Effect)> {
+) -> Result<(AppState, Effect), AppState> {
     match action {
         Action::StandingsLoaded(result) => {
-            Some(handle_standings_loaded(state.clone(), result.clone(), component_states))
+            Ok(handle_standings_loaded(state, result.clone(), component_states))
         }
         Action::ScheduleLoaded(result) => {
-            Some(handle_schedule_loaded(state.clone(), result.clone(), component_states))
+            Ok(handle_schedule_loaded(state, result.clone(), component_states))
         }
-        Action::GameDetailsLoaded(game_id, result) => Some(handle_game_details_loaded(
-            state.clone(),
+        Action::GameDetailsLoaded(game_id, result) => Ok(handle_game_details_loaded(
+            state,
             *game_id,
             result.clone(),
         )),
-        Action::BoxscoreLoaded(game_id, result) => Some(handle_boxscore_loaded(
-            state.clone(),
+        Action::BoxscoreLoaded(game_id, result) => Ok(handle_boxscore_loaded(
+            state,
             *game_id,
             result.clone(),
         )),
-        Action::TeamRosterStatsLoaded(team_abbrev, result) => Some(handle_team_roster_loaded(
-            state.clone(),
+        Action::TeamRosterStatsLoaded(team_abbrev, result) => Ok(handle_team_roster_loaded(
+            state,
             team_abbrev.clone(),
             result.clone(),
         )),
-        Action::PlayerStatsLoaded(player_id, result) => Some(handle_player_stats_loaded(
-            state.clone(),
+        Action::PlayerStatsLoaded(player_id, result) => Ok(handle_player_stats_loaded(
+            state,
             *player_id,
             result.clone(),
         )),
-        Action::RefreshData => Some(handle_refresh_data(state.clone())),
-        _ => None,
+        Action::RefreshData => Ok(handle_refresh_data(state)),
+        _ => Err(state),
     }
 }
 

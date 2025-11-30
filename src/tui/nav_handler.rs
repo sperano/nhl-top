@@ -105,7 +105,8 @@ pub fn key_to_nav_msg(key: KeyEvent) -> Option<DocumentNavMsg> {
 /// - Down: FocusNext
 ///
 /// Returns None for all other keys (including Enter, which is handled separately).
-pub fn key_to_simple_nav_msg(key: KeyEvent) -> Option<DocumentNavMsg> {
+#[cfg(test)]
+fn key_to_simple_nav_msg(key: KeyEvent) -> Option<DocumentNavMsg> {
     match key.code {
         KeyCode::Up => Some(DocumentNavMsg::FocusPrev),
         KeyCode::Down => Some(DocumentNavMsg::FocusNext),
